@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.10.3",
+  "version": "1.10.4",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/mdupreejr/youtube-thumbs",
@@ -15,7 +15,6 @@
   "host_network": true,
   "map": ["addon_config:rw"],
   "options": {
-    "home_assistant_token": "",
     "media_player_entity": "media_player.atv_officebig",
     "port": 21812,
     "rate_limit_per_minute": 10,
@@ -28,7 +27,6 @@
     "history_poll_interval": 30
   },
   "schema": {
-    "home_assistant_token": "password?",
     "media_player_entity": "str",
     "port": "port?",
     "rate_limit_per_minute": "int(1,1000)",

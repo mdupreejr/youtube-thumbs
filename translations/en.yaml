@@ -1,7 +1,4 @@
 configuration:
-  home_assistant_token:
-    name: Home Assistant token
-    description: Optional manual token. Leave blank to automatically use the Supervisor-provided token.
   media_player_entity:
     name: Media player entity
     description: Entity ID of the Apple TV (or other player) to monitor, e.g. media_player.apple_tv.

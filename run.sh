@@ -4,18 +4,9 @@ bashio::log.info "YouTube Thumbs Rating Add-on Starting..."
 
 # Read configuration from add-on options
 bashio::log.info "Loading configuration..."
-HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
 
 export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL:-http://supervisor/core}"
 bashio::log.info "Home Assistant URL fixed to ${HOME_ASSISTANT_URL}"
-
-if [ -z "${HOME_ASSISTANT_TOKEN_CONFIG}" ] || [ "${HOME_ASSISTANT_TOKEN_CONFIG}" = "null" ]; then
-    export HOME_ASSISTANT_TOKEN=""
-    bashio::log.info "No custom Home Assistant token configured, will use SUPERVISOR_TOKEN"
-else
-    export HOME_ASSISTANT_TOKEN="${HOME_ASSISTANT_TOKEN_CONFIG}"
-    bashio::log.info "Using custom Home Assistant token"
-fi
 
 export MEDIA_PLAYER_ENTITY=$(bashio::config 'media_player_entity')
 bashio::log.info "Media Player Entity: ${MEDIA_PLAYER_ENTITY}"
