@@ -1,3 +1,4 @@
+import atexit
 from flask import Flask, jsonify, Response
 from typing import Tuple, Optional, Dict, Any
 import os
@@ -8,9 +9,12 @@ from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
 from matcher import matcher
 from database import get_database
+from history_tracker import HistoryTracker
 
 app = Flask(__name__)
 db = get_database()
+
+FALSE_VALUES = {'false', '0', 'no', 'off'}
 
 
 def format_media_info(title: str, artist: str) -> str:
@@ -54,16 +58,32 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
         return None
     
     # Step 2: Filter candidates by title text matching
-    matches = matcher.filter_candidates_by_title(title, candidates)
+    matches = matcher.filter_candidates_by_title(title, candidates, artist)
     if not matches:
         logger.error(f"No videos matched title text: '{title}' | Candidates checked: {len(candidates)}")
         return None
     
     # Step 3: Select best match (first one = highest search relevance)
     video = matches[0]
+    match_score = video.pop('_match_score', None)
 
     if len(matches) > 1:
-        logger.warning(f"Multiple matches found ({len(matches)}), using first result: '{video['title']}' on '{video['channel']}'")
+        runner_up = matches[1]
+        logger.warning(
+            "Multiple matches found (%s). Using '%s' (score %.2f) over '%s' (score %.2f)",
+            len(matches),
+            video['title'],
+            match_score or 0,
+            runner_up.get('title'),
+            runner_up.get('_match_score', 0),
+        )
+    elif match_score is not None:
+        logger.info(
+            "Matched '%s' on '%s' (score %.2f)",
+            video['title'],
+            video.get('channel'),
+            match_score,
+        )
 
     logger.info(f"Successfully found video: '{video['title']}' on '{video['channel']}' (ID: {video['video_id']})")
     return video
@@ -119,6 +139,36 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         }
 
     return None
+
+
+def _history_tracker_enabled() -> bool:
+    value = os.getenv('ENABLE_HISTORY_TRACKER', 'true')
+    return value.lower() not in FALSE_VALUES if isinstance(value, str) else True
+
+
+def _history_poll_interval() -> int:
+    raw_interval = os.getenv('HISTORY_POLL_INTERVAL', '30')
+    try:
+        interval = int(raw_interval)
+        return interval if interval > 0 else 30
+    except ValueError:
+        logger.warning(
+            "Invalid HISTORY_POLL_INTERVAL '%s'; using default 30 seconds",
+            raw_interval,
+        )
+        return 30
+
+
+history_tracker = HistoryTracker(
+    ha_api=ha_api,
+    database=db,
+    find_cached_video=find_cached_video,
+    search_and_match_video=search_and_match_video,
+    poll_interval=_history_poll_interval(),
+    enabled=_history_tracker_enabled(),
+)
+history_tracker.start()
+atexit.register(history_tracker.stop)
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:

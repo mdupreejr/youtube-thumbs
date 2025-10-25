@@ -98,7 +98,7 @@ class YouTubeAPI:
                 if expected_duration is not None and duration is not None:
                     diff = abs(duration - expected_duration)
                     if diff <= 2:
-                        logger.info(
+                        logger.debug(
                             f"Duration match: '{video_info['title']}' on '{video_info['channel']}' - "
                             f"{duration}s (diff: {diff}s)"
                         )

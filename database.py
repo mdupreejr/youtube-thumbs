@@ -255,6 +255,33 @@ class Database:
             row = cur.fetchone()
         return dict(row) if row else None
 
+    def find_by_title_and_duration(self, title: str, duration: Optional[int]) -> Optional[Dict[str, Any]]:
+        """
+        Return the most recent video whose HA title matches and whose duration aligns.
+
+        If duration is omitted, falls back to exact HA title lookup.
+        """
+        if not title:
+            return None
+
+        if duration is None:
+            return self.find_by_exact_ha_title(title)
+
+        query = """
+            SELECT * FROM video_ratings
+            WHERE ha_title = ?
+              AND (
+                    (ha_duration IS NOT NULL AND ha_duration = ?)
+                 OR (ha_duration IS NULL AND yt_duration IS NOT NULL AND yt_duration = ?)
+              )
+            ORDER BY date_updated DESC, date_added DESC
+            LIMIT 1
+        """
+        with self._lock:
+            cur = self._conn.execute(query, (title, duration, duration))
+            row = cur.fetchone()
+        return dict(row) if row else None
+
 
 _db_instance: Optional[Database] = None
 

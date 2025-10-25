@@ -13,6 +13,7 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 - 🛡️ Built-in rate limiting (configurable)
 - 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
+- 🕒 Background history tracker that logs every song even without ratings
 - ⚡ Optimized performance with caching and connection pooling
 - 💡 Reuses cached matches to avoid redundant YouTube searches
 - 💾 Local SQLite history + sqlite_web UI on port 8080
@@ -99,6 +100,13 @@ Health check with rate limiter stats.
 4. Filters results using fuzzy title matching (50%+ word overlap).
 5. Rates the best match on YouTube.
 
+### Playback History Tracker
+
+- Every 30 seconds the add-on polls Home Assistant for the currently playing song.
+- New titles (title + duration) are matched against YouTube, stored in `ratings.db`, and receive an initial play count.
+- Replays simply increment `play_count`, so your database reflects every listen even when you never call 👍/👎.
+- Set `ENABLE_HISTORY_TRACKER=false` to disable the background thread or tweak the cadence with `HISTORY_POLL_INTERVAL=<seconds>` if you need a slower/faster poll rate (exposed in the add-on config as `history_tracker_enabled` / `history_poll_interval`).
+
 ## Add-on Configuration Options
 
 Configure these in the add-on Configuration tab:
@@ -114,6 +122,8 @@ Configure these in the add-on Configuration tab:
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
 | `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `sqlite_web_port` | 8080 | Port for the sqlite_web admin UI |
+| `history_tracker_enabled` | true | Toggle the background poller that logs every song |
+| `history_poll_interval` | 30 | Seconds between Home Assistant polls (10–300 allowed) |
 
 **Note:** The add-on automatically handles authentication using the Supervisor token.
 
