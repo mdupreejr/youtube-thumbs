@@ -7,7 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from logger import logger, error_logger
+from logger import logger
 
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
@@ -106,21 +106,18 @@ class YouTubeAPI:
                     candidates.append(video_info)
             
             if not candidates and expected_duration:
-                error_msg = f"No videos match duration {expected_duration}s (±2s)"
-                logger.error(error_msg)
-                error_logger.error(f"{error_msg} | Context: search_video_globally | Query: '{title}'")
+                logger.error(f"No videos match duration {expected_duration}s (±2s) | Query: '{title}'")
                 return None
             
             logger.info(f"Found {len(candidates)} duration-matched candidates")
             return candidates
             
         except HttpError as e:
-            logger.error(f"YouTube API error: {e}")
-            error_logger.error(f"YouTube API HttpError in search_video_globally | Query: '{title}' | Error: {str(e)}")
+            logger.error(f"YouTube API error in search_video_globally | Query: '{title}' | Error: {str(e)}")
             return None
         except Exception as e:
-            logger.error(f"Error searching video: {str(e)}")
-            error_logger.error(f"Unexpected error in search_video_globally | Query: '{title}' | Error: {str(e)} | Traceback: {traceback.format_exc()}")
+            logger.error(f"Unexpected error searching video | Query: '{title}' | Error: {str(e)}")
+            logger.debug(f"Traceback for search error: {traceback.format_exc()}")
             return None
     
     def get_video_rating(self, video_id: str) -> str:
@@ -142,12 +139,11 @@ class YouTubeAPI:
             return 'none'
             
         except HttpError as e:
-            logger.error(f"YouTube API error getting rating: {e}")
-            error_logger.error(f"YouTube API HttpError in get_video_rating | Video ID: {video_id} | Error: {str(e)}")
+            logger.error(f"YouTube API error getting rating | Video ID: {video_id} | Error: {str(e)}")
             return 'none'
         except Exception as e:
-            logger.error(f"Error getting video rating: {str(e)}")
-            error_logger.error(f"Unexpected error in get_video_rating | Video ID: {video_id} | Error: {str(e)} | Traceback: {traceback.format_exc()}")
+            logger.error(f"Unexpected error getting video rating | Video ID: {video_id} | Error: {str(e)}")
+            logger.debug(f"Traceback for get_video_rating error: {traceback.format_exc()}")
             return 'none'
     
     def set_video_rating(self, video_id: str, rating: str) -> bool:
@@ -169,12 +165,11 @@ class YouTubeAPI:
             return True
             
         except HttpError as e:
-            logger.error(f"YouTube API error setting rating: {e}")
-            error_logger.error(f"YouTube API HttpError in set_video_rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
+            logger.error(f"YouTube API error setting rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Error setting video rating: {str(e)}")
-            error_logger.error(f"Unexpected error in set_video_rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)} | Traceback: {traceback.format_exc()}")
+            logger.error(f"Unexpected error setting video rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
+            logger.debug(f"Traceback for set_video_rating error: {traceback.format_exc()}")
             return False
 
 # Create global instance (will be initialized when module is imported)

@@ -66,7 +66,6 @@ class HomeAssistantAPI:
             attributes = data.get('attributes', {})
             media_title = attributes.get('media_title')
             media_artist = attributes.get('media_artist')
-            media_album = attributes.get('media_album')
             
             if not media_title:
                 logger.warning("No media_title found in Home Assistant response")
@@ -77,7 +76,6 @@ class HomeAssistantAPI:
             media_info = {
                 'title': media_title,
                 'artist': media_artist or 'Unknown',
-                'album': media_album or 'Unknown',
                 'duration': media_duration
             }
             

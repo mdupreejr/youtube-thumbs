@@ -3,7 +3,7 @@ from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
 from dotenv import load_dotenv
-from logger import logger, user_action_logger, error_logger
+from logger import logger, user_action_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
@@ -17,13 +17,13 @@ PORT = int(os.getenv('PORT', '21812'))
 HOST = os.getenv('HOST', '0.0.0.0')
 
 
-def find_video_with_retry(ha_media: Dict[str, Any]) -> Tuple[Optional[Dict], bool]:
+def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """
     Find matching video using global search with duration and title matching.
-    No retries - either finds it or fails fast.
-    
+    Either finds it or fails fast.
+
     Returns:
-        tuple: (video_dict or None, success: bool)
+        video_dict or None
     """
     yt_api = get_youtube_api()
     
@@ -33,16 +33,12 @@ def find_video_with_retry(ha_media: Dict[str, Any]) -> Tuple[Optional[Dict], boo
     
     # Validate required fields
     if not title:
-        error_msg = "Missing title in media info"
-        logger.error(error_msg)
-        error_logger.error(f"{error_msg} | Context: find_video_with_retry")
-        return None, False
-    
+        logger.error("Missing title in media info")
+        return None
+
     if not duration:
-        error_msg = "Missing duration in media info"
-        logger.error(error_msg)
-        error_logger.error(f"{error_msg} | Context: find_video_with_retry")
-        return None, False
+        logger.error("Missing duration in media info")
+        return None
     
     # Build search query (include artist if available for better results)
     if artist:
@@ -53,27 +49,23 @@ def find_video_with_retry(ha_media: Dict[str, Any]) -> Tuple[Optional[Dict], boo
     # Step 1: Search globally, filtered by duration
     candidates = yt_api.search_video_globally(search_query, duration)
     if not candidates:
-        error_msg = f"No videos found globally matching title and duration"
-        logger.error(error_msg)
-        error_logger.error(f"{error_msg} | Context: find_video_with_retry | Query: '{search_query}' | Duration: {duration}s")
-        return None, False
+        logger.error(f"No videos found globally matching title and duration | Query: '{search_query}' | Duration: {duration}s")
+        return None
     
     # Step 2: Filter candidates by title text matching
     matches = matcher.filter_candidates_by_title(title, candidates)
     if not matches:
-        error_msg = f"No videos matched title text: '{title}'"
-        logger.error(error_msg)
-        error_logger.error(f"{error_msg} | Context: find_video_with_retry | Candidates checked: {len(candidates)}")
-        return None, False
+        logger.error(f"No videos matched title text: '{title}' | Candidates checked: {len(candidates)}")
+        return None
     
     # Step 3: Select best match (first one = highest search relevance)
     video = matches[0]
-    
+
     if len(matches) > 1:
         logger.warning(f"Multiple matches found ({len(matches)}), using first result: '{video['title']}' on '{video['channel']}'")
-    
+
     logger.info(f"Successfully found video: '{video['title']}' on '{video['channel']}' (ID: {video['video_id']})")
-    return video, True
+    return video
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:
@@ -88,19 +80,17 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
     try:
         ha_media = ha_api.get_current_media()
         if not ha_media:
-            error_msg = "No media currently playing"
-            error_logger.error(f"{error_msg} | Context: rate_video ({rating_type})")
-            return jsonify({"success": False, "error": error_msg}), 400
+            logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
+            return jsonify({"success": False, "error": "No media currently playing"}), 400
         
-        video, _ = find_video_with_retry(ha_media)
+        video = search_and_match_video(ha_media)
         if not video:
-            error_msg = "Video not found"
             title = ha_media.get('title', 'unknown')
             artist = ha_media.get('artist', '')
             media_info = f"\"{title}\" by {artist}" if artist else f"\"{title}\""
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - {error_msg}")
-            error_logger.error(f"{error_msg} | Context: rate_video ({rating_type}) | Media: {media_info}")
-            return jsonify({"success": False, "error": error_msg}), 404
+            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
+            logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
+            return jsonify({"success": False, "error": "Video not found"}), 404
         
         video_id = video['video_id']
         video_title = video['title']
@@ -122,14 +112,13 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             logger.info(f"Successfully rated video {video_id} {rating_type}")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | SUCCESS")
             return jsonify({"success": True, "message": f"Successfully rated {rating_type}", "video_id": video_id, "title": video_title}), 200
-        
-        error_msg = "Failed to set rating"
+
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | FAILED - API error")
-        error_logger.error(f"{error_msg} | Context: rate_video ({rating_type}) | Video ID: {video_id} | Title: {video_title}")
-        return jsonify({"success": False, "error": error_msg}), 500
+        logger.error(f"Failed to set rating | Context: rate_video ({rating_type}) | Video ID: {video_id} | Title: {video_title}")
+        return jsonify({"success": False, "error": "Failed to set rating"}), 500
     except Exception as e:
-        logger.error(f"Error in {rating_type} endpoint: {str(e)}")
-        error_logger.error(f"Unexpected error in rate_video ({rating_type}) | Error: {str(e)} | Traceback: {traceback.format_exc()}")
+        logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
+        logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/thumbs_up', methods=['POST'])

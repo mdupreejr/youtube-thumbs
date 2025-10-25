@@ -31,12 +31,6 @@ export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
 export RATE_LIMIT_PER_DAY=$(bashio::config 'rate_limit_per_day')
 export LOG_LEVEL=$(bashio::config 'log_level')
-export LOG_MAX_SIZE_MB=$(bashio::config 'log_max_size_mb')
-
-# Set log file paths to /data directory for persistence
-export LOG_FILE=/data/app.log
-export USER_ACTION_LOG_FILE=/data/user_actions.log
-export ERROR_LOG_FILE=/data/errors.log
 
 # Check what files exist and where
 bashio::log.info "Checking for OAuth credentials..."
