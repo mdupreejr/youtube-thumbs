@@ -10,6 +10,7 @@ from youtube_api import get_youtube_api
 from matcher import matcher
 from database import get_database
 from history_tracker import HistoryTracker
+from quota_guard import quota_guard
 
 app = Flask(__name__)
 db = get_database()
@@ -51,6 +52,14 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     else:
         search_query = title
     
+    if quota_guard.is_blocked():
+        logger.warning(
+            "Skipping YouTube search for '%s' due to quota cooldown: %s",
+            title,
+            quota_guard.describe_block(),
+        )
+        return None
+
     # Step 1: Search globally, filtered by duration
     candidates = yt_api.search_video_globally(search_query, duration)
     if not candidates:
@@ -188,6 +197,24 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
             return jsonify({"success": False, "error": "No media currently playing"}), 400
         
+        if quota_guard.is_blocked():
+            cooldown_msg = quota_guard.block_message()
+            logger.warning("Blocking %s request: %s", rating_type, cooldown_msg)
+            user_action_logger.info(f"{rating_type.upper()} | COOLDOWN_ACTIVE | {cooldown_msg}")
+            rating_logger.info(
+                f"{rating_type.upper()} | BLOCKED | Reason: quota cooldown | Until: {quota_guard.blocked_until_iso()}"
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": cooldown_msg,
+                        "cooldown_until": quota_guard.blocked_until_iso(),
+                    }
+                ),
+                503,
+            )
+
         video = find_cached_video(ha_media)
         if not video:
             video = search_and_match_video(ha_media)

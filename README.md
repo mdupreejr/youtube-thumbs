@@ -132,6 +132,15 @@ Configure these in the add-on Configuration tab:
 
 **Note:** The add-on automatically handles authentication using the Supervisor token.
 
+### Automatic Quota Cooldown
+
+Any time Google responds with `quotaExceeded`, the add-on writes
+`/config/youtube_thumbs/quota_guard.json`, logs the failure, and pauses all YouTube
+API calls for 24 hours (configurable via `YTT_QUOTA_COOLDOWN_SECONDS`). During the
+cooldown the HTTP endpoints return `503` with a friendly error message, and the
+history tracker skips matching attempts. Delete the guard file only after your
+quota resets if you need to re-enable access early.
+
 ## Data Storage & sqlite_web
 
 - All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
@@ -181,6 +190,11 @@ Because the new service performs UPSERTs, duplicates are safe—the latest metad
 - Check add-on logs for specific error messages
 - Ensure OAuth credentials are from Google Cloud Console with YouTube Data API v3 enabled
 - The add-on will automatically create `token.pickle` on first run
+
+**`quotaExceeded` / 503 errors**
+- Hitting the YouTube quota triggers an automatic 24-hour cooldown saved in `/config/youtube_thumbs/quota_guard.json`.
+- The HTTP API responds with 503 during that window; history tracking will skip new matches.
+- Either wait for the cooldown to expire or delete the guard file after you’ve raised/reset your quota (only if you’re sure the quota has recovered).
 
 **Check Logs**
 - View in Home Assistant: Settings → Add-ons → YouTube Thumbs Rating → Log tab

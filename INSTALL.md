@@ -82,6 +82,11 @@ Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
 button will route through Home Assistant ingress automatically. If you override the
 host, skip the button and browse directly to `http://<home-assistant-host>:<sqlite_web_port>`.
 
+If Google reports `quotaExceeded`, the add-on writes
+`/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic for
+24 hours (tweak with `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
+API returns `503` responses and the history tracker skips new matches.
+
 **Security note:** The rating API always listens on `127.0.0.1` and cannot be exposed. The sqlite_web helper also defaults to `127.0.0.1`, but you can set `sqlite_web_host: 0.0.0.0` (and optionally adjust `sqlite_web_port`) if you intentionally want the DB UI reachable from your LAN.
 
 #### Finding your media player entity:
