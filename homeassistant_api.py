@@ -1,26 +1,20 @@
 import requests
 from typing import Optional, Dict, Any
 import os
-from dotenv import load_dotenv
 from logger import logger
-
-load_dotenv()
 
 class HomeAssistantAPI:
     """Interface to Home Assistant API."""
     
     def __init__(self) -> None:
         self.url = os.getenv('HOME_ASSISTANT_URL')
-        # Use SUPERVISOR_TOKEN if available (add-on environment), otherwise use HOME_ASSISTANT_TOKEN
         self.token = os.getenv('SUPERVISOR_TOKEN') or os.getenv('HOME_ASSISTANT_TOKEN')
         self.entity = os.getenv('MEDIA_PLAYER_ENTITY')
 
         if self.token and os.getenv('SUPERVISOR_TOKEN'):
             logger.info("Using Supervisor token for authentication")
-            logger.debug(f"Token length: {len(self.token)}")
         elif self.token:
             logger.info("Using long-lived access token for authentication")
-            logger.debug(f"Token length: {len(self.token)}")
 
         if not all([self.url, self.token, self.entity]):
             raise ValueError("Missing Home Assistant configuration. Please check add-on configuration.")
@@ -32,22 +26,16 @@ class HomeAssistantAPI:
             'Authorization': f'Bearer {self.token}',
             'Content-Type': 'application/json'
         }
-        
-        # Use session for connection pooling and performance
+
         self.session = requests.Session()
         self.session.headers.update(self.headers)
     
     def get_current_media(self) -> Optional[Dict[str, Any]]:
-        """
-        Get current playing media information.
-        Returns dict with title, artist, album or None if nothing playing.
-        """
+        """Get current playing media information."""
         try:
             logger.info(f"Fetching current media from Home Assistant entity: {self.entity}")
-            
+
             url = f"{self.url}/api/states/{self.entity}"
-            logger.debug(f"Requesting: {url}")
-            logger.debug(f"Headers: Authorization=Bearer {'*' * 20}")
 
             response = self.session.get(url, timeout=10)
 

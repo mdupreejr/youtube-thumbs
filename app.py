@@ -2,19 +2,13 @@ from flask import Flask, jsonify, Response
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
-from dotenv import load_dotenv
 from logger import logger, user_action_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
 from matcher import matcher
 
-load_dotenv()
-
 app = Flask(__name__)
-
-PORT = int(os.getenv('PORT', '21812'))
-HOST = os.getenv('HOST', '0.0.0.0')
 
 
 def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
@@ -94,7 +88,6 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         
         video_id = video['video_id']
         video_title = video['title']
-        video_channel = video.get('channel', 'unknown')
         artist = ha_media.get('artist', '')
         
         # Format media info for logging
@@ -141,12 +134,15 @@ def health() -> Response:
 
 
 if __name__ == '__main__':
-    logger.info(f"Starting YouTube Thumbs service on {HOST}:{PORT}")
-    
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', '21812'))
+
+    logger.info(f"Starting YouTube Thumbs service on {host}:{port}")
+
     try:
         get_youtube_api()
     except Exception as e:
         logger.error(f"Failed to initialize YouTube API: {str(e)}")
         logger.error("Please ensure credentials.json exists and run the OAuth flow")
-    
-    app.run(host=HOST, port=PORT, debug=False)
+
+    app.run(host=host, port=port, debug=False)

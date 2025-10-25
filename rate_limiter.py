@@ -2,10 +2,7 @@ import time
 from collections import deque
 from typing import Tuple, Dict, Any
 import os
-from dotenv import load_dotenv
 from logger import logger
-
-load_dotenv()
 
 class RateLimiter:
     """Rate limiter to prevent API abuse."""
