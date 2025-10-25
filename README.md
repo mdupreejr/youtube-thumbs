@@ -104,7 +104,7 @@ Health check with rate limiter stats.
 
 - Every 30 seconds the add-on polls Home Assistant for the currently playing song.
 - New titles (title + duration) are matched against YouTube, stored in `ratings.db`, and receive an initial play count.
-- Replays simply increment `play_count`, so your database reflects every listen even when you never call 👍/👎.
+- Continuous playback only records once; the counter increments again the next time that song starts playing (after the player stops or switches tracks).
 - Set `ENABLE_HISTORY_TRACKER=false` to disable the background thread or tweak the cadence with `HISTORY_POLL_INTERVAL=<seconds>` if you need a slower/faster poll rate (exposed in the add-on config as `history_tracker_enabled` / `history_poll_interval`).
 
 ## Add-on Configuration Options

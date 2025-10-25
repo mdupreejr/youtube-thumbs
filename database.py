@@ -126,15 +126,16 @@ class Database:
             'rating': video.get('rating', 'none') or 'none',
             'date_added': self._timestamp(date_added),
         }
+        payload['date_updated'] = payload['date_added']
 
         upsert_sql = """
         INSERT INTO video_ratings (
             video_id, ha_title, yt_title, channel, ha_duration, yt_duration,
-            youtube_url, rating, date_added, play_count, rating_count
+            youtube_url, rating, date_added, date_updated, play_count, rating_count
         )
         VALUES (
             :video_id, :ha_title, :yt_title, :channel, :ha_duration, :yt_duration,
-            :youtube_url, :rating, :date_added, 0, 0
+            :youtube_url, :rating, :date_added, :date_updated, 0, 0
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
@@ -161,21 +162,22 @@ class Database:
                         """
                         UPDATE video_ratings
                         SET play_count = COALESCE(play_count, 0) + 1,
-                            date_played = ?
+                            date_played = ?,
+                            date_updated = COALESCE(date_updated, ?)
                         WHERE video_id = ?
                         """,
-                        (ts, video_id),
+                        (ts, ts, video_id),
                     )
                     if cur.rowcount == 0:
                         self._conn.execute(
                             """
                             INSERT INTO video_ratings (
                                 video_id, ha_title, yt_title, rating,
-                                date_added, date_played, play_count, rating_count
+                                date_added, date_updated, date_played, play_count, rating_count
                             )
-                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, 1, 0)
+                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, ?, 1, 0)
                             """,
-                            (video_id, ts, ts),
+                            (video_id, ts, ts, ts),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to record play for {video_id}: {exc}")

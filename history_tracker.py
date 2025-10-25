@@ -31,6 +31,7 @@ class HistoryTracker:
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, name="history-tracker", daemon=True)
         self._last_failed_key: Optional[str] = None
+        self._active_media_key: Optional[str] = None
 
     def start(self) -> None:
         if not self.enabled:
@@ -63,6 +64,7 @@ class HistoryTracker:
     def _poll_once(self) -> None:
         media = self.ha_api.get_current_media()
         if not media:
+            self._active_media_key = None
             return
 
         title = media.get('title')
@@ -73,11 +75,15 @@ class HistoryTracker:
             return
 
         media_key = f"{title}|{duration}"
+        if self._active_media_key == media_key:
+            logger.debug("History tracker already recorded '%s' recently; skipping duplicate", title)
+            return
 
         existing = self.db.find_by_title_and_duration(title, duration)
         if existing:
             self.db.record_play(existing['video_id'])
             logger.debug("History tracker recorded repeat play for '%s'", title)
+            self._active_media_key = media_key
             self._last_failed_key = None
             return
 
@@ -115,6 +121,7 @@ class HistoryTracker:
         })
         self.db.record_play(video_id)
         logger.info("History tracker stored '%s' (video %s)", title, video_id)
+        self._active_media_key = media_key
         self._last_failed_key = None
 
     @staticmethod
