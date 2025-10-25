@@ -17,6 +17,9 @@ RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
 # Copy all application files
 COPY *.py .
 
+# Copy OAuth credentials
+COPY credentials.json token.pickle ./
+
 # Copy startup script
 COPY run.sh .
 RUN chmod +x run.sh
