@@ -83,43 +83,29 @@ bashio::log.info "Rate limits: ${RATE_LIMIT_PER_MINUTE}/min, ${RATE_LIMIT_PER_HO
 bashio::log.info "Log level: ${LOG_LEVEL}"
 
 # Check what files exist and where
-bashio::log.info "Checking for OAuth credentials..."
+bashio::log.info "Checking for OAuth credentials in /config/youtube_thumbs (add-on config directory)..."
 
 # Create the addon_config directory if it doesn't exist (also used for logs)
-if [ ! -d /config/youtube_thumbs ]; then
-    mkdir -p /config/youtube_thumbs
-    bashio::log.info "Created directory /config/youtube_thumbs/ for logs and credentials"
+CONFIG_DIR="/config/youtube_thumbs"
+mkdir -p "${CONFIG_DIR}"
+bashio::log.info "Ensured directory ${CONFIG_DIR} exists"
+
+if [ -f "${CONFIG_DIR}/credentials.json" ]; then
+    bashio::log.info "Found credentials.json in ${CONFIG_DIR}"
+    ln -sf "${CONFIG_DIR}/credentials.json" /app/credentials.json
+    bashio::log.info "Created symlink: /app/credentials.json -> ${CONFIG_DIR}/credentials.json"
 else
-    bashio::log.info "Directory /config/youtube_thumbs/ already exists"
+    bashio::log.warning "credentials.json NOT found in ${CONFIG_DIR}"
+    bashio::log.warning "Please copy credentials.json to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
 fi
 
-# Try multiple possible locations (prioritize addon_config location)
-if [ -f /config/youtube_thumbs/credentials.json ]; then
-    bashio::log.info "Found credentials.json in /config/youtube_thumbs/"
-    ln -sf /config/youtube_thumbs/credentials.json /app/credentials.json
-    bashio::log.info "Created symlink: /app/credentials.json -> /config/youtube_thumbs/credentials.json"
-elif [ -f /data/credentials.json ]; then
-    bashio::log.info "Found credentials.json in /data/"
-    ln -sf /data/credentials.json /app/credentials.json
-    bashio::log.info "Created symlink: /app/credentials.json -> /data/credentials.json"
+if [ -f "${CONFIG_DIR}/token.pickle" ]; then
+    bashio::log.info "Found token.pickle in ${CONFIG_DIR}"
+    ln -sf "${CONFIG_DIR}/token.pickle" /app/token.pickle
+    bashio::log.info "Created symlink: /app/token.pickle -> ${CONFIG_DIR}/token.pickle"
 else
-    bashio::log.warning "credentials.json NOT found in /config/youtube_thumbs/ or /data/"
-    bashio::log.warning "Please copy credentials.json to /addon_configs/XXXXXXXX_youtube_thumbs/"
-    bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
-fi
-
-if [ -f /config/youtube_thumbs/token.pickle ]; then
-    bashio::log.info "Found token.pickle in /config/youtube_thumbs/"
-    ln -sf /config/youtube_thumbs/token.pickle /app/token.pickle
-    bashio::log.info "Created symlink: /app/token.pickle -> /config/youtube_thumbs/token.pickle"
-elif [ -f /data/token.pickle ]; then
-    bashio::log.info "Found token.pickle in /data/"
-    ln -sf /data/token.pickle /app/token.pickle
-    bashio::log.info "Created symlink: /app/token.pickle -> /data/token.pickle"
-else
-    bashio::log.warning "token.pickle NOT found in /config/youtube_thumbs/ or /data/"
-    bashio::log.warning "Please copy token.pickle to /addon_configs/XXXXXXXX_youtube_thumbs/"
-    bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
+    bashio::log.warning "token.pickle NOT found in ${CONFIG_DIR}"
+    bashio::log.warning "Please copy token.pickle to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
 fi
 
 bashio::log.info "-------------------------------------------"
