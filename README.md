@@ -14,6 +14,7 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 - 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
 - ⚡ Optimized performance with caching and connection pooling
+- 💾 Local SQLite history + sqlite_web UI on port 8080
 - 🔒 OAuth authentication preservation
 
 ## Installation
@@ -111,6 +112,36 @@ Configure these in the add-on Configuration tab:
 
 **Note:** The add-on automatically handles authentication using the Supervisor token.
 
+## Data Storage & sqlite_web
+
+- All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
+- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) on port `8080`, bound to the same host/IP as the Flask API.
+  - Browse to `http://<home-assistant-host>:8080` to search, sort, or edit records without any custom frontend code.
+  - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
+- You can override the UI port by setting the `SQLITE_WEB_PORT` environment variable inside the add-on options if needed.
+
+### Manual import from the legacy `ratings.log`
+
+Importing is a one-time operation, so feel free to do it manually:
+
+1. Stop the add-on (to release the SQLite lock).
+2. Open `/config/youtube_thumbs/ratings.log` alongside `sqlite_web` (or the `sqlite3` CLI).
+3. For each entry you care about, add a record in the `video_ratings` table with the video ID, titles, and rating. Keep the `date_added`/`date_updated` timestamps aligned with the log if you want historical accuracy.
+4. Start the add-on again; new plays/ratings will append automatically.
+
+Tip: For larger imports, you can paste SQL like the snippet below directly into `sqlite3`:
+
+```sql
+INSERT OR IGNORE INTO video_ratings (
+  video_id, ha_title, yt_title, channel, rating, date_added, date_updated, play_count, rating_count
+) VALUES (
+  'ZmLIxKpgEPw', 'Song Title', 'Song Title', 'Artist', 'like',
+  '2024-05-01 12:00:00', '2024-05-01 12:00:00', 1, 1
+);
+```
+
+Because the new service performs UPSERTs, duplicates are safe—the latest metadata always wins.
+
 ## Troubleshooting
 
 **"No media currently playing"**
@@ -157,6 +188,21 @@ View logs in the add-on **Log** tab.
 - Authentication handled automatically via Supervisor token
 - Service only accessible from localhost (not exposed to network)
 - ⚠️ Never share your `credentials.json` file
+
+## Local Development
+
+Running the Flask service outside the Home Assistant add-on? Spin up a virtual environment to isolate dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export HOME_ASSISTANT_URL="http://supervisor/core"  # or your actual HA URL
+export MEDIA_PLAYER_ENTITY="media_player.apple_tv"
+python app.py
+```
+
+Set `YTT_DB_PATH` if you want the SQLite file somewhere other than `/config/youtube_thumbs/ratings.db`.
 
 ## Support
 

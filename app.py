@@ -7,8 +7,10 @@ from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
 from matcher import matcher
+from database import get_database
 
 app = Flask(__name__)
+db = get_database()
 
 
 def format_media_info(title: str, artist: str) -> str:
@@ -99,6 +101,17 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         artist = ha_media.get('artist', '')
         media_info = format_media_info(video_title, artist)
 
+        db.upsert_video({
+            'video_id': video_id,
+            'ha_title': ha_media.get('title', video_title),
+            'yt_title': video_title,
+            'channel': video.get('channel'),
+            'ha_duration': ha_media.get('duration'),
+            'yt_duration': video.get('duration'),
+            'youtube_url': f"https://www.youtube.com/watch?v={video_id}"
+        })
+        db.record_play(video_id)
+
         yt_api = get_youtube_api()
         current_rating = yt_api.get_video_rating(video_id)
         
@@ -106,12 +119,14 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             logger.info(f"Video {video_id} already rated '{rating_type}'")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | ALREADY_RATED")
             rating_logger.info(f"{rating_type.upper()} | ALREADY_RATED | {media_info} | ID: {video_id}")
+            db.record_rating(video_id, rating_type)
             return jsonify({"success": True, "message": f"Already rated {rating_type}", "video_id": video_id, "title": video_title}), 200
 
         if yt_api.set_video_rating(video_id, rating_type):
             logger.info(f"Successfully rated video {video_id} {rating_type}")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | SUCCESS")
             rating_logger.info(f"{rating_type.upper()} | SUCCESS | {media_info} | ID: {video_id}")
+            db.record_rating(video_id, rating_type)
             return jsonify({"success": True, "message": f"Successfully rated {rating_type}", "video_id": video_id, "title": video_title}), 200
 
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | FAILED - API error")

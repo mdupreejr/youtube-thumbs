@@ -96,6 +96,47 @@ bashio::log.info "Target media player: ${MEDIA_PLAYER_ENTITY}"
 bashio::log.info "Log files location: /config/youtube_thumbs/"
 bashio::log.info "-------------------------------------------"
 
+APP_DIR="/app"
+cd "${APP_DIR}"
+
+DB_PATH="/config/youtube_thumbs/ratings.db"
+export YTT_DB_PATH="${DB_PATH}"
+
+if [ ! -f "${DB_PATH}" ]; then
+    bashio::log.info "Initializing SQLite database at ${DB_PATH}"
+    python3 - <<'EOF'
+from database import get_database
+get_database()
+EOF
+else
+    bashio::log.info "Found existing SQLite database at ${DB_PATH}"
+fi
+
+SQLITE_WEB_PORT=${SQLITE_WEB_PORT:-8080}
+SQLITE_WEB_LOG="/config/youtube_thumbs/sqlite_web.log"
+SQLITE_WEB_PID=""
+
+if command -v sqlite_web >/dev/null 2>&1; then
+    bashio::log.info "Starting sqlite_web UI on port ${SQLITE_WEB_PORT}"
+    sqlite_web "${DB_PATH}" \
+        --no-browser \
+        --host "${HOST}" \
+        --port "${SQLITE_WEB_PORT}" \
+        >> "${SQLITE_WEB_LOG}" 2>&1 &
+    SQLITE_WEB_PID=$!
+    bashio::log.info "sqlite_web UI log: ${SQLITE_WEB_LOG}"
+else
+    bashio::log.warning "sqlite_web not found; database UI will be unavailable"
+fi
+
+cleanup() {
+    if [ -n "${SQLITE_WEB_PID}" ]; then
+        bashio::log.info "Stopping sqlite_web (PID ${SQLITE_WEB_PID})"
+        kill "${SQLITE_WEB_PID}" >/dev/null 2>&1 || true
+    fi
+}
+
+trap cleanup EXIT
+
 # Start the Flask application
-cd /app
 exec python3 app.py

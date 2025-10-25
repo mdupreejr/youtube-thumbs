@@ -87,6 +87,13 @@ log_level: INFO
    ```
 3. If you see OAuth credential warnings, verify you copied the files to the correct location
 
+### 6b. Access the sqlite_web UI (optional)
+
+- Browse to `http://<home-assistant-host>:8080` to open **sqlite_web**.
+- From there you can search, sort, and edit the `video_ratings` table without writing any HTML.
+- Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
+- To change the port, set the `SQLITE_WEB_PORT` environment variable in the add-on options.
+
 ### 7. Configure Home Assistant
 
 Add REST commands to your `configuration.yaml`:
@@ -163,6 +170,25 @@ automation:
 - Try refreshing the Add-on Store page
 - Check Settings → Add-ons → Add-on Store → ⋮ → Check for updates
 - Restart Home Assistant if the add-on still doesn't appear
+
+### Manually importing legacy `ratings.log`
+
+If you have historical data in `/config/youtube_thumbs/ratings.log`, you can enter it manually (this is typically a one-time chore):
+
+1. Stop the add-on so the SQLite file is unlocked.
+2. Open `sqlite_web` (port 8080) or use the `sqlite3 /config/youtube_thumbs/ratings.db` CLI.
+3. Create rows in the `video_ratings` table using the timestamps/video IDs from the log. Example SQL:
+
+```sql
+INSERT OR IGNORE INTO video_ratings (
+  video_id, ha_title, yt_title, channel, rating, date_added, date_updated, play_count, rating_count
+) VALUES (
+  'ZmLIxKpgEPw', 'Song Title', 'Song Title', 'Artist', 'like',
+  '2024-05-01 12:00:00', '2024-05-01 12:00:00', 1, 1
+);
+```
+
+4. Restart the add-on; new ratings and plays will now append automatically.
 
 ## API Endpoints
 
