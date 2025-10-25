@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/yourusername/youtube_thumbs",
@@ -11,12 +11,6 @@
   "hassio_api": true,
   "hassio_role": "default",
   "host_network": true,
-  "ports": {
-    "21812/tcp": 21812
-  },
-  "ports_description": {
-    "21812/tcp": "YouTube Thumbs API port"
-  },
   "options": {
     "home_assistant_url": "http://supervisor/core",
     "home_assistant_token": "",
@@ -33,7 +27,8 @@
     "home_assistant_url (Optional)": "str?",
     "home_assistant_token (Optional)": "password?",
     "media_player_entity": "str",
-    "port": "port",
+    "port": "port?",
+    "host": "str?",
     "rate_limit_per_minute": "int(1,1000)",
     "rate_limit_per_hour": "int(1,10000)",
     "rate_limit_per_day": "int(1,100000)",
