@@ -1,5 +1,9 @@
+import re
 from typing import List, Dict
 from logger import logger
+
+# Constants
+TITLE_OVERLAP_THRESHOLD = 0.5  # 50% of HA words must appear in YouTube title
 
 class TitleMatcher:
     """Match song titles between Home Assistant and YouTube history."""
@@ -12,26 +16,17 @@ class TitleMatcher:
         
         # Convert to lowercase
         text = text.lower()
-        
-        # Remove common separators and variations
-        replacements = {
-            ' - ': ' ',
-            ' – ': ' ',
-            ' — ': ' ',
-            '(official video)': '',
-            '(official music video)': '',
-            '(official audio)': '',
-            '(lyric video)': '',
-            '(lyrics)': '',
-            '[official video]': '',
-            '[official music video]': '',
-            '[official audio]': '',
-            'ft.': 'feat.',
-            'ft ': 'feat ',
-        }
-        
-        for old, new in replacements.items():
-            text = text.replace(old, new)
+
+        # Remove common separators (dashes) with single regex
+        text = re.sub(r'\s[–—-]\s', ' ', text)
+
+        # Remove common video labels
+        text = re.sub(r'[\(\[]official (music )?video[\)\]]', '', text)
+        text = re.sub(r'[\(\[]official audio[\)\]]', '', text)
+        text = re.sub(r'[\(\[]lyric(s)? video[\)\]]', '', text)
+
+        # Normalize featuring/ft variations
+        text = re.sub(r'\bft\.?\s', 'feat ', text)
         
         # Remove extra whitespace
         text = ' '.join(text.split())
@@ -64,10 +59,10 @@ class TitleMatcher:
             ha_words = set(ha_title_norm.split())
             yt_words = set(yt_title_norm.split())
             
-            # Calculate overlap - need at least 50% of HA words in YT title
+            # Calculate overlap - need at least threshold of HA words in YT title
             if ha_words:
                 overlap = len(ha_words & yt_words) / len(ha_words)
-                if overlap >= 0.5:
+                if overlap >= TITLE_OVERLAP_THRESHOLD:
                     logger.info(f"Title match: '{yt_title}' (overlap: {overlap:.0%})")
                     matches.append(video)
                 else:

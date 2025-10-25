@@ -9,6 +9,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import logger
 
+# Constants
+SEARCH_MAX_RESULTS = 50
+DURATION_TOLERANCE_SECONDS = 2
+
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
 
@@ -68,7 +72,7 @@ class YouTubeAPI:
             logger.info(f"Searching globally for: \"{title}\"")
 
             response = self.youtube.search().list(
-                part='snippet', q=title, type='video', maxResults=50
+                part='snippet', q=title, type='video', maxResults=SEARCH_MAX_RESULTS
             ).execute()
 
             items = response.get('items', [])
@@ -95,14 +99,14 @@ class YouTubeAPI:
 
                 if expected_duration is not None:
                     diff = abs(duration - expected_duration)
-                    if diff <= 2:
+                    if diff <= DURATION_TOLERANCE_SECONDS:
                         logger.info(f"Duration match: '{video_info['title']}' on '{video_info['channel']}' - {duration}s (diff: {diff}s)")
                         candidates.append(video_info)
                 else:
                     candidates.append(video_info)
 
             if not candidates and expected_duration:
-                logger.error(f"No videos match duration {expected_duration}s (±2s) | Query: '{title}'")
+                logger.error(f"No videos match duration {expected_duration}s (±{DURATION_TOLERANCE_SECONDS}s) | Query: '{title}'")
                 return None
 
             logger.info(f"Found {len(candidates)} duration-matched candidates")

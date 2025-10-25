@@ -54,7 +54,7 @@ Before starting the add-on, copy your OAuth credentials:
 
 ### 4. Configure the Add-on
 
-1. In the Add-ons section, click on **YouTube Thumbs*
+1. In the Add-ons section, click on **YouTube Thumbs**
 2. Go to the **Configuration** tab
 3. Fill in the required fields:
 

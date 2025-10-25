@@ -4,6 +4,11 @@ from typing import Tuple, Dict, Any
 import os
 from logger import logger
 
+# Constants for time windows (in seconds)
+TIME_WINDOW_MINUTE = 60
+TIME_WINDOW_HOUR = 3600
+TIME_WINDOW_DAY = 86400
+
 class RateLimiter:
     """Rate limiter to prevent API abuse."""
     
@@ -24,11 +29,7 @@ class RateLimiter:
     def _count_recent_requests(self, time_window: int) -> int:
         """Count requests within the time window."""
         current_time = time.time()
-        count = 0
-        for timestamp in self.requests:
-            if current_time - timestamp <= time_window:
-                count += 1
-        return count
+        return sum(1 for ts in self.requests if current_time - ts <= time_window)
     
     def check_and_add_request(self) -> Tuple[bool, str]:
         """
@@ -36,14 +37,14 @@ class RateLimiter:
         Returns (allowed: bool, reason: str)
         """
         current_time = time.time()
-        
+
         # Clean old requests (older than 1 day)
-        self._clean_old_requests(86400)
-        
+        self._clean_old_requests(TIME_WINDOW_DAY)
+
         # Count requests in each time window
-        minute_count = self._count_recent_requests(60)
-        hour_count = self._count_recent_requests(3600)
-        day_count = self._count_recent_requests(86400)
+        minute_count = self._count_recent_requests(TIME_WINDOW_MINUTE)
+        hour_count = self._count_recent_requests(TIME_WINDOW_HOUR)
+        day_count = self._count_recent_requests(TIME_WINDOW_DAY)
         
         # Check limits
         if minute_count >= self.per_minute:
@@ -66,12 +67,12 @@ class RateLimiter:
     def get_stats(self) -> Dict[str, Any]:
         """Get current rate limit statistics."""
         # Clean old requests (older than 1 day)
-        self._clean_old_requests(86400)
-        
+        self._clean_old_requests(TIME_WINDOW_DAY)
+
         return {
-            "last_minute": self._count_recent_requests(60),
-            "last_hour": self._count_recent_requests(3600),
-            "last_day": self._count_recent_requests(86400),
+            "last_minute": self._count_recent_requests(TIME_WINDOW_MINUTE),
+            "last_hour": self._count_recent_requests(TIME_WINDOW_HOUR),
+            "last_day": self._count_recent_requests(TIME_WINDOW_DAY),
             "limits": {
                 "per_minute": self.per_minute,
                 "per_hour": self.per_hour,
