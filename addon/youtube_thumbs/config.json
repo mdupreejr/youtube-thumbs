@@ -1,0 +1,42 @@
+{
+  "name": "YouTube Thumbs Rating",
+  "version": "1.1.0",
+  "slug": "youtube_thumbs",
+  "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
+  "url": "https://github.com/yourusername/youtube_thumbs",
+  "arch": ["aarch64", "amd64", "armhf", "armv7", "i386"],
+  "startup": "application",
+  "boot": "auto",
+  "init": false,
+  "host_network": true,
+  "ports": {
+    "21812/tcp": 21812
+  },
+  "ports_description": {
+    "21812/tcp": "YouTube Thumbs API port"
+  },
+  "options": {
+    "home_assistant_url": "http://supervisor/core",
+    "home_assistant_token": "",
+    "media_player_entity": "media_player.apple_tv",
+    "port": 21812,
+    "host": "0.0.0.0",
+    "rate_limit_per_minute": 10,
+    "rate_limit_per_hour": 100,
+    "rate_limit_per_day": 500,
+    "log_level": "INFO",
+    "log_max_size_mb": 10
+  },
+  "schema": {
+    "home_assistant_url": "str",
+    "home_assistant_token": "password",
+    "media_player_entity": "str",
+    "port": "port",
+    "host": "str",
+    "rate_limit_per_minute": "int(1,1000)",
+    "rate_limit_per_hour": "int(1,10000)",
+    "rate_limit_per_day": "int(1,100000)",
+    "log_level": "list(DEBUG|INFO|WARNING|ERROR|CRITICAL)?",
+    "log_max_size_mb": "int(1,100)?"
+  }
+}
