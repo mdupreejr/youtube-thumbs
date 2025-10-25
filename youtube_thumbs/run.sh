@@ -84,14 +84,6 @@ else
     bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
 fi
 
-# List what's actually in various directories for debugging
-bashio::log.info "Contents of /config/youtube_thumbs/ (if exists):"
-ls -la /config/youtube_thumbs/ 2>/dev/null || bashio::log.warning "Directory /config/youtube_thumbs/ does not exist"
-bashio::log.info "Contents of /share/youtube_thumbs/ (if exists):"
-ls -la /share/youtube_thumbs/ 2>/dev/null || bashio::log.warning "Directory /share/youtube_thumbs/ does not exist"
-bashio::log.info "Contents of /data/:"
-ls -la /data/ || bashio::log.warning "Could not list /data/ directory"
-
 bashio::log.info "Starting YouTube Thumbs service on ${HOST}:${PORT}..."
 bashio::log.info "Home Assistant URL: ${HOME_ASSISTANT_URL}"
 bashio::log.info "Media Player Entity: ${MEDIA_PLAYER_ENTITY}"
