@@ -1,12 +1,20 @@
 #!/usr/bin/with-contenv bashio
 
 # Read configuration from add-on options
-export HOME_ASSISTANT_URL=$(bashio::config 'home_assistant_url')
-export HOME_ASSISTANT_TOKEN=$(bashio::config 'home_assistant_token')
+HOME_ASSISTANT_URL_CONFIG=$(bashio::config 'home_assistant_url')
+HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
+
+# Use defaults if config is empty
+export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG:-http://supervisor/core}"
+export HOME_ASSISTANT_TOKEN="${HOME_ASSISTANT_TOKEN_CONFIG}"
 export MEDIA_PLAYER_ENTITY=$(bashio::config 'media_player_entity')
 
-# Export SUPERVISOR_TOKEN (automatically provided by Home Assistant)
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+# Only export SUPERVISOR_TOKEN if it exists (it's automatically provided by Home Assistant)
+# Don't set it to empty string, let it be unset so Python can check for it properly
+if [ -n "${SUPERVISOR_TOKEN}" ]; then
+    export SUPERVISOR_TOKEN
+    bashio::log.info "SUPERVISOR_TOKEN is available for authentication"
+fi
 export PORT=$(bashio::config 'port')
 export HOST=$(bashio::config 'host')
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
