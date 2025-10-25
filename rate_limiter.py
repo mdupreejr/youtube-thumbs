@@ -8,15 +8,32 @@ class RateLimiter:
     """Rate limiter to prevent API abuse."""
     
     def __init__(self) -> None:
-        self.per_minute = int(os.getenv('RATE_LIMIT_PER_MINUTE', '10'))
-        self.per_hour = int(os.getenv('RATE_LIMIT_PER_HOUR', '100'))
-        self.per_day = int(os.getenv('RATE_LIMIT_PER_DAY', '500'))
+        self.per_minute = self._get_limit('RATE_LIMIT_PER_MINUTE', 10)
+        self.per_hour = self._get_limit('RATE_LIMIT_PER_HOUR', 100)
+        self.per_day = self._get_limit('RATE_LIMIT_PER_DAY', 500)
         
         # Dedicated queues per window to keep operations O(1)
         self.minute_requests = deque()
         self.hour_requests = deque()
         self.day_requests = deque()
     
+    @staticmethod
+    def _get_limit(env_name: str, default: int) -> int:
+        """Read an integer limit from env vars, falling back on blanks/errors."""
+        raw_value = os.getenv(env_name)
+        if not raw_value or not raw_value.strip():
+            return default
+        try:
+            return int(raw_value.strip())
+        except ValueError:
+            logger.warning(
+                "Invalid value '%s' for %s; using default %s",
+                raw_value,
+                env_name,
+                default,
+            )
+            return default
+
     @staticmethod
     def _prune(queue: deque, time_window: int, current_time: float) -> None:
         """Remove timestamps older than the provided window."""
