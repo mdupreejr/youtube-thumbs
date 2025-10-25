@@ -12,23 +12,27 @@ class RateLimiter:
         self.per_hour = int(os.getenv('RATE_LIMIT_PER_HOUR', '100'))
         self.per_day = int(os.getenv('RATE_LIMIT_PER_DAY', '500'))
         
-        # Single deque to track all request timestamps (more memory efficient)
-        self.requests = deque()
+        # Dedicated queues per window to keep operations O(1)
+        self.minute_requests = deque()
+        self.hour_requests = deque()
+        self.day_requests = deque()
     
-    def _clean_old_requests(self, time_window: int) -> None:
-        """Remove requests older than the time window."""
-        current_time = time.time()
-        while self.requests and current_time - self.requests[0] > time_window:
-            self.requests.popleft()
+    @staticmethod
+    def _prune(queue: deque, time_window: int, current_time: float) -> None:
+        """Remove timestamps older than the provided window."""
+        while queue and current_time - queue[0] > time_window:
+            queue.popleft()
     
-    def _count_recent_requests(self, time_window: int) -> int:
-        """Count requests within the time window."""
-        current_time = time.time()
-        count = 0
-        for timestamp in self.requests:
-            if current_time - timestamp <= time_window:
-                count += 1
-        return count
+    def _counts(self, current_time: float) -> Tuple[int, int, int]:
+        """Return counts for each rate limit window."""
+        self._prune(self.minute_requests, 60, current_time)
+        self._prune(self.hour_requests, 3600, current_time)
+        self._prune(self.day_requests, 86400, current_time)
+        return (
+            len(self.minute_requests),
+            len(self.hour_requests),
+            len(self.day_requests),
+        )
     
     def check_and_add_request(self) -> Tuple[bool, str]:
         """
@@ -37,13 +41,7 @@ class RateLimiter:
         """
         current_time = time.time()
         
-        # Clean old requests (older than 1 day)
-        self._clean_old_requests(86400)
-        
-        # Count requests in each time window
-        minute_count = self._count_recent_requests(60)
-        hour_count = self._count_recent_requests(3600)
-        day_count = self._count_recent_requests(86400)
+        minute_count, hour_count, day_count = self._counts(current_time)
         
         # Check limits
         if minute_count >= self.per_minute:
@@ -58,20 +56,22 @@ class RateLimiter:
             logger.warning(f"Rate limit exceeded: {self.per_day} requests per day")
             return False, f"Rate limit exceeded: {self.per_day} requests per day"
         
-        # Add request timestamp
-        self.requests.append(current_time)
+        # Add request timestamp to each queue
+        self.minute_requests.append(current_time)
+        self.hour_requests.append(current_time)
+        self.day_requests.append(current_time)
         
         return True, "OK"
     
     def get_stats(self) -> Dict[str, Any]:
         """Get current rate limit statistics."""
-        # Clean old requests (older than 1 day)
-        self._clean_old_requests(86400)
-        
+        current_time = time.time()
+        minute_count, hour_count, day_count = self._counts(current_time)
+
         return {
-            "last_minute": self._count_recent_requests(60),
-            "last_hour": self._count_recent_requests(3600),
-            "last_day": self._count_recent_requests(86400),
+            "last_minute": minute_count,
+            "last_hour": hour_count,
+            "last_day": day_count,
             "limits": {
                 "per_minute": self.per_minute,
                 "per_hour": self.per_hour,

@@ -14,6 +14,7 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 - 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
 - ⚡ Optimized performance with caching and connection pooling
+- 💡 Reuses cached matches to avoid redundant YouTube searches
 - 💾 Local SQLite history + sqlite_web UI on port 8080
 - 🔒 OAuth authentication preservation
 
@@ -120,6 +121,7 @@ Configure these in the add-on Configuration tab:
   - Use the add-on's **OPEN WEB UI** button; Home Assistant will launch a new window pointed directly at sqlite_web.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<port>`.
+- Every successful match is cached, so follow-up requests for the same title/duration reuse the stored video ID and skip the expensive YouTube search entirely.
 
 ### Manual import from the legacy `ratings.log`
 

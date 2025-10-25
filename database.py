@@ -95,7 +95,7 @@ class Database:
             'date_added': self._timestamp(date_added),
         }
 
-        insert_sql = """
+        upsert_sql = """
         INSERT INTO video_ratings (
             video_id, ha_title, yt_title, channel, ha_duration, yt_duration,
             youtube_url, rating, date_added, play_count, rating_count
@@ -104,23 +104,18 @@ class Database:
             :video_id, :ha_title, :yt_title, :channel, :ha_duration, :yt_duration,
             :youtube_url, :rating, :date_added, 0, 0
         )
-        ON CONFLICT(video_id) DO NOTHING;
-        """
-        update_sql = """
-        UPDATE video_ratings SET
-            ha_title=:ha_title,
-            yt_title=:yt_title,
-            channel=:channel,
-            ha_duration=:ha_duration,
-            yt_duration=:yt_duration,
-            youtube_url=:youtube_url
-        WHERE video_id=:video_id;
+        ON CONFLICT(video_id) DO UPDATE SET
+            ha_title=excluded.ha_title,
+            yt_title=excluded.yt_title,
+            channel=excluded.channel,
+            ha_duration=excluded.ha_duration,
+            yt_duration=excluded.yt_duration,
+            youtube_url=excluded.youtube_url;
         """
         with self._lock:
             try:
                 with self._conn:
-                    self._conn.execute(insert_sql, payload)
-                    self._conn.execute(update_sql, payload)
+                    self._conn.execute(upsert_sql, payload)
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to upsert video {video['video_id']}: {exc}")
 
@@ -192,6 +187,24 @@ class Database:
             )
             row = cur.fetchone()
         return dict(row) if row else None
+
+    def find_by_title(self, title: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Return cached videos whose HA or YT title matches (case-insensitive)."""
+        if not title:
+            return []
+        normalized = title.strip().lower()
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT * FROM video_ratings
+                WHERE lower(ha_title) = ? OR lower(yt_title) = ?
+                ORDER BY date_updated DESC, date_added DESC
+                LIMIT ?
+                """,
+                (normalized, normalized, limit),
+            )
+            rows = cur.fetchall()
+        return [dict(row) for row in rows]
 
     def search(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Fuzzy search by HA title, YT title, or channel."""

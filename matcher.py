@@ -1,6 +1,22 @@
 from typing import List, Dict
 from logger import logger
 
+REPLACEMENTS = {
+    ' - ': ' ',
+    ' – ': ' ',
+    ' — ': ' ',
+    '(official video)': '',
+    '(official music video)': '',
+    '(official audio)': '',
+    '(lyric video)': '',
+    '(lyrics)': '',
+    '[official video]': '',
+    '[official music video]': '',
+    '[official audio]': '',
+    'ft.': 'feat.',
+    'ft ': 'feat ',
+}
+
 class TitleMatcher:
     """Match song titles between Home Assistant and YouTube history."""
     
@@ -14,23 +30,7 @@ class TitleMatcher:
         text = text.lower()
         
         # Remove common separators and variations
-        replacements = {
-            ' - ': ' ',
-            ' – ': ' ',
-            ' — ': ' ',
-            '(official video)': '',
-            '(official music video)': '',
-            '(official audio)': '',
-            '(lyric video)': '',
-            '(lyrics)': '',
-            '[official video]': '',
-            '[official music video]': '',
-            '[official audio]': '',
-            'ft.': 'feat.',
-            'ft ': 'feat ',
-        }
-        
-        for old, new in replacements.items():
+        for old, new in REPLACEMENTS.items():
             text = text.replace(old, new)
         
         # Remove extra whitespace
@@ -55,13 +55,14 @@ class TitleMatcher:
         
         logger.info(f"Filtering {len(candidates)} candidates by title: '{ha_title}'")
         
+        ha_words = set(ha_title_norm.split())
+
         for video in candidates:
             yt_title = video.get('title', '')
             yt_title_norm = TitleMatcher.normalize_text(yt_title)
             
             # Check if HA title words appear in YouTube title
             # Extract key words from HA title (ignore common words)
-            ha_words = set(ha_title_norm.split())
             yt_words = set(yt_title_norm.split())
             
             # Calculate overlap - need at least 50% of HA words in YT title

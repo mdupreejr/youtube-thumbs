@@ -69,6 +69,44 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     return video
 
 
+def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Attempt to reuse an existing DB record before querying YouTube."""
+    title = ha_media.get('title')
+    duration = ha_media.get('duration')
+    artist = (ha_media.get('artist') or '').lower() if ha_media.get('artist') else None
+
+    if not title:
+        return None
+
+    cached_rows = db.find_by_title(title)
+    if not cached_rows:
+        return None
+
+    for row in cached_rows:
+        stored_duration = row.get('ha_duration') or row.get('yt_duration')
+        if duration and stored_duration and abs(stored_duration - duration) > 2:
+            continue
+
+        channel = row.get('channel')
+        if artist and channel and channel.lower() != artist:
+            continue
+
+        logger.info(
+            "Using cached video ID %s for title '%s' (channel: %s)",
+            row['video_id'],
+            title,
+            channel or 'unknown',
+        )
+        return {
+            'video_id': row['video_id'],
+            'title': row.get('yt_title') or row.get('ha_title') or title,
+            'channel': channel,
+            'duration': row.get('yt_duration') or row.get('ha_duration')
+        }
+
+    return None
+
+
 def rate_video(rating_type: str) -> Tuple[Response, int]:
     """Common handler for rating videos."""
     logger.info(f"{rating_type} request received")
@@ -86,7 +124,9 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
             return jsonify({"success": False, "error": "No media currently playing"}), 400
         
-        video = search_and_match_video(ha_media)
+        video = find_cached_video(ha_media)
+        if not video:
+            video = search_and_match_video(ha_media)
         if not video:
             title = ha_media.get('title', 'unknown')
             artist = ha_media.get('artist', '')
