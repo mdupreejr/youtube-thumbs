@@ -1,6 +1,6 @@
 # YouTube Thumbs Rating Add-on
 
-**Version: 1.3.9**
+**Version: 1.6.0**
 
 Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant.
 
@@ -12,7 +12,8 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 
 - 🎵 Automatic YouTube video matching with fuzzy search
 - 🛡️ Built-in rate limiting (configurable)
-- 📝 Comprehensive logging with separate audit trails
+- 📝 Comprehensive logging integrated with Home Assistant
+- 📊 Detailed user action audit trail
 - ⚡ Optimized performance with caching and connection pooling
 - 🔒 OAuth authentication preservation
 

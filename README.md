@@ -7,7 +7,7 @@ A Flask service that lets you rate YouTube videos (👍/👎) for songs playing 
 - 🎵 Rate currently playing songs via REST API
 - 🔍 Automatic YouTube video matching with fuzzy search
 - 🛡️ Built-in rate limiting (10/min, 100/hour, 500/day)
-- 📝 Comprehensive logging with separate log files for actions and errors
+- 📝 Comprehensive logging with structured output
 - 📊 Detailed user action audit trail
 - ⚡ Optimized with regex caching and connection pooling
 
@@ -50,10 +50,10 @@ PORT=21812
 ### 4. First Run - OAuth Setup
 
 ```bash
-python simple_oauth.py
+python app.py
 ```
 
-This opens your browser to authorize. After granting access, `token.pickle` is created automatically.
+On first run, the app will start the OAuth flow and open your browser to authorize. After granting access, `token.pickle` is created automatically.
 
 ### 5. Configure Home Assistant
 
@@ -169,11 +169,7 @@ Environment variables (`.env`):
 | `RATE_LIMIT_PER_MINUTE` | 10 | Max requests/minute |
 | `RATE_LIMIT_PER_HOUR` | 100 | Max requests/hour |
 | `RATE_LIMIT_PER_DAY` | 500 | Max requests/day |
-| `LOG_FILE` | app.log | General application log file |
-| `USER_ACTION_LOG_FILE` | user_actions.log | User action audit log |
-| `ERROR_LOG_FILE` | errors.log | Error log file |
-| `LOG_LEVEL` | INFO | Logging level |
-| `LOG_MAX_SIZE_MB` | 10 | Log rotation size |
+| `LOG_LEVEL` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 
 ## Troubleshooting
 
@@ -187,44 +183,48 @@ Environment variables (`.env`):
 - Check duration matching (±2 seconds tolerance)
 
 **OAuth Issues**
-- Delete `token.pickle` and re-run `python simple_oauth.py`
+- Delete `token.pickle` and re-run `python app.py`
 - Ensure `credentials.json` is present
 
 **Check Logs**
 ```bash
-# General application logs
-tail -f app.log
+# All logs output to stdout/stderr
+# View logs with:
+python app.py
 
-# User actions (thumbs up/down audit trail)
-tail -f user_actions.log
-
-# Errors only
-tail -f errors.log
+# Or when running as a service:
+journalctl -u youtube-thumbs -f
 ```
 
 ## Logging
 
-The service uses three separate log files for better organization:
+The service uses structured logging with multiple log levels:
 
-### **user_actions.log** - User Action Audit Trail
-Clean, structured log of every thumbs up/down action:
+### Log Output
+All logs output to stdout/stderr and can be viewed in the console or captured by your process manager (systemd, Docker, etc.).
+
+### Log Levels
+- **INFO**: General application flow and successful operations
+- **WARNING**: Rate limiting, multiple matches, non-critical issues
+- **ERROR**: Failed operations with context
+- **DEBUG**: Detailed tracebacks and debugging information (enable with `LOG_LEVEL=DEBUG`)
+
+### User Action Logging
+User actions (thumbs up/down) are logged with the `[USER_ACTION]` prefix:
 ```
-[2025-10-25 03:54:00] LIKE | "Song Title" by Artist | ID: xyz123 | SUCCESS
-[2025-10-25 03:55:00] DISLIKE | "Another Song" | ID: abc456 | FAILED - Video not found
-[2025-10-25 03:56:00] LIKE | "Third Song" by Artist | ID: def789 | ALREADY_RATED
+[USER_ACTION] LIKE | "Song Title" by Artist | ID: xyz123 | SUCCESS
+[USER_ACTION] DISLIKE | "Another Song" | ID: abc456 | FAILED - Video not found
+[USER_ACTION] LIKE | "Third Song" by Artist | ID: def789 | ALREADY_RATED
 ```
 
-### **errors.log** - Error Tracking
-All errors with detailed context and stack traces:
+### Error Logging
+Errors include detailed context:
 ```
-[2025-10-25 03:54:00] ERROR: Video not found | Context: rate_video (like) | Media: "Song Title" by Artist
-[2025-10-25 03:55:00] ERROR: YouTube API HttpError in search_video_globally | Query: 'Song' | Error: ...
+[ERROR] Video not found | Context: rate_video (like) | Media: "Song Title" by Artist
+[ERROR] YouTube API error in search_video_globally | Query: 'Song' | Error: ...
 ```
 
-### **app.log** - General Application Logs
-Info, warnings, and debug messages for application flow.
-
-All log files use rotating file handlers (configurable size and backup count).
+Set `LOG_LEVEL=DEBUG` to see detailed tracebacks.
 
 ## File Structure
 
@@ -235,7 +235,7 @@ youtube_thumbs/
 ├── homeassistant_api.py    # HA integration with connection pooling
 ├── matcher.py              # Fuzzy title matching
 ├── rate_limiter.py         # Memory-efficient rate limiting
-├── logger.py               # Multi-logger setup with rotation
+├── logger.py               # Structured logging setup
 ├── requirements.txt        # Dependencies
 ├── .env.example            # Configuration template
 └── README.md               # This file
