@@ -26,6 +26,7 @@ class Database:
 
         self._configure()
         self._ensure_schema()
+        self._normalize_existing_timestamps()
 
     def _configure(self) -> None:
         """Set SQLite pragmas for durability and concurrency."""
@@ -67,9 +68,39 @@ class Database:
 
     @staticmethod
     def _timestamp(ts: Optional[str] = None) -> str:
+        """
+        Return timestamps in a format compatible with sqlite's built-in converters.
+        sqlite3 expects 'YYYY-MM-DD HH:MM:SS' (space separator) for TIMESTAMP columns.
+        """
         if ts:
-            return ts
-        return datetime.utcnow().isoformat(timespec='seconds')
+            cleaned = ts.replace('T', ' ').replace('Z', '').strip()
+            if cleaned:
+                return cleaned
+        return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+    def _normalize_existing_timestamps(self) -> None:
+        """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
+        columns = ('date_added', 'date_updated', 'date_played')
+        updates = []
+        with self._lock:
+            try:
+                with self._conn:
+                    for column in columns:
+                        cursor = self._conn.execute(
+                            f"""
+                            UPDATE video_ratings
+                            SET {column} = REPLACE({column}, 'T', ' ')
+                            WHERE {column} LIKE '%T%';
+                            """
+                        )
+                        if cursor.rowcount:
+                            updates.append((column, cursor.rowcount))
+            except sqlite3.DatabaseError as exc:
+                logger.error(f"Failed to normalize timestamp format: {exc}")
+                return
+
+        for column, count in updates:
+            logger.info("Normalized %s timestamp values (%s rows)", column, count)
 
     def upsert_video(self, video: Dict[str, Any], date_added: Optional[str] = None) -> None:
         """
