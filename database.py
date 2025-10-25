@@ -237,48 +237,6 @@ class Database:
             rows = cur.fetchall()
         return [dict(row) for row in rows]
 
-    def search(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fuzzy search by HA title, YT title, or channel."""
-        pattern = f"%{query}%"
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                WHERE ha_title LIKE ? OR yt_title LIKE ? OR channel LIKE ?
-                ORDER BY (date_updated IS NULL), date_updated DESC, date_added DESC
-                LIMIT ?
-                """,
-                (pattern, pattern, pattern, limit),
-            )
-            rows = cur.fetchall()
-        return [dict(row) for row in rows]
-
-    def top_played(self, limit: int = 10) -> List[Dict[str, Any]]:
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                ORDER BY play_count DESC, date_played DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
-            rows = cur.fetchall()
-        return [dict(row) for row in rows]
-
-    def top_rated(self, limit: int = 10) -> List[Dict[str, Any]]:
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                ORDER BY rating_count DESC, date_updated DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
-            rows = cur.fetchall()
-        return [dict(row) for row in rows]
-
 
 _db_instance: Optional[Database] = None
 

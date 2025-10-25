@@ -61,6 +61,7 @@ Before starting the add-on, copy your OAuth credentials:
 ```yaml
 media_player_entity: media_player.apple_tv
 port: 21812
+api_host: 127.0.0.1         # (Optional) Override to expose the rating API beyond the host machine
 rate_limit_per_minute: 10   # Max YouTube API calls in any 60-second window
 rate_limit_per_hour: 100    # Max YouTube API calls in any 3600-second window
 rate_limit_per_day: 500     # Max YouTube API calls in any 24-hour period
@@ -68,6 +69,8 @@ log_level: INFO
 ```
 
 **Note:** The add-on automatically uses the Supervisor token for authentication, and connects to Home Assistant via `http://supervisor/core` (no configuration needed).
+
+**Security note:** By default the rating API only listens on `127.0.0.1`, which means it is reachable only from Home Assistant itself. You can set `api_host` to `0.0.0.0` if you *intentionally* want to expose it to your LAN, but that is discouraged. The `host` option continues to control the sqlite_web helper (default `0.0.0.0` so the **OPEN WEB UI** button works); set it to `127.0.0.1` if you prefer to hide that UI as well.
 
 #### Finding your media player entity:
 1. Go to **Developer Tools** → **States**
@@ -81,7 +84,7 @@ log_level: INFO
 1. Go to the **Log** tab
 2. Check for successful startup messages:
    ```
-   [INFO] Starting YouTube Thumbs service on 0.0.0.0:21812...
+   [INFO] Starting YouTube Thumbs service on 127.0.0.1:21812...
    [INFO] Home Assistant URL: http://supervisor/core
    [INFO] Media Player Entity: media_player.apple_tv
    ```

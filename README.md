@@ -106,6 +106,8 @@ Configure these in the add-on Configuration tab:
 |--------|---------|-------------|
 | `media_player_entity` | (required) | Media player entity ID (e.g., `media_player.apple_tv`) |
 | `port` | 21812 | Service port |
+| `api_host` | 127.0.0.1 | Bind address for the rating API. Override only if you truly need LAN access. |
+| `host` | 0.0.0.0 | Bind address for sqlite_web/UI helpers. Set to `127.0.0.1` to hide the DB UI from your LAN. |
 | `rate_limit_per_minute` | 10 | Max YouTube API calls in 60-second window |
 | `rate_limit_per_hour` | 100 | Max YouTube API calls in 3600-second window |
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
@@ -190,7 +192,8 @@ View logs in the add-on **Log** tab.
 
 - OAuth credentials stored in `/addon_configs/` (persistent storage)
 - Authentication handled automatically via Supervisor token
-- Service only accessible from localhost (not exposed to network)
+- Rating API binds to `127.0.0.1` by default. Change `api_host` only if you accept the risk of exposing it beyond the Home Assistant host.
+- UI helpers (`sqlite_web`) follow the `host` option and default to `0.0.0.0` for convenience—set it to `127.0.0.1` if you want those hidden as well.
 - ⚠️ Never share your `credentials.json` file
 
 ## Local Development

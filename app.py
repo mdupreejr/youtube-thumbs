@@ -200,7 +200,7 @@ def health() -> Response:
 
 
 if __name__ == '__main__':
-    host = os.getenv('HOST', '0.0.0.0')
+    host = os.getenv('HOST', '127.0.0.1')
     port = int(os.getenv('PORT', '21812'))
 
     logger.info(f"Starting YouTube Thumbs service on {host}:{port}")

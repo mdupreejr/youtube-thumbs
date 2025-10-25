@@ -36,14 +36,49 @@ else
     bashio::log.warning "SUPERVISOR_TOKEN not available - authentication may fail"
 fi
 
-export PORT=$(bashio::config 'port')
-export HOST=$(bashio::config 'host')
+PORT_CONFIG=$(bashio::config 'port')
+if bashio::var.has_value "${PORT_CONFIG}"; then
+    export PORT="${PORT_CONFIG}"
+else
+    export PORT=21812
+fi
+
+API_HOST_CONFIG=$(bashio::config 'api_host')
+HOST_CONFIG=$(bashio::config 'host')
+
+if bashio::var.has_value "${HOST_CONFIG}"; then
+    SQLITE_WEB_HOST="${HOST_CONFIG}"
+else
+    SQLITE_WEB_HOST="0.0.0.0"
+fi
+
+export SQLITE_WEB_HOST
+
+if bashio::var.has_value "${API_HOST_CONFIG}"; then
+    HOST_VALUE="${API_HOST_CONFIG}"
+elif bashio::var.has_value "${HOST_CONFIG}"; then
+    HOST_VALUE="${HOST_CONFIG}"
+else
+    HOST_VALUE="127.0.0.1"
+fi
+
+export HOST="${HOST_VALUE}"
+
+case "${HOST}" in
+    "127.0.0.1"|"localhost"|"::1")
+        bashio::log.info "Restricting API binding to local host (${HOST})"
+        ;;
+    *)
+        bashio::log.warning "API host overridden to '${HOST}'. This exposes the service beyond the local system."
+        ;;
+esac
+
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
 export RATE_LIMIT_PER_DAY=$(bashio::config 'rate_limit_per_day')
 export LOG_LEVEL=$(bashio::config 'log_level')
 
-bashio::log.info "Server configuration: ${HOST}:${PORT}"
+bashio::log.info "API server binding: ${HOST}:${PORT}"
 bashio::log.info "Rate limits: ${RATE_LIMIT_PER_MINUTE}/min, ${RATE_LIMIT_PER_HOUR}/hr, ${RATE_LIMIT_PER_DAY}/day"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 
@@ -91,6 +126,9 @@ bashio::log.info "-------------------------------------------"
 bashio::log.info "Starting YouTube Thumbs Rating Service"
 bashio::log.info "-------------------------------------------"
 bashio::log.info "Service endpoint: http://${HOST}:${PORT}"
+if [ "${HOST}" = "127.0.0.1" ] || [ "${HOST}" = "localhost" ] || [ "${HOST}" = "::1" ]; then
+    bashio::log.info "API is restricted to local calls from Home Assistant/Supervisor."
+fi
 bashio::log.info "Home Assistant URL: ${HOME_ASSISTANT_URL}"
 bashio::log.info "Target media player: ${MEDIA_PLAYER_ENTITY}"
 bashio::log.info "Log files location: /config/youtube_thumbs/"
@@ -131,12 +169,16 @@ if command -v sqlite_web >/dev/null 2>&1; then
     bashio::log.info "Starting sqlite_web UI on port ${SQLITE_WEB_PORT}"
     sqlite_web "${DB_PATH}" \
         --no-browser \
-        --host "${HOST}" \
+        --host "${SQLITE_WEB_HOST}" \
         --port "${SQLITE_WEB_PORT}" \
         >> "${SQLITE_WEB_LOG}" 2>&1 &
     SQLITE_WEB_PID=$!
     bashio::log.info "sqlite_web UI log: ${SQLITE_WEB_LOG}"
-    bashio::log.info "Access sqlite_web at http://${HOST}:${SQLITE_WEB_PORT}"
+    if [ "${SQLITE_WEB_HOST}" = "127.0.0.1" ] || [ "${SQLITE_WEB_HOST}" = "localhost" ] || [ "${SQLITE_WEB_HOST}" = "::1" ]; then
+        bashio::log.info "sqlite_web bound to ${SQLITE_WEB_HOST}; use the Home Assistant Web UI button or an SSH tunnel to access it."
+    else
+        bashio::log.info "Access sqlite_web at http://${SQLITE_WEB_HOST}:${SQLITE_WEB_PORT}"
+    fi
 else
     bashio::log.warning "sqlite_web not found; database UI will be unavailable"
 fi
