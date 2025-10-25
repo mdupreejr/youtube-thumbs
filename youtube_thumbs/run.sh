@@ -6,7 +6,7 @@ HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
 
 # Use defaults if config is empty or "null"
 if [ -z "${HOME_ASSISTANT_URL_CONFIG}" ] || [ "${HOME_ASSISTANT_URL_CONFIG}" = "null" ]; then
-    export HOME_ASSISTANT_URL="http://supervisor/core"
+    export HOME_ASSISTANT_URL="http://homeassistant:8123"
 else
     export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG}"
 fi
