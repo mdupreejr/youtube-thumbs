@@ -166,6 +166,7 @@ class InvidiousClient:
                 'video_id': item.get('videoId'),
                 'title': item.get('title'),
                 'channel': item.get('author'),
+                'artist': item.get('author'),
                 'duration': duration,
             }
 

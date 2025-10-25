@@ -54,6 +54,7 @@ class HomeAssistantAPI:
             attributes = data.get('attributes', {})
             media_title = attributes.get('media_title')
             media_artist = attributes.get('media_artist')
+            media_channel = attributes.get('media_channel') or attributes.get('app_name')
             
             if not media_title:
                 logger.warning("No media_title found in Home Assistant response")
@@ -64,10 +65,17 @@ class HomeAssistantAPI:
             media_info = {
                 'title': media_title,
                 'artist': media_artist or 'Unknown',
+                'channel': media_channel,
                 'duration': media_duration
             }
-            
-            logger.info(f"Current media: \"{media_title}\" by \"{media_artist}\" ({media_duration}s)")
+
+            logger.info(
+                "Current media: \"%s\" by \"%s\" (%ss)%s",
+                media_title,
+                media_artist,
+                media_duration,
+                f" on channel '{media_channel}'" if media_channel else "",
+            )
             return media_info
             
         except requests.exceptions.RequestException as e:

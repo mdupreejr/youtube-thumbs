@@ -44,7 +44,11 @@ class Database:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             video_id TEXT UNIQUE NOT NULL,
             ha_title TEXT NOT NULL,
+            ha_artist TEXT,
+            ha_channel TEXT,
             yt_title TEXT NOT NULL,
+            yt_artist TEXT,
+            yt_channel TEXT,
             channel TEXT,
             ha_duration INTEGER,
             yt_duration INTEGER,
@@ -63,9 +67,24 @@ class Database:
             try:
                 with self._conn:
                     self._conn.executescript(schema_sql)
+                    self._add_column_if_missing('video_ratings', 'ha_artist', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'ha_channel', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'yt_channel', 'TEXT')
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
+
+    def _add_column_if_missing(self, table: str, column: str, definition: str) -> None:
+        cursor = self._conn.execute(f"PRAGMA table_info({table});")
+        columns = {row['name'] for row in cursor.fetchall()}
+        if column in columns:
+            return
+        try:
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition};")
+            logger.info("Added column %s.%s", table, column)
+        except sqlite3.DatabaseError as exc:
+            logger.error("Failed to add column %s.%s: %s", table, column, exc)
 
     @staticmethod
     def _timestamp(ts: Optional[str] = None) -> str:
@@ -108,8 +127,9 @@ class Database:
         Insert or update metadata for a video.
 
         Args:
-            video: Dict with keys video_id, ha_title, yt_title, channel, ha_duration,
-                   yt_duration, youtube_url, rating (optional).
+            video: Dict with keys video_id, ha_title, yt_title, yt_channel, ha_artist,
+                   ha_channel, yt_artist, ha_duration, yt_duration, youtube_url,
+                   rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
         ha_title = video.get('ha_title') or video.get('yt_title') or 'Unknown Title'
@@ -118,8 +138,12 @@ class Database:
         payload = {
             'video_id': video['video_id'],
             'ha_title': ha_title,
+            'ha_artist': video.get('ha_artist'),
+            'ha_channel': video.get('ha_channel'),
             'yt_title': yt_title,
-            'channel': video.get('channel'),
+            'yt_artist': video.get('yt_artist'),
+            'yt_channel': video.get('yt_channel') or video.get('channel'),
+            'channel': video.get('channel') or video.get('yt_channel'),
             'ha_duration': video.get('ha_duration'),
             'yt_duration': video.get('yt_duration'),
             'youtube_url': video.get('youtube_url'),
@@ -130,16 +154,20 @@ class Database:
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            video_id, ha_title, yt_title, channel, ha_duration, yt_duration,
-            youtube_url, rating, date_added, date_updated, play_count, rating_count
+            video_id, ha_title, ha_artist, ha_channel, yt_title, yt_artist, yt_channel, channel,
+            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count
         )
         VALUES (
-            :video_id, :ha_title, :yt_title, :channel, :ha_duration, :yt_duration,
-            :youtube_url, :rating, :date_added, :date_updated, 0, 0
+            :video_id, :ha_title, :ha_artist, :ha_channel, :yt_title, :yt_artist, :yt_channel, :channel,
+            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
+            ha_artist=excluded.ha_artist,
+            ha_channel=excluded.ha_channel,
             yt_title=excluded.yt_title,
+            yt_artist=excluded.yt_artist,
+            yt_channel=excluded.yt_channel,
             channel=excluded.channel,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,

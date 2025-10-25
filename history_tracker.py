@@ -124,7 +124,11 @@ class HistoryTracker:
         self.db.upsert_video({
             'video_id': video_id,
             'ha_title': title,
+            'ha_artist': media.get('artist'),
+            'ha_channel': media.get('channel'),
             'yt_title': video.get('title', title),
+            'yt_artist': video.get('artist'),
+            'yt_channel': video.get('channel'),
             'channel': video.get('channel'),
             'ha_duration': duration,
             'yt_duration': video.get('duration'),

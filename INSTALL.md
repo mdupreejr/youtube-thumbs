@@ -95,6 +95,10 @@ If Google reports `quotaExceeded`, the add-on writes
 24 hours (tweak with `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
 API returns `503` responses and the history tracker skips new matches.
 
+Every time a video is matched we store both the Home Assistant artist/channel
+metadata and the YouTube channel so you can inspect mismatches later via
+sqlite_web or the ratings logs.
+
 **Security note:** The rating API always listens on `127.0.0.1` and cannot be exposed. The sqlite_web helper also defaults to `127.0.0.1`, but you can set `sqlite_web_host: 0.0.0.0` (and optionally adjust `sqlite_web_port`) if you intentionally want the DB UI reachable from your LAN.
 
 #### Finding your media player entity:

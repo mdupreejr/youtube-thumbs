@@ -144,10 +144,12 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             exact_match['video_id'],
             title,
         )
+        channel = exact_match.get('yt_channel') or exact_match.get('channel')
         return {
             'video_id': exact_match['video_id'],
             'title': exact_match.get('yt_title') or exact_match.get('ha_title') or title,
-            'channel': exact_match.get('channel'),
+            'channel': channel,
+            'artist': exact_match.get('yt_artist') or channel,
             'duration': exact_match.get('yt_duration') or exact_match.get('ha_duration')
         }
 
@@ -160,7 +162,7 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if duration and stored_duration and abs(stored_duration - duration) > 2:
             continue
 
-        channel = row.get('channel')
+        channel = row.get('yt_channel') or row.get('channel')
         if artist and channel and channel.lower() != artist:
             continue
 
@@ -174,6 +176,7 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             'video_id': row['video_id'],
             'title': row.get('yt_title') or row.get('ha_title') or title,
             'channel': channel,
+            'artist': row.get('yt_artist') or channel,
             'duration': row.get('yt_duration') or row.get('ha_duration')
         }
 
@@ -265,7 +268,11 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         db.upsert_video({
             'video_id': video_id,
             'ha_title': ha_media.get('title', video_title),
+            'ha_artist': ha_media.get('artist'),
+            'ha_channel': ha_media.get('channel'),
             'yt_title': video_title,
+            'yt_artist': video.get('artist'),
+            'yt_channel': video.get('channel'),
             'channel': video.get('channel'),
             'ha_duration': ha_media.get('duration'),
             'yt_duration': video.get('duration'),

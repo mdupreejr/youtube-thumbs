@@ -151,6 +151,7 @@ quota resets if you need to re-enable access early.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Prefer a different bind target? Keep `sqlite_web_host` at `127.0.0.1` for ingress/HA-only access or set it to `0.0.0.0` to expose the DB UI to your LAN. Pair it with the `sqlite_web_port` option (or the `SQLITE_WEB_HOST`/`SQLITE_WEB_PORT` env vars) if you need custom settings.
 - When `sqlite_web_host` is not localhost, the **OPEN WEB UI** button is bypassed—browse to `http://<home-assistant-host>:<sqlite_web_port>` directly instead.
+- Every record tracks both the Home Assistant-reported artist/channel and the YouTube channel metadata so you can audit mismatches later.
 - Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
