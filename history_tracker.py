@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
@@ -32,6 +33,8 @@ class HistoryTracker:
         self._thread = threading.Thread(target=self._run, name="history-tracker", daemon=True)
         self._last_failed_key: Optional[str] = None
         self._active_media_key: Optional[str] = None
+        self._play_window_seconds = self._resolve_play_window()
+        self._last_play_timestamps: Dict[str, float] = {}
 
     def start(self) -> None:
         if not self.enabled:
@@ -75,8 +78,15 @@ class HistoryTracker:
             return
 
         media_key = f"{title}|{duration}"
-        if self._active_media_key == media_key:
-            logger.debug("History tracker already recorded '%s' recently; skipping duplicate", title)
+        now = time.time()
+
+        if not self._can_record_play(media_key, now):
+            logger.debug(
+                "History tracker throttled '%s' (play recorded %.0fs ago)",
+                title,
+                now - self._last_play_timestamps.get(media_key, 0),
+            )
+            self._active_media_key = media_key
             return
 
         existing = self.db.find_by_title_and_duration(title, duration)
@@ -85,6 +95,7 @@ class HistoryTracker:
             logger.debug("History tracker recorded repeat play for '%s'", title)
             self._active_media_key = media_key
             self._last_failed_key = None
+            self._mark_play_recorded(media_key, now)
             return
 
         video = self.find_cached_video({
@@ -123,6 +134,7 @@ class HistoryTracker:
         logger.info("History tracker stored '%s' (video %s)", title, video_id)
         self._active_media_key = media_key
         self._last_failed_key = None
+        self._mark_play_recorded(media_key, now)
 
     @staticmethod
     def _normalize_duration(value: Any) -> Optional[int]:
@@ -132,3 +144,24 @@ class HistoryTracker:
             return int(round(float(value)))
         except (TypeError, ValueError):
             return None
+
+    def _resolve_play_window(self) -> int:
+        raw = os.getenv('HISTORY_PLAY_WINDOW_SECONDS', '3600')
+        try:
+            value = int(raw)
+        except ValueError:
+            logger.warning("Invalid HISTORY_PLAY_WINDOW_SECONDS '%s'; defaulting to 3600", raw)
+            return 3600
+        if value < 60:
+            logger.warning("HISTORY_PLAY_WINDOW_SECONDS too low (%s); enforcing minimum 60", value)
+            return 60
+        return value
+
+    def _can_record_play(self, media_key: str, now: float) -> bool:
+        last = self._last_play_timestamps.get(media_key)
+        if not last:
+            return True
+        return (now - last) >= self._play_window_seconds
+
+    def _mark_play_recorded(self, media_key: str, now: float) -> None:
+        self._last_play_timestamps[media_key] = now
