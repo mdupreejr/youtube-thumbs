@@ -4,6 +4,9 @@
 export HOME_ASSISTANT_URL=$(bashio::config 'home_assistant_url')
 export HOME_ASSISTANT_TOKEN=$(bashio::config 'home_assistant_token')
 export MEDIA_PLAYER_ENTITY=$(bashio::config 'media_player_entity')
+
+# Export SUPERVISOR_TOKEN (automatically provided by Home Assistant)
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
 export PORT=$(bashio::config 'port')
 export HOST=$(bashio::config 'host')
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
