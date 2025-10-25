@@ -5,6 +5,10 @@
 credentials.json
 token.pickle
 
+# Distribution archives (may contain credentials)
+*.tar.gz
+*.zip
+
 # Log files
 log.txt
 log.txt.*
