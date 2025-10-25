@@ -115,10 +115,10 @@ Configure these in the add-on Configuration tab:
 ## Data Storage & sqlite_web
 
 - All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
-- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) on port `8080`, bound to the same host/IP as the Flask API.
-  - Browse to `http://<home-assistant-host>:8080` to search, sort, or edit records without any custom frontend code.
+- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and exposes it through Home Assistant Ingress.
+  - Open the **YouTube Thumbs Rating** add-on and click **OPEN WEB UI**, or use the new sidebar entry *YouTube Thumbs DB*.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
-- You can override the UI port by setting the `SQLITE_WEB_PORT` environment variable inside the add-on options if needed.
+- Prefer a direct port? Set the `SQLITE_WEB_PORT` environment variable and the UI will also bind to `http://<host>:<port>`.
 
 ### Manual import from the legacy `ratings.log`
 
