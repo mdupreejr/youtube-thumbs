@@ -11,7 +11,7 @@ A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs 
 - 📊 Detailed user action audit trail
 - ⚡ Optimized performance with caching and connection pooling
 
-## Installation
+## Installation **[REVIEW: Let's just have the installation instructions in one place, not in Readme, DOcs and Install md's]**
 
 **Quick Install:**
 
