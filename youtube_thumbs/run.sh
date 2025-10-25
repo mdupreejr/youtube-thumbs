@@ -41,6 +41,12 @@ export ERROR_LOG_FILE=/data/errors.log
 # Check what files exist and where
 bashio::log.info "Checking for OAuth credentials..."
 
+# Create the addon_config directory if it doesn't exist
+if [ ! -d /config/youtube_thumbs ]; then
+    mkdir -p /config/youtube_thumbs
+    bashio::log.info "Created directory /config/youtube_thumbs/"
+fi
+
 # Try multiple possible locations (prioritize addon_config location)
 if [ -f /config/youtube_thumbs/credentials.json ]; then
     bashio::log.info "Found credentials.json in /config/youtube_thumbs/"
