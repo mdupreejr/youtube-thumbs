@@ -23,7 +23,6 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 1. Add this GitHub repository to Home Assistant Add-on Store
 2. Install the "YouTube Thumbs Rating" add-on
 3. Copy your `credentials.json` to `/addon_configs/XXXXXXXX_youtube_thumbs/`
-   (The add-on will automatically create `token.pickle` on first run)
 4. Configure the add-on with your media player entity
 5. Start the add-on
 
