@@ -75,15 +75,16 @@ Need sqlite_web outside of Home Assistant ingress? Add
 sqlite_web_host: 0.0.0.0  # exposes the DB UI to your LAN
 sqlite_web_port: 8080     # optional, defaults to 8080
 use_invidious_search: true
-invidious_base_url: https://yewtu.be
+invidious_base_url: https://yewtu.be, https://inv.tux.pizza
 ```
 
 Only open the DB UI to networks you trust.
 
-Want to conserve YouTube quota? Enable `use_invidious_search` and point it at an
-Invidious instance (many public mirrors exist; `https://yewtu.be` works well).
-With that toggle on, the add-on searches Invidious first and only falls back to
-the official API if no match is found.
+Want to conserve YouTube quota? Enable `use_invidious_search` and point it at one
+or more Invidious instances (many public mirrors exist; `https://yewtu.be` and
+`https://inv.tux.pizza` are popular). When multiple URLs are provided (comma or
+newline separated) the add-on rotates through them and temporarily skips any host
+that errors before trying the next one.
 
 Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
 button will route through Home Assistant ingress automatically. If you override the

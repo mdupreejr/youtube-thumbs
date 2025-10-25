@@ -255,8 +255,10 @@ Provided as-is for personal use.
 ### Invidious Fallback Search
 
 Optionally point the add-on at an [Invidious](https://github.com/iv-org/invidious)
-instance. When `use_invidious_search` is true and `invidious_base_url` is set
-(e.g., `https://yewtu.be`), the service searches through Invidious first and
-only hits the official YouTube Data API when Invidious fails to return a match.
-This dramatically reduces quota usage. If Invidious is unreachable the add-on
-gracefully falls back to Google’s API.
+instance. When `use_invidious_search` is true and `invidious_base_url` is set,
+the service searches through Invidious first and only hits the official YouTube
+Data API when Invidious fails to return a match. Provide multiple instances by
+comma- or newline-separating them (e.g., `https://yewtu.be,https://inv.tux.pizza`)
+and the add-on will rotate through the list, temporarily skipping hosts that
+fail before trying the next one. This dramatically reduces quota usage. If every
+Invidious host is unreachable the add-on gracefully falls back to Google’s API.

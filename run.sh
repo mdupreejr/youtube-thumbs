@@ -64,6 +64,9 @@ fi
 INVIDIOUS_BASE_URL_CONFIG=$(bashio::config 'invidious_base_url')
 if bashio::var.has_value "${INVIDIOUS_BASE_URL_CONFIG}" && [ "${INVIDIOUS_BASE_URL_CONFIG}" != "null" ]; then
     export INVIDIOUS_BASE_URL="${INVIDIOUS_BASE_URL_CONFIG}"
+    if [ -z "${INVIDIOUS_BASE_URLS}" ]; then
+        export INVIDIOUS_BASE_URLS="${INVIDIOUS_BASE_URL_CONFIG}"
+    fi
 else
     unset INVIDIOUS_BASE_URL
 fi
