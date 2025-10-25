@@ -11,6 +11,11 @@ from matcher import matcher
 app = Flask(__name__)
 
 
+def format_media_info(title: str, artist: str) -> str:
+    """Format media information for logging."""
+    return f'"{title}" by {artist}' if artist else f'"{title}"'
+
+
 def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """
     Find matching video using global search with duration and title matching.
@@ -81,7 +86,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         if not video:
             title = ha_media.get('title', 'unknown')
             artist = ha_media.get('artist', '')
-            media_info = f"\"{title}\" by {artist}" if artist else f"\"{title}\""
+            media_info = format_media_info(title, artist)
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
             logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
             return jsonify({"success": False, "error": "Video not found"}), 404
@@ -89,10 +94,8 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         video_id = video['video_id']
         video_title = video['title']
         artist = ha_media.get('artist', '')
-        
-        # Format media info for logging
-        media_info = f"\"{video_title}\" by {artist}" if artist else f"\"{video_title}\""
-        
+        media_info = format_media_info(video_title, artist)
+
         yt_api = get_youtube_api()
         current_rating = yt_api.get_video_rating(video_id)
         

@@ -14,6 +14,7 @@ class YouTubeAPI:
 
     SCOPES = ['https://www.googleapis.com/auth/youtube']
     DURATION_PATTERN = re.compile(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?')
+    NO_RATING = 'none'  # YouTube API rating value for unrated videos
     
     def __init__(self) -> None:
         self.youtube = None
@@ -124,19 +125,19 @@ class YouTubeAPI:
             response = request.execute()
 
             if response.get('items'):
-                rating = response['items'][0].get('rating', 'none')
+                rating = response['items'][0].get('rating', self.NO_RATING)
                 logger.info(f"Current rating for {video_id}: {rating}")
                 return rating
 
-            return 'none'
+            return self.NO_RATING
 
         except HttpError as e:
             logger.error(f"YouTube API error getting rating | Video ID: {video_id} | Error: {str(e)}")
-            return 'none'
+            return self.NO_RATING
         except Exception as e:
             logger.error(f"Unexpected error getting video rating | Video ID: {video_id} | Error: {str(e)}")
             logger.debug(f"Traceback for get_video_rating error: {traceback.format_exc()}")
-            return 'none'
+            return self.NO_RATING
 
     def set_video_rating(self, video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
