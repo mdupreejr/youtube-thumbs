@@ -113,8 +113,10 @@ else
 fi
 
 INGRESS_PORT=$(bashio::addon.ingress_port 2>/dev/null || true)
+SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 
-if bashio::var.has_value "${SQLITE_WEB_PORT}"; then
+if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
+    SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
     bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
 elif bashio::var.has_value "${INGRESS_PORT}"; then
     SQLITE_WEB_PORT="${INGRESS_PORT}"
