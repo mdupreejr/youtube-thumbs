@@ -1,18 +1,13 @@
-# YouTube Thumbs Rating Add-on Documentation
+# YouTube Thumbs Rating Add-on Documentation **[REVIEW: This is essentially exactly the same as INSTALL, why dont we merge them so there's one less file]**
 
 Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant.
 
 ## Features
 
-- 🎵 Rate currently playing songs via REST API
+- 🎵 Rate currently playing songs via YouTube API
 - 🔍 Automatic YouTube video matching with fuzzy search
 - 🛡️ Built-in rate limiting (configurable)
 - 📝 Comprehensive logging with separate log files
-- ⚡ Optimized with regex caching and connection pooling
-
-## Installation
-
-For quick installation instructions, see [INSTALL.md](INSTALL.md).
 
 ### Prerequisites
 
@@ -24,7 +19,7 @@ Before installing, you need YouTube OAuth credentials:
 4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
 5. Choose **Desktop app** as the application type
 6. Download the credentials and save as `credentials.json`
-7. Run the OAuth flow once (outside Home Assistant) to generate `token.pickle`:
+7. Run the OAuth flow once (outside Home Assistant) to generate `token.pickle`: **[REVIEW: DOnt we have a process for this to be done through the app?]**
    ```bash
    # On your computer (not in HA), with Python installed:
    python3 -m venv venv
@@ -53,7 +48,7 @@ Before installing, you need YouTube OAuth credentials:
 
 Copy your OAuth files to the add-on's config directory:
 
-1. Navigate to `/addon_configs/XXXXXXXX_youtube_thumbs/` (via File Editor or Samba)
+1. Navigate to `/addon_configs/XXXXXXXX_youtube_thumbs/` (via File Editor, Samba, FTP, etc)
 2. Copy both files:
    - `credentials.json`
    - `token.pickle`
@@ -69,7 +64,7 @@ Configure the add-on before starting:
 
 #### Required Configuration
 
-- **home_assistant_token**: Your Home Assistant Long-Lived Access Token
+- **home_assistant_token**: Your Home Assistant Long-Lived Access Token **[REVIEW: Depreciated]**
   - Get this from: Profile → Long-Lived Access Tokens → Create Token
   
 - **media_player_entity**: Your media player entity ID (e.g., `media_player.apple_tv`)
@@ -77,9 +72,9 @@ Configure the add-on before starting:
 
 #### Optional Configuration
 
-- **home_assistant_url**: Default is `http://supervisor/core` (recommended for add-ons)
+- **home_assistant_url**: Default is `http://supervisor/core` (recommended for add-ons) **[REVIEW: This should always be the same why do we even offer the ability to change it]**
 - **port**: Default is `21812` (change if needed)
-- **host**: Default is `0.0.0.0` (usually no need to change)
+- **host**: Default is `0.0.0.0` (usually no need to change) **[REVIEW: Also should not ever need to be changed. Though this could likely be an internal address, there's no reason to allow API calls to our app from anyting other than supervisor]**
 - **rate_limit_per_minute**: Default is `10`
 - **rate_limit_per_hour**: Default is `100`
 - **rate_limit_per_day**: Default is `500`
@@ -88,9 +83,7 @@ Configure the add-on before starting:
 ### Step 5: Start the Add-on
 
 1. Go to the **Info** tab
-2. Enable **Start on boot** (recommended)
-3. Enable **Watchdog** (auto-restart on crashes)
-4. Click **START**
+2. Click **START**
 
 ### Step 6: Check Logs
 
