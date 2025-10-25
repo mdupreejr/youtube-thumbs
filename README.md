@@ -2,6 +2,10 @@
 
 A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs playing on your AppleTV. Perfect for Lutron remote integration or any automation that needs to rate music.
 
+## About
+
+This add-on provides a Flask service that integrates with Home Assistant to automatically rate YouTube videos based on what's currently playing on your AppleTV. Perfect for Lutron remote integration or any automation that needs to rate music.
+
 ## Features
 
 - 🎵 Rate currently playing songs via REST API
@@ -10,31 +14,20 @@ A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs 
 - 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
 - ⚡ Optimized performance with caching and connection pooling
+- 🔒 OAuth authentication preservation
 
-## Installation **[REVIEW: Let's just have the installation instructions in one place, not in Readme, DOcs and Install md's]**
+## Installation
 
-**Quick Install:**
+### Quick Install
 
-1. Add this repository URL in Home Assistant Add-on Store
+1. Add this GitHub repository to Home Assistant Add-on Store
 2. Install the "YouTube Thumbs Rating" add-on
-3. Copy your OAuth credentials to the addon_configs directory
-4. Configure the add-on with your HA token and media player entity
+3. Copy your `credentials.json` to `/addon_configs/XXXXXXXX_youtube_thumbs/`
+   (The add-on will automatically create `token.pickle` on first run)
+4. Configure the add-on with your media player entity
 5. Start the add-on
 
-**For detailed instructions, see [INSTALL.md](INSTALL.md)**
-
-## Setup YouTube OAuth
-
-Before using this add-on, you need YouTube OAuth credentials:
-
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable **YouTube Data API v3**
-3. Create **OAuth 2.0 Desktop** credentials
-4. Download `credentials.json`
-5. Run the OAuth flow once to generate `token.pickle`
-6. Copy both files to `/addon_configs/XXXXXXXX_youtube_thumbs/`
-
-See [DOCS.md](DOCS.md) for detailed OAuth setup instructions.
+For detailed installation instructions, including OAuth setup and troubleshooting, see **[INSTALL.md](INSTALL.md)**
 
 ## Configuration
 
@@ -110,14 +103,14 @@ Configure these in the add-on Configuration tab:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `home_assistant_token` | (required) | Your HA Long-Lived Access Token |
-| `media_player_entity` | (required) | Media player entity ID |
-| `home_assistant_url` | http://supervisor/core | HA URL (use default for add-ons) |
+| `media_player_entity` | (required) | Media player entity ID (e.g., `media_player.apple_tv`) |
 | `port` | 21812 | Service port |
-| `rate_limit_per_minute` | 10 | Max requests/minute |
-| `rate_limit_per_hour` | 100 | Max requests/hour |
-| `rate_limit_per_day` | 500 | Max requests/day |
-| `log_level` | INFO | Logging level |
+| `rate_limit_per_minute` | 10 | Max YouTube API calls in 60-second window |
+| `rate_limit_per_hour` | 100 | Max YouTube API calls in 3600-second window |
+| `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
+| `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
+
+**Note:** The add-on automatically handles authentication using the Supervisor token.
 
 ## Troubleshooting
 
@@ -131,9 +124,10 @@ Configure these in the add-on Configuration tab:
 - Check duration matching (±2 seconds tolerance)
 
 **OAuth/Credentials errors**
-- Verify `credentials.json` and `token.pickle` are in `/addon_configs/XXXXXXXX_youtube_thumbs/`
+- Verify `credentials.json` is in `/addon_configs/XXXXXXXX_youtube_thumbs/`
 - Check add-on logs for specific error messages
 - Ensure OAuth credentials are from Google Cloud Console with YouTube Data API v3 enabled
+- The add-on will automatically create `token.pickle` on first run
 
 **Check Logs**
 - View in Home Assistant: Settings → Add-ons → YouTube Thumbs Rating → Log tab
@@ -161,16 +155,15 @@ View logs in the add-on **Log** tab.
 ## Security
 
 - OAuth credentials stored in `/addon_configs/` (persistent storage)
-- Home Assistant token encrypted by Supervisor
+- Authentication handled automatically via Supervisor token
 - Service only accessible from localhost (not exposed to network)
-- ⚠️ Never share your `credentials.json`, `token.pickle`, or HA token
+- ⚠️ Never share your `credentials.json` file
 
 ## Support
 
 For issues or questions:
 - Check add-on logs first (Settings → Add-ons → YouTube Thumbs Rating → Log)
-- Review [INSTALL.md](INSTALL.md) for installation help
-- See [DOCS.md](DOCS.md) for detailed documentation
+- Review [INSTALL.md](INSTALL.md) for complete documentation and troubleshooting
 
 ## License
 
