@@ -4,9 +4,19 @@
 HOME_ASSISTANT_URL_CONFIG=$(bashio::config 'home_assistant_url')
 HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
 
-# Use defaults if config is empty
-export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG:-http://supervisor/core}"
-export HOME_ASSISTANT_TOKEN="${HOME_ASSISTANT_TOKEN_CONFIG}"
+# Use defaults if config is empty or "null"
+if [ -z "${HOME_ASSISTANT_URL_CONFIG}" ] || [ "${HOME_ASSISTANT_URL_CONFIG}" = "null" ]; then
+    export HOME_ASSISTANT_URL="http://supervisor/core"
+else
+    export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG}"
+fi
+
+if [ -z "${HOME_ASSISTANT_TOKEN_CONFIG}" ] || [ "${HOME_ASSISTANT_TOKEN_CONFIG}" = "null" ]; then
+    export HOME_ASSISTANT_TOKEN=""
+else
+    export HOME_ASSISTANT_TOKEN="${HOME_ASSISTANT_TOKEN_CONFIG}"
+fi
+
 export MEDIA_PLAYER_ENTITY=$(bashio::config 'media_player_entity')
 
 # Only export SUPERVISOR_TOKEN if it exists (it's automatically provided by Home Assistant)
