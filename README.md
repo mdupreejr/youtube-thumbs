@@ -109,10 +109,9 @@ Health check with rate limiter stats.
 
 ## Add-on Configuration Options
 
-The add-on exposes two bind addresses:
-`api_host` confines the thumbs API (`/thumbs_up`, `/thumbs_down`) to a specific interface,
-while `host` controls helper tools such as `sqlite_web`. Keep the defaults (`127.0.0.1`
-for `api_host`, `0.0.0.0` for `host`) unless you need LAN access to either surface.
+For safety the thumbs API (`/thumbs_up`, `/thumbs_down`) and sqlite_web helper now
+always bind to `127.0.0.1` inside the add-on container. Use Home Assistant’s ingress
+or an SSH tunnel if you need access from elsewhere.
 
 Configure these in the add-on Configuration tab:
 
@@ -120,8 +119,6 @@ Configure these in the add-on Configuration tab:
 |--------|---------|-------------|
 | `media_player_entity` | (required) | Media player entity ID (e.g., `media_player.apple_tv`) |
 | `port` | 21812 | Service port |
-| `api_host` | 127.0.0.1 | Bind address for the rating API. Override only if you truly need LAN access. |
-| `host` | 0.0.0.0 | Bind address for sqlite_web/UI helpers. Set to `127.0.0.1` to hide the DB UI from your LAN. |
 | `rate_limit_per_minute` | 10 | Max YouTube API calls in 60-second window |
 | `rate_limit_per_hour` | 100 | Max YouTube API calls in 3600-second window |
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
@@ -135,10 +132,10 @@ Configure these in the add-on Configuration tab:
 ## Data Storage & sqlite_web
 
 - All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
-- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it in a separate browser tab.
-  - Use the add-on's **OPEN WEB UI** button; Home Assistant will launch a new window pointed directly at sqlite_web.
+- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it via HA ingress.
+  - Use the add-on's **OPEN WEB UI** button; Home Assistant proxies the localhost-only sqlite_web instance into your browser.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
-- Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<port>`.
+- Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and tunnel/forward that port through SSH if you need direct CLI access.
 - Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
@@ -208,8 +205,7 @@ View logs in the add-on **Log** tab.
 
 - OAuth credentials stored in `/addon_configs/` (persistent storage)
 - Authentication handled automatically via Supervisor token
-- Rating API binds to `127.0.0.1` by default. Change `api_host` only if you accept the risk of exposing it beyond the Home Assistant host.
-- UI helpers (`sqlite_web`) follow the `host` option and default to `0.0.0.0` for convenience—set it to `127.0.0.1` if you want those hidden as well.
+- Rating API and sqlite_web both bind to `127.0.0.1`, so only Home Assistant/Supervisor can reach them directly. Use ingress/SSH tunnels for external access.
 - ⚠️ Never share your `credentials.json` file
 
 ## Local Development

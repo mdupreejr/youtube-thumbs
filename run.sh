@@ -43,35 +43,12 @@ else
     export PORT=21812
 fi
 
-API_HOST_CONFIG=$(bashio::config 'api_host')
-HOST_CONFIG=$(bashio::config 'host')
+# Always bind both the API and sqlite_web helper to localhost for safety
+export HOST="127.0.0.1"
+export SQLITE_WEB_HOST="127.0.0.1"
 
-if bashio::var.has_value "${HOST_CONFIG}"; then
-    SQLITE_WEB_HOST="${HOST_CONFIG}"
-else
-    SQLITE_WEB_HOST="0.0.0.0"
-fi
-
-export SQLITE_WEB_HOST
-
-if bashio::var.has_value "${API_HOST_CONFIG}"; then
-    HOST_VALUE="${API_HOST_CONFIG}"
-elif bashio::var.has_value "${HOST_CONFIG}"; then
-    HOST_VALUE="${HOST_CONFIG}"
-else
-    HOST_VALUE="127.0.0.1"
-fi
-
-export HOST="${HOST_VALUE}"
-
-case "${HOST}" in
-    "127.0.0.1"|"localhost"|"::1")
-        bashio::log.info "Restricting API binding to local host (${HOST})"
-        ;;
-    *)
-        bashio::log.warning "API host overridden to '${HOST}'. This exposes the service beyond the local system."
-        ;;
-esac
+bashio::log.info "API binding forced to localhost (${HOST})"
+bashio::log.info "sqlite_web binding forced to localhost (${SQLITE_WEB_HOST})"
 
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')

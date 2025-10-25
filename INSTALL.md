@@ -61,7 +61,6 @@ Before starting the add-on, copy your OAuth credentials:
 ```yaml
 media_player_entity: media_player.apple_tv
 port: 21812
-api_host: 127.0.0.1         # (Optional) Override to expose the rating API beyond the host machine
 rate_limit_per_minute: 10   # Max YouTube API calls in any 60-second window
 rate_limit_per_hour: 100    # Max YouTube API calls in any 3600-second window
 rate_limit_per_day: 500     # Max YouTube API calls in any 24-hour period
@@ -70,7 +69,7 @@ log_level: INFO
 
 **Note:** The add-on automatically uses the Supervisor token for authentication, and connects to Home Assistant via `http://supervisor/core` (no configuration needed).
 
-**Security note:** By default the rating API only listens on `127.0.0.1`, which means it is reachable only from Home Assistant itself. You can set `api_host` to `0.0.0.0` if you *intentionally* want to expose it to your LAN, but that is discouraged. The `host` option continues to control the sqlite_web helper (default `0.0.0.0` so the **OPEN WEB UI** button works); set it to `127.0.0.1` if you prefer to hide that UI as well.
+**Security note:** The rating API and sqlite_web helper both listen on `127.0.0.1` and are therefore reachable only from Home Assistant/Supervisor. Use ingress or SSH tunneling if you need remote access; exposing them to your LAN is no longer supported.
 
 #### Finding your media player entity:
 1. Go to **Developer Tools** → **States**
@@ -94,7 +93,7 @@ log_level: INFO
 
 - Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**; it will launch sqlite_web in a new browser tab.
 - Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
-- Need a different port? Set the `sqlite_web_port` option (or `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<your-port>`.
+- Need a different port? Set the `sqlite_web_port` option (or `SQLITE_WEB_PORT` env var) and use HA ingress or an SSH tunnel to access the localhost-only endpoint.
 
 ### 7. Configure Home Assistant
 

@@ -11,12 +11,6 @@ configuration:
   port:
     name: Rating API port
     description: TCP port that Home Assistant automations call for /thumbs_up or /thumbs_down. Change only if 21812 conflicts with something else.
-  api_host:
-    name: Rating API bind address
-    description: Network interface for the thumbs API. Keep 127.0.0.1 to restrict it to the HA host; use 0.0.0.0 only if you need LAN access.
-  host:
-    name: UI bind address
-    description: Interface for helper UIs like sqlite_web. Set to 127.0.0.1 to keep the DB UI private; 0.0.0.0 exposes it to your LAN.
   sqlite_web_port:
     name: sqlite_web port
     description: Port for the sqlite_web database viewer opened via the OPEN WEB UI button (defaults to 8080).
