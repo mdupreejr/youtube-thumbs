@@ -78,6 +78,10 @@ sqlite_web_port: 8080     # optional, defaults to 8080
 
 Only open the DB UI to networks you trust.
 
+Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
+button will route through Home Assistant ingress automatically. If you override the
+host, skip the button and browse directly to `http://<home-assistant-host>:<sqlite_web_port>`.
+
 **Security note:** The rating API always listens on `127.0.0.1` and cannot be exposed. The sqlite_web helper also defaults to `127.0.0.1`, but you can set `sqlite_web_host: 0.0.0.0` (and optionally adjust `sqlite_web_port`) if you intentionally want the DB UI reachable from your LAN.
 
 #### Finding your media player entity:
@@ -102,7 +106,7 @@ Only open the DB UI to networks you trust.
 
 - Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**; it will launch sqlite_web in a new browser tab.
 - Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
-- Need a different binding? Set `sqlite_web_host` (defaults to `127.0.0.1`) and `sqlite_web_port` or export the `SQLITE_WEB_HOST` / `SQLITE_WEB_PORT` env vars. Only expose the DB UI to networks you trust.
+- Need a different binding? Set `sqlite_web_host` (defaults to `127.0.0.1`) and `sqlite_web_port` or export the `SQLITE_WEB_HOST` / `SQLITE_WEB_PORT` env vars. Only expose the DB UI to networks you trust, and use a direct browser tab (`http://<home-assistant-host>:<sqlite_web_port>`) when you override the host.
 
 ### 7. Configure Home Assistant
 

@@ -110,9 +110,10 @@ Health check with rate limiter stats.
 ## Add-on Configuration Options
 
 For safety the thumbs API (`/thumbs_up`, `/thumbs_down`) always binds to `127.0.0.1`
-inside the add-on container. The sqlite_web helper defaults to `127.0.0.1` as well,
-but you can expose it to your LAN by changing the `sqlite_web_host` option (be sure
-you trust the clients that will have access to the database UI).
+inside the add-on container. The sqlite_web helper also defaults to `127.0.0.1` and is
+served through Home Assistant Ingress, so the **OPEN WEB UI** button works out of the box.
+If you need to expose sqlite_web directly to your LAN, change the `sqlite_web_host`
+option (be sure you trust the clients that will have access to the database UI).
 
 Configure these in the add-on Configuration tab:
 
@@ -125,7 +126,7 @@ Configure these in the add-on Configuration tab:
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
 | `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `sqlite_web_host` | 127.0.0.1 | Bind address for sqlite_web (set to `0.0.0.0` only if you need LAN access) |
-| `sqlite_web_port` | 8080 | Port for the sqlite_web admin UI |
+| `sqlite_web_port` | 8080 | Port for sqlite_web when exposed to your LAN; ignored when using HA ingress (the default) |
 | `history_tracker_enabled` | true | Toggle the background poller that logs every song |
 | `history_poll_interval` | 30 | Seconds between Home Assistant polls (10–300 allowed) |
 
@@ -137,8 +138,8 @@ Configure these in the add-on Configuration tab:
 - The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it via HA ingress.
   - Use the add-on's **OPEN WEB UI** button; Home Assistant proxies the sqlite_web instance into your browser even when it is bound to `127.0.0.1`.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
-- Prefer a different bind target? Keep `sqlite_web_host` at `127.0.0.1` for local-only access or set it to `0.0.0.0` to expose the DB UI to your LAN. Pair it with the `sqlite_web_port` option (or the `SQLITE_WEB_HOST`/`SQLITE_WEB_PORT` env vars) if you need custom settings.
-- When `sqlite_web_host` is not localhost, open `http://<your-host>:<port>` directly to reach sqlite_web.
+- Prefer a different bind target? Keep `sqlite_web_host` at `127.0.0.1` for ingress/HA-only access or set it to `0.0.0.0` to expose the DB UI to your LAN. Pair it with the `sqlite_web_port` option (or the `SQLITE_WEB_HOST`/`SQLITE_WEB_PORT` env vars) if you need custom settings.
+- When `sqlite_web_host` is not localhost, the **OPEN WEB UI** button is bypassed—browse to `http://<home-assistant-host>:<sqlite_web_port>` directly instead.
 - Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
