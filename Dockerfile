@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
 
 # Copy all application files
-COPY *.py .
+COPY *.py ./
 
 # Copy startup script
 COPY run.sh .
