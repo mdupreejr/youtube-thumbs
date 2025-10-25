@@ -11,11 +11,17 @@ class HomeAssistantAPI:
     
     def __init__(self) -> None:
         self.url = os.getenv('HOME_ASSISTANT_URL')
-        # Use SUPERVISOR_TOKEN if available (add-on environment), otherwise use HOME_ASSISTANT_TOKEN
-        self.token = os.getenv('SUPERVISOR_TOKEN') or os.getenv('HOME_ASSISTANT_TOKEN')
+        # Use HASSIO_TOKEN if available (add-on environment), otherwise use SUPERVISOR_TOKEN, otherwise HOME_ASSISTANT_TOKEN
+        self.token = os.getenv('HASSIO_TOKEN') or os.getenv('SUPERVISOR_TOKEN') or os.getenv('HOME_ASSISTANT_TOKEN')
         self.entity = os.getenv('MEDIA_PLAYER_ENTITY')
 
-        if self.token and os.getenv('SUPERVISOR_TOKEN'):
+        # Determine if we're using Hassio API (needs X-Hassio-Key) or direct HA API (needs Bearer token)
+        self.use_hassio_api = bool(os.getenv('HASSIO_TOKEN'))
+
+        if os.getenv('HASSIO_TOKEN'):
+            logger.info("Using Hassio token for authentication")
+            logger.debug(f"Token length: {len(self.token)}")
+        elif os.getenv('SUPERVISOR_TOKEN'):
             logger.info("Using Supervisor token for authentication")
             logger.debug(f"Token length: {len(self.token)}")
         elif self.token:
@@ -27,11 +33,18 @@ class HomeAssistantAPI:
 
         logger.info(f"Home Assistant URL: {self.url}")
         logger.info(f"Media Player Entity: {self.entity}")
-        
-        self.headers = {
-            'Authorization': f'Bearer {self.token}',
-            'Content-Type': 'application/json'
-        }
+
+        # Set appropriate headers based on authentication method
+        if self.use_hassio_api:
+            self.headers = {
+                'X-Hassio-Key': self.token,
+                'Content-Type': 'application/json'
+            }
+        else:
+            self.headers = {
+                'Authorization': f'Bearer {self.token}',
+                'Content-Type': 'application/json'
+            }
         
         # Use session for connection pooling and performance
         self.session = requests.Session()
@@ -47,7 +60,10 @@ class HomeAssistantAPI:
             
             url = f"{self.url}/api/states/{self.entity}"
             logger.debug(f"Requesting: {url}")
-            logger.debug(f"Headers: Authorization=Bearer {'*' * 20}")
+            if self.use_hassio_api:
+                logger.debug(f"Headers: X-Hassio-Key={'*' * 20}")
+            else:
+                logger.debug(f"Headers: Authorization=Bearer {'*' * 20}")
 
             response = self.session.get(url, timeout=10)
 
