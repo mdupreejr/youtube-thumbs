@@ -85,7 +85,13 @@ class YouTubeAPI:
 
             candidates = []
             for video in details.get('items', []):
-                duration = self._parse_duration(video['contentDetails']['duration'])
+                content_details = video.get('contentDetails') or {}
+                duration_str = content_details.get('duration')
+                if not duration_str:
+                    logger.warning(f"Skipping video without duration info: {video.get('id')}")
+                    continue
+
+                duration = self._parse_duration(duration_str)
                 video_info = {
                     'video_id': video['id'],
                     'title': video['snippet']['title'],
