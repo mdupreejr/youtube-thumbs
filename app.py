@@ -78,6 +78,20 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not title:
         return None
 
+    exact_match = db.find_by_exact_ha_title(title)
+    if exact_match:
+        logger.info(
+            "Using exact cached video ID %s for title '%s'",
+            exact_match['video_id'],
+            title,
+        )
+        return {
+            'video_id': exact_match['video_id'],
+            'title': exact_match.get('yt_title') or exact_match.get('ha_title') or title,
+            'channel': exact_match.get('channel'),
+            'duration': exact_match.get('yt_duration') or exact_match.get('ha_duration')
+        }
+
     cached_rows = db.find_by_title(title)
     if not cached_rows:
         return None

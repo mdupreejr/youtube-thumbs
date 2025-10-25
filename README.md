@@ -93,10 +93,11 @@ Health check with rate limiter stats.
 
 ## How It Works
 
-1. Service fetches current media from Home Assistant
-2. Searches YouTube for matching video (by title, artist, duration ±2s)
-3. Filters results using fuzzy title matching (50%+ word overlap)
-4. Rates the best match on YouTube
+1. Service fetches current media from Home Assistant.
+2. Checks the SQLite cache for an exact `ha_title` match and reuses that video ID when found.
+3. If no cache hit occurs, searches YouTube for matching video (by title, artist, duration ±2s).
+4. Filters results using fuzzy title matching (50%+ word overlap).
+5. Rates the best match on YouTube.
 
 ## Add-on Configuration Options
 
@@ -123,7 +124,7 @@ Configure these in the add-on Configuration tab:
   - Use the add-on's **OPEN WEB UI** button; Home Assistant will launch a new window pointed directly at sqlite_web.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<port>`.
-- Every successful match is cached, so follow-up requests for the same title/duration reuse the stored video ID and skip the expensive YouTube search entirely.
+- Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
 ### Manual import from the legacy `ratings.log`

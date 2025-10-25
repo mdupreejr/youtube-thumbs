@@ -57,6 +57,7 @@ class Database:
             rating_count INTEGER DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         """
         with self._lock:
             try:
@@ -236,6 +237,23 @@ class Database:
             )
             rows = cur.fetchall()
         return [dict(row) for row in rows]
+
+    def find_by_exact_ha_title(self, title: str) -> Optional[Dict[str, Any]]:
+        """Return most recent video entry whose HA title exactly matches the provided string."""
+        if not title:
+            return None
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT * FROM video_ratings
+                WHERE ha_title = ?
+                ORDER BY date_updated DESC, date_added DESC
+                LIMIT 1
+                """,
+                (title,),
+            )
+            row = cur.fetchone()
+        return dict(row) if row else None
 
 
 _db_instance: Optional[Database] = None
