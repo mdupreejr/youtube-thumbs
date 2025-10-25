@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.10.6",
+  "version": "1.11.0",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/mdupreejr/youtube-thumbs",
@@ -25,6 +25,8 @@
     "log_level": "INFO",
     "sqlite_web_host": "127.0.0.1",
     "sqlite_web_port": 8080,
+    "use_invidious_search": false,
+    "invidious_base_url": "",
     "history_tracker_enabled": true,
     "history_poll_interval": 30
   },
@@ -37,6 +39,8 @@
     "log_level": "list(DEBUG|INFO|WARNING|ERROR|CRITICAL)?",
     "sqlite_web_host": "str?",
     "sqlite_web_port": "port?",
+    "use_invidious_search": "bool?",
+    "invidious_base_url": "str?",
     "history_tracker_enabled": "bool?",
     "history_poll_interval": "int(10,300)?"
   }

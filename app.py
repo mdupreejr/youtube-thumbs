@@ -11,6 +11,7 @@ from matcher import matcher
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
+from invidious_api import get_invidious_client
 
 app = Flask(__name__)
 db = get_database()
@@ -60,10 +61,33 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
         )
         return None
 
-    # Step 1: Search globally, filtered by duration
-    candidates = yt_api.search_video_globally(search_query, duration)
+    candidates = None
+    provider = None
+
+    invidious_client = get_invidious_client()
+    if invidious_client.is_enabled():
+        candidates = invidious_client.search_videos(search_query, duration)
+        if candidates:
+            provider = 'Invidious'
+
     if not candidates:
-        logger.error(f"No videos found globally matching title and duration | Query: '{search_query}' | Duration: {duration}s")
+        if quota_guard.is_blocked():
+            logger.warning(
+                "Skipping YouTube search for '%s' due to quota cooldown and no Invidious match",
+                title,
+            )
+            return None
+
+        candidates = yt_api.search_video_globally(search_query, duration)
+        provider = 'YouTube'
+
+    if not candidates:
+        logger.error(
+            "No videos found matching title and duration | Query: '%s' | Duration: %ss | Providers attempted: %s",
+            search_query,
+            duration,
+            provider or 'none',
+        )
         return None
     
     # Step 2: Filter candidates by title text matching
@@ -94,7 +118,13 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
             match_score,
         )
 
-    logger.info(f"Successfully found video: '{video['title']}' on '{video['channel']}' (ID: {video['video_id']})")
+    logger.info(
+        "Successfully found video via %s: '%s' on '%s' (ID: %s)",
+        provider or 'unknown',
+        video['title'],
+        video.get('channel'),
+        video['video_id'],
+    )
     return video
 
 
