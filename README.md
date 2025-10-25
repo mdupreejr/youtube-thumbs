@@ -122,6 +122,7 @@ Configure these in the add-on Configuration tab:
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<port>`.
 - Every successful match is cached, so follow-up requests for the same title/duration reuse the stored video ID and skip the expensive YouTube search entirely.
+- If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
 ### Manual import from the legacy `ratings.log`
 

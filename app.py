@@ -152,15 +152,16 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         })
         db.record_play(video_id)
 
-        yt_api = get_youtube_api()
-        current_rating = yt_api.get_video_rating(video_id)
-        
-        if current_rating == rating_type:
-            logger.info(f"Video {video_id} already rated '{rating_type}'")
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | ALREADY_RATED")
-            rating_logger.info(f"{rating_type.upper()} | ALREADY_RATED | {media_info} | ID: {video_id}")
+        cached_video_row = db.get_video(video_id)
+        cached_rating = (cached_video_row or {}).get('rating')
+        if cached_rating == rating_type:
+            logger.info(f"Video {video_id} already rated '{rating_type}' (cache)")
+            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | ALREADY_RATED_CACHE")
+            rating_logger.info(f"{rating_type.upper()} | ALREADY_RATED | {media_info} | ID: {video_id} | Source: cache")
             db.record_rating(video_id, rating_type)
             return jsonify({"success": True, "message": f"Already rated {rating_type}", "video_id": video_id, "title": video_title}), 200
+
+        yt_api = get_youtube_api()
 
         if yt_api.set_video_rating(video_id, rating_type):
             logger.info(f"Successfully rated video {video_id} {rating_type}")
