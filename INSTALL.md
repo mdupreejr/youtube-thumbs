@@ -89,10 +89,9 @@ log_level: INFO
 
 ### 6b. Access the sqlite_web UI (optional)
 
-- Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**.
-- A sidebar entry (*YouTube Thumbs DB*) is also added automatically for one-click access.
+- Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**; it will launch sqlite_web in a new browser tab.
 - Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
-- Need a direct port instead of Ingress? Set the `SQLITE_WEB_PORT` environment variable in the add-on options and browse to `http://<home-assistant-host>:<your-port>`.
+- Need a different port? Set the `sqlite_web_port` option (or `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<your-port>`.
 
 ### 7. Configure Home Assistant
 

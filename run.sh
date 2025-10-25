@@ -112,14 +112,14 @@ else
     bashio::log.info "Found existing SQLite database at ${DB_PATH}"
 fi
 
-INGRESS_PORT=$(bashio::addon.ingress_port 2>/dev/null || true)
+SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
 SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 
 if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
     SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
     bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
-elif bashio::var.has_value "${INGRESS_PORT}"; then
-    SQLITE_WEB_PORT="${INGRESS_PORT}"
+elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}"; then
+    SQLITE_WEB_PORT="${SQLITE_WEB_PORT_CONFIG}"
 else
     SQLITE_WEB_PORT=8080
 fi
@@ -136,11 +136,7 @@ if command -v sqlite_web >/dev/null 2>&1; then
         >> "${SQLITE_WEB_LOG}" 2>&1 &
     SQLITE_WEB_PID=$!
     bashio::log.info "sqlite_web UI log: ${SQLITE_WEB_LOG}"
-    if bashio::var.has_value "${INGRESS_PORT}"; then
-        bashio::log.info "sqlite_web available via Home Assistant sidebar (Open Web UI)"
-    else
-        bashio::log.info "Access sqlite_web at http://${HOST}:${SQLITE_WEB_PORT}"
-    fi
+    bashio::log.info "Access sqlite_web at http://${HOST}:${SQLITE_WEB_PORT}"
 else
     bashio::log.warning "sqlite_web not found; database UI will be unavailable"
 fi

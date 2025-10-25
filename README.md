@@ -109,16 +109,17 @@ Configure these in the add-on Configuration tab:
 | `rate_limit_per_hour` | 100 | Max YouTube API calls in 3600-second window |
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
 | `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `sqlite_web_port` | 8080 | Port for the sqlite_web admin UI |
 
 **Note:** The add-on automatically handles authentication using the Supervisor token.
 
 ## Data Storage & sqlite_web
 
 - All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
-- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and exposes it through Home Assistant Ingress.
-  - Open the **YouTube Thumbs Rating** add-on and click **OPEN WEB UI**, or use the new sidebar entry *YouTube Thumbs DB*.
+- The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it in a separate browser tab.
+  - Use the add-on's **OPEN WEB UI** button; Home Assistant will launch a new window pointed directly at sqlite_web.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
-- Prefer a direct port? Set the `SQLITE_WEB_PORT` environment variable and the UI will also bind to `http://<host>:<port>`.
+- Prefer a different port? Set the `sqlite_web_port` option (or the `SQLITE_WEB_PORT` env var) and browse to `http://<home-assistant-host>:<port>`.
 
 ### Manual import from the legacy `ratings.log`
 
