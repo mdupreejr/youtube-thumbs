@@ -21,7 +21,7 @@ class HomeAssistantAPI:
             logger.info("Using long-lived access token for authentication")
         
         if not all([self.url, self.token, self.entity]):
-            raise ValueError("Missing Home Assistant configuration in .env file")
+            raise ValueError("Missing Home Assistant configuration. Please check add-on configuration.")
         
         self.headers = {
             'Authorization': f'Bearer {self.token}',
