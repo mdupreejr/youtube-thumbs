@@ -109,6 +109,11 @@ Health check with rate limiter stats.
 
 ## Add-on Configuration Options
 
+The add-on exposes two bind addresses:
+`api_host` confines the thumbs API (`/thumbs_up`, `/thumbs_down`) to a specific interface,
+while `host` controls helper tools such as `sqlite_web`. Keep the defaults (`127.0.0.1`
+for `api_host`, `0.0.0.0` for `host`) unless you need LAN access to either surface.
+
 Configure these in the add-on Configuration tab:
 
 | Option | Default | Description |
