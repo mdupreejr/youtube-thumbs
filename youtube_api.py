@@ -87,11 +87,7 @@ class YouTubeAPI:
             for video in details.get('items', []):
                 content_details = video.get('contentDetails') or {}
                 duration_str = content_details.get('duration')
-                if not duration_str:
-                    logger.warning(f"Skipping video without duration info: {video.get('id')}")
-                    continue
-
-                duration = self._parse_duration(duration_str)
+                duration = self._parse_duration(duration_str) if duration_str else None
                 video_info = {
                     'video_id': video['id'],
                     'title': video['snippet']['title'],
@@ -99,12 +95,20 @@ class YouTubeAPI:
                     'duration': duration
                 }
 
-                if expected_duration is not None:
+                if expected_duration is not None and duration is not None:
                     diff = abs(duration - expected_duration)
                     if diff <= 2:
-                        logger.info(f"Duration match: '{video_info['title']}' on '{video_info['channel']}' - {duration}s (diff: {diff}s)")
+                        logger.info(
+                            f"Duration match: '{video_info['title']}' on '{video_info['channel']}' - "
+                            f"{duration}s (diff: {diff}s)"
+                        )
                         candidates.append(video_info)
                 else:
+                    if duration is None and expected_duration is not None:
+                        logger.warning(
+                            f"Duration missing for '{video_info['title']}' "
+                            f"(ID: {video_info['video_id']}); falling back to title match only"
+                        )
                     candidates.append(video_info)
 
             if not candidates and expected_duration:
