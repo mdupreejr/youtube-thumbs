@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/mdupreejr/youtube-thumbs",
@@ -12,7 +12,7 @@
   "homeassistant_api": true,
   "hassio_role": "homeassistant",
   "host_network": true,
-  "map": ["addon_config:rw", "share"],
+  "map": ["addon_config:rw"],
   "options": {
     "home_assistant_url": "http://supervisor/core",
     "home_assistant_token": "",

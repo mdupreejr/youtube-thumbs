@@ -46,16 +46,12 @@ if [ -f /config/youtube_thumbs/credentials.json ]; then
     bashio::log.info "Found credentials.json in /config/youtube_thumbs/"
     ln -sf /config/youtube_thumbs/credentials.json /app/credentials.json
     bashio::log.info "Created symlink: /app/credentials.json -> /config/youtube_thumbs/credentials.json"
-elif [ -f /share/youtube_thumbs/credentials.json ]; then
-    bashio::log.info "Found credentials.json in /share/youtube_thumbs/"
-    ln -sf /share/youtube_thumbs/credentials.json /app/credentials.json
-    bashio::log.info "Created symlink: /app/credentials.json -> /share/youtube_thumbs/credentials.json"
 elif [ -f /data/credentials.json ]; then
     bashio::log.info "Found credentials.json in /data/"
     ln -sf /data/credentials.json /app/credentials.json
     bashio::log.info "Created symlink: /app/credentials.json -> /data/credentials.json"
 else
-    bashio::log.warning "credentials.json NOT found in /config/youtube_thumbs/, /share/youtube_thumbs/, or /data/"
+    bashio::log.warning "credentials.json NOT found in /config/youtube_thumbs/ or /data/"
     bashio::log.warning "Please copy credentials.json to /addon_configs/XXXXXXXX_youtube_thumbs/"
     bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
 fi
@@ -64,16 +60,12 @@ if [ -f /config/youtube_thumbs/token.pickle ]; then
     bashio::log.info "Found token.pickle in /config/youtube_thumbs/"
     ln -sf /config/youtube_thumbs/token.pickle /app/token.pickle
     bashio::log.info "Created symlink: /app/token.pickle -> /config/youtube_thumbs/token.pickle"
-elif [ -f /share/youtube_thumbs/token.pickle ]; then
-    bashio::log.info "Found token.pickle in /share/youtube_thumbs/"
-    ln -sf /share/youtube_thumbs/token.pickle /app/token.pickle
-    bashio::log.info "Created symlink: /app/token.pickle -> /share/youtube_thumbs/token.pickle"
 elif [ -f /data/token.pickle ]; then
     bashio::log.info "Found token.pickle in /data/"
     ln -sf /data/token.pickle /app/token.pickle
     bashio::log.info "Created symlink: /app/token.pickle -> /data/token.pickle"
 else
-    bashio::log.warning "token.pickle NOT found in /config/youtube_thumbs/, /share/youtube_thumbs/, or /data/"
+    bashio::log.warning "token.pickle NOT found in /config/youtube_thumbs/ or /data/"
     bashio::log.warning "Please copy token.pickle to /addon_configs/XXXXXXXX_youtube_thumbs/"
     bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
 fi
