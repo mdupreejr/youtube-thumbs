@@ -1,7 +1,5 @@
 # YouTube Thumbs Rating Add-on
 
-**Version: 1.6.0**
-
 Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant.
 
 ## About
@@ -19,11 +17,13 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 
 ## Installation
 
-1. Copy this entire directory to `/addons/youtube_thumbs/` on your Home Assistant (accessible via Samba at `\\homeassistant.local\addons\`)
-2. Copy your `credentials.json` and `token.pickle` to the same directory
-3. In Home Assistant, go to Settings → Add-ons → Add-on Store
-4. Refresh the page - the local add-on should be automatically detected
-5. Find "YouTube Thumbs Rating" in the Local Add-ons section and click Install
+1. Add this GitHub repository to Home Assistant Add-on Store
+2. Install the "YouTube Thumbs Rating" add-on
+3. Copy your `credentials.json` and `token.pickle` to `/addon_configs/XXXXXXXX_youtube_thumbs/`
+4. Configure the add-on with your HA token and media player entity
+5. Start the add-on
+
+For detailed installation instructions, see [INSTALL.md](INSTALL.md)
 
 ## Configuration
 
@@ -61,4 +61,7 @@ Then create automations to call these services based on button presses or other 
 
 ## Support
 
-Check the add-on logs for troubleshooting. For detailed documentation, see DOCS.md.
+For troubleshooting and detailed documentation:
+- Check the add-on **Log** tab in Home Assistant
+- See [INSTALL.md](INSTALL.md) for installation help
+- See [DOCS.md](DOCS.md) for complete documentation

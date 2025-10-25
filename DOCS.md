@@ -1,7 +1,5 @@
 # YouTube Thumbs Rating Add-on Documentation
 
-**Version: 1.3.9**
-
 Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant.
 
 ## Features
@@ -14,44 +12,57 @@ Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home A
 
 ## Installation
 
-### Step 1: Add Local Add-on Repository
+For quick installation instructions, see [INSTALL.md](INSTALL.md).
 
-1. Copy the entire `addon/youtube_thumbs` directory to your Home Assistant's local add-ons directory:
+### Prerequisites
+
+Before installing, you need YouTube OAuth credentials:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable **YouTube Data API v3**
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+5. Choose **Desktop app** as the application type
+6. Download the credentials and save as `credentials.json`
+7. Run the OAuth flow once (outside Home Assistant) to generate `token.pickle`:
+   ```bash
+   # On your computer (not in HA), with Python installed:
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install google-auth-oauthlib google-api-python-client
+   # Place credentials.json in current directory
+   # Run a quick OAuth flow script or use the app.py from this repo
    ```
-   /addons/local/youtube_thumbs/
-   ```
+8. After authorizing, you'll have both `credentials.json` and `token.pickle`
 
-2. You can do this via:
-   - **Samba/SMB share**: Browse to `\\homeassistant.local\addons\` (Windows) or `smb://homeassistant.local/addons/` (Mac), then create/navigate to the `local` subdirectory
-   - **Terminal & SSH Add-on**: 
-     ```bash
-     cd /addons
-     mkdir -p local
-     # Then extract tar.gz to local/ or copy files to local/youtube_thumbs/
-     ```
-
-### Step 2: Copy OAuth Credentials
-
-**IMPORTANT**: You must copy your existing OAuth files to preserve your authentication:
-
-1. Copy `credentials.json` to `/addons/local/youtube_thumbs/credentials.json` (via Samba: `\\homeassistant.local\addons\local\youtube_thumbs\credentials.json`)
-2. Copy `token.pickle` to `/addons/local/youtube_thumbs/token.pickle` (via Samba: `\\homeassistant.local\addons\local\youtube_thumbs\token.pickle`)
-
-These files will be automatically moved to persistent storage (`/data/`) on first run.
-
-### Step 3: Install the Add-on
+### Step 1: Add Repository to Home Assistant
 
 1. Navigate to **Settings** → **Add-ons** → **Add-on Store**
 2. Click the **⋮** (three dots) menu in the top right
 3. Select **Repositories**
-4. Add: `file:///config/addon` (if not already added for local add-ons)
-5. Refresh the page
-6. Find **YouTube Thumbs Rating** in the list
-7. Click on it and press **INSTALL**
+4. Add: `https://github.com/mdupreejr/youtube-thumbs`
+5. Click **Add** → **Close**
+
+### Step 2: Install the Add-on
+
+1. Refresh the Add-on Store
+2. Find **YouTube Thumbs Rating** in the available add-ons
+3. Click **INSTALL**
+
+### Step 3: Copy OAuth Credentials
+
+Copy your OAuth files to the add-on's config directory:
+
+1. Navigate to `/addon_configs/XXXXXXXX_youtube_thumbs/` (via File Editor or Samba)
+2. Copy both files:
+   - `credentials.json`
+   - `token.pickle`
+
+**Samba path**: `\\homeassistant.local\addon_configs\XXXXXXXX_youtube_thumbs\`
 
 ### Step 4: Configure the Add-on
 
-Before starting, configure the add-on:
+Configure the add-on before starting:
 
 1. Go to the **Configuration** tab
 2. Set the following options:
@@ -73,7 +84,6 @@ Before starting, configure the add-on:
 - **rate_limit_per_hour**: Default is `100`
 - **rate_limit_per_day**: Default is `500`
 - **log_level**: Default is `INFO` (options: DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- **log_max_size_mb**: Default is `10` MB
 
 ### Step 5: Start the Add-on
 
@@ -150,15 +160,11 @@ automation:
 
 ## Logs
 
-The add-on creates three log files in `/data/` (persistent storage):
-
-- **app.log**: General application logs
-- **user_actions.log**: User action audit trail (thumbs up/down)
-- **errors.log**: Error tracking with stack traces
+The add-on integrates with Home Assistant's logging system.
 
 View logs via:
-- Add-on **Log** tab (shows app.log)
-- File Editor add-on to view individual log files in `/addon_configs/youtube_thumbs/`
+- Add-on **Log** tab (shows real-time application logs)
+- Set `log_level: DEBUG` in configuration for detailed output
 
 ## API Endpoints
 
@@ -188,7 +194,7 @@ Response:
 ### Add-on Won't Start
 
 1. Check the **Log** tab for errors
-2. Verify `credentials.json` and `token.pickle` are in `/addons/local/youtube_thumbs/`
+2. Verify `credentials.json` and `token.pickle` are in `/addon_configs/XXXXXXXX_youtube_thumbs/`
 3. Ensure Home Assistant token is valid
 4. Check media player entity ID is correct
 
@@ -227,12 +233,12 @@ Response:
 
 To update the add-on:
 
-1. Replace files in `/addons/local/youtube_thumbs/` (via Samba share `\\homeassistant.local\addons\local\youtube_thumbs\`)
-2. Go to Add-on Info tab
-3. Click **Rebuild**
-4. Restart the add-on
+1. Go to **Settings** → **Add-ons** → **YouTube Thumbs Rating**
+2. Click the **Info** tab
+3. If an update is available, click **Update**
+4. The add-on will automatically restart with the new version
 
-Your OAuth credentials and configuration will persist.
+Your OAuth credentials (in `/addon_configs/`) and configuration will persist.
 
 ## Support
 

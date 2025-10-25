@@ -1,82 +1,59 @@
-# YouTube Thumbs - Rate Songs from Home Assistant
+# YouTube Thumbs - Home Assistant Add-on
 
-A Flask service that lets you rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant. Perfect for Lutron remote integration.
+A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs playing on your AppleTV. Perfect for Lutron remote integration or any automation that needs to rate music.
 
 ## Features
 
 - 🎵 Rate currently playing songs via REST API
 - 🔍 Automatic YouTube video matching with fuzzy search
-- 🛡️ Built-in rate limiting (10/min, 100/hour, 500/day)
-- 📝 Comprehensive logging with structured output
+- 🛡️ Built-in rate limiting (configurable)
+- 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
-- ⚡ Optimized with regex caching and connection pooling
+- ⚡ Optimized performance with caching and connection pooling
 
-## Quick Start
+## Installation
 
-### 1. Install Dependencies
+**Quick Install:**
 
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+1. Add this repository URL in Home Assistant Add-on Store
+2. Install the "YouTube Thumbs Rating" add-on
+3. Copy your OAuth credentials to the addon_configs directory
+4. Configure the add-on with your HA token and media player entity
+5. Start the add-on
 
-**⚠️ Important:** Always activate the venv before running any Python commands or making changes to the project.
+**For detailed instructions, see [INSTALL.md](INSTALL.md)**
 
-### 2. Setup YouTube API
+## Setup YouTube OAuth
+
+Before using this add-on, you need YouTube OAuth credentials:
 
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
 2. Enable **YouTube Data API v3**
-3. Create **OAuth Desktop** credentials
-4. Download and save as `credentials.json`
+3. Create **OAuth 2.0 Desktop** credentials
+4. Download `credentials.json`
+5. Run the OAuth flow once to generate `token.pickle`
+6. Copy both files to `/addon_configs/XXXXXXXX_youtube_thumbs/`
 
-### 3. Configure Environment
+See [DOCS.md](DOCS.md) for detailed OAuth setup instructions.
 
-```bash
-cp .env.example .env
-nano .env
-```
+## Configuration
 
-Fill in your details:
-```env
-HOME_ASSISTANT_URL=http://homeassistant.local:8123
-HOME_ASSISTANT_TOKEN=your_long_lived_access_token
-MEDIA_PLAYER_ENTITY=media_player.apple_tv
-PORT=21812
-```
-
-**Get HA Token:** Profile → Long-Lived Access Tokens → Create Token
-
-### 4. First Run - OAuth Setup
-
-```bash
-python app.py
-```
-
-On first run, the app will start the OAuth flow and open your browser to authorize. After granting access, `token.pickle` is created automatically.
-
-### 5. Configure Home Assistant
-
-Add to your `configuration.yaml`:
+Add REST commands to your Home Assistant `configuration.yaml`:
 
 ```yaml
 rest_command:
   youtube_thumbs_up:
-    url: "http://YOUR_SERVER_IP:21812/thumbs_up"
+    url: "http://localhost:21812/thumbs_up"
     method: POST
     timeout: 30
-    
+
   youtube_thumbs_down:
-    url: "http://YOUR_SERVER_IP:21812/thumbs_down"
+    url: "http://localhost:21812/thumbs_down"
     method: POST
     timeout: 30
 ```
 
-Restart Home Assistant.
-
-### 6. Create Automations
-
-Example Lutron remote automation:
+Then create automations to call these services. Example for Lutron remote:
 
 ```yaml
 automation:
@@ -88,38 +65,6 @@ automation:
         subtype: button_1
     action:
       - service: rest_command.youtube_thumbs_up
-```
-
-## Run the Service
-
-### Development
-```bash
-python app.py
-```
-
-### Production (systemd)
-
-Create `/etc/systemd/system/youtube-thumbs.service`:
-
-```ini
-[Unit]
-Description=YouTube Thumbs Rating Service
-After=network.target
-
-[Service]
-Type=simple
-User=your_user
-WorkingDirectory=/path/to/youtube_thumbs
-ExecStart=/path/to/youtube_thumbs/venv/bin/python app.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl enable --now youtube-thumbs
 ```
 
 ## API Endpoints
@@ -159,142 +104,73 @@ Health check with rate limiter stats.
 3. Filters results using fuzzy title matching (50%+ word overlap)
 4. Rates the best match on YouTube
 
-## Configuration
+## Add-on Configuration Options
 
-Environment variables (`.env`):
+Configure these in the add-on Configuration tab:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 21812 | Service port |
-| `RATE_LIMIT_PER_MINUTE` | 10 | Max requests/minute |
-| `RATE_LIMIT_PER_HOUR` | 100 | Max requests/hour |
-| `RATE_LIMIT_PER_DAY` | 500 | Max requests/day |
-| `LOG_LEVEL` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `home_assistant_token` | (required) | Your HA Long-Lived Access Token |
+| `media_player_entity` | (required) | Media player entity ID |
+| `home_assistant_url` | http://supervisor/core | HA URL (use default for add-ons) |
+| `port` | 21812 | Service port |
+| `rate_limit_per_minute` | 10 | Max requests/minute |
+| `rate_limit_per_hour` | 100 | Max requests/hour |
+| `rate_limit_per_day` | 500 | Max requests/day |
+| `log_level` | INFO | Logging level |
 
 ## Troubleshooting
 
 **"No media currently playing"**
 - Verify AppleTV is playing music
-- Check `MEDIA_PLAYER_ENTITY` matches your HA entity
+- Check media player entity ID is correct in add-on configuration
 
 **"Video not found"**
 - Ensure YouTube account is signed in on AppleTV
 - Song must appear in your YouTube watch history
 - Check duration matching (±2 seconds tolerance)
 
-**OAuth Issues**
-- Delete `token.pickle` and re-run `python app.py`
-- Ensure `credentials.json` is present
+**OAuth/Credentials errors**
+- Verify `credentials.json` and `token.pickle` are in `/addon_configs/XXXXXXXX_youtube_thumbs/`
+- Check add-on logs for specific error messages
+- Ensure OAuth credentials are from Google Cloud Console with YouTube Data API v3 enabled
 
 **Check Logs**
-```bash
-# All logs output to stdout/stderr
-# View logs with:
-python app.py
-
-# Or when running as a service:
-journalctl -u youtube-thumbs -f
-```
+- View in Home Assistant: Settings → Add-ons → YouTube Thumbs Rating → Log tab
+- Set `log_level: DEBUG` in configuration for detailed output
 
 ## Logging
 
-The service uses structured logging with multiple log levels:
+The add-on integrates with Home Assistant's logging system:
 
-### Log Output
-All logs output to stdout/stderr and can be viewed in the console or captured by your process manager (systemd, Docker, etc.).
-
-### Log Levels
+**Log Levels:**
 - **INFO**: General application flow and successful operations
 - **WARNING**: Rate limiting, multiple matches, non-critical issues
 - **ERROR**: Failed operations with context
-- **DEBUG**: Detailed tracebacks and debugging information (enable with `LOG_LEVEL=DEBUG`)
+- **DEBUG**: Detailed tracebacks and debugging (set `log_level: DEBUG` in config)
 
-### User Action Logging
-User actions (thumbs up/down) are logged with the `[USER_ACTION]` prefix:
+**User Action Logging:**
+User actions are logged with `[USER_ACTION]` prefix:
 ```
 [USER_ACTION] LIKE | "Song Title" by Artist | ID: xyz123 | SUCCESS
 [USER_ACTION] DISLIKE | "Another Song" | ID: abc456 | FAILED - Video not found
-[USER_ACTION] LIKE | "Third Song" by Artist | ID: def789 | ALREADY_RATED
 ```
 
-### Error Logging
-Errors include detailed context:
-```
-[ERROR] Video not found | Context: rate_video (like) | Media: "Song Title" by Artist
-[ERROR] YouTube API error in search_video_globally | Query: 'Song' | Error: ...
-```
-
-Set `LOG_LEVEL=DEBUG` to see detailed tracebacks.
-
-## File Structure
-
-```
-youtube_thumbs/
-├── app.py                  # Main Flask app
-├── youtube_api.py          # YouTube API with caching
-├── homeassistant_api.py    # HA integration with connection pooling
-├── matcher.py              # Fuzzy title matching
-├── rate_limiter.py         # Memory-efficient rate limiting
-├── logger.py               # Structured logging setup
-├── requirements.txt        # Dependencies
-├── .env.example            # Configuration template
-└── README.md               # This file
-```
-
-## Performance Optimizations
-
-- **Regex caching** - Duration parsing ~10-50x faster
-- **Connection pooling** - HTTP requests reuse TCP connections
-- **Memory efficient** - Single deque for rate limiting (67% less memory)
-- **Type hints** - Full type annotations for better IDE support
-
-## Development Workflow
-
-When making changes to the project, follow this workflow:
-
-### 1. Always Use Virtual Environment
-```bash
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 2. Make Your Changes
-Edit code, test functionality, etc.
-
-### 3. Test Your Changes
-```bash
-python app.py
-# Test the endpoints
-```
-
-### 4. Version and Commit Checklist
-Before considering your work complete:
-
-- [ ] Activate venv (`source venv/bin/activate`)
-- [ ] Test all changes work as expected
-- [ ] Update README.md if needed
-- [ ] Bump version number in commit message (v1.0, v1.1, v2.0, etc.)
-- [ ] Commit with descriptive message and todo list of what was completed
-- [ ] Example commit:
-  ```bash
-  git add .
-  git commit -m "v1.1 - Feature description
-  
-  - [x] Item 1 completed
-  - [x] Item 2 completed
-  - [x] Item 3 completed"
-  ```
-
-### Version Numbering
-- **Major version (v2.0)**: Breaking changes or major features
-- **Minor version (v1.1)**: New features, non-breaking changes
-- **Patch version (v1.0.1)**: Bug fixes only
+View logs in the add-on **Log** tab.
 
 ## Security
 
-- ⚠️ Never commit `.env`, `credentials.json`, or `token.pickle`
-- Service runs on local network only
-- OAuth tokens stored locally
-- Keep HA token secure
+- OAuth credentials stored in `/addon_configs/` (persistent storage)
+- Home Assistant token encrypted by Supervisor
+- Service only accessible from localhost (not exposed to network)
+- ⚠️ Never share your `credentials.json`, `token.pickle`, or HA token
+
+## Support
+
+For issues or questions:
+- Check add-on logs first (Settings → Add-ons → YouTube Thumbs Rating → Log)
+- Review [INSTALL.md](INSTALL.md) for installation help
+- See [DOCS.md](DOCS.md) for detailed documentation
 
 ## License
 
