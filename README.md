@@ -17,9 +17,11 @@ A Flask service that lets you rate YouTube videos (👍/👎) for songs playing 
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # or: venv/bin/activate on Windows
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+**⚠️ Important:** Always activate the venv before running any Python commands or making changes to the project.
 
 ### 2. Setup YouTube API
 
@@ -245,6 +247,47 @@ youtube_thumbs/
 - **Connection pooling** - HTTP requests reuse TCP connections
 - **Memory efficient** - Single deque for rate limiting (67% less memory)
 - **Type hints** - Full type annotations for better IDE support
+
+## Development Workflow
+
+When making changes to the project, follow this workflow:
+
+### 1. Always Use Virtual Environment
+```bash
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 2. Make Your Changes
+Edit code, test functionality, etc.
+
+### 3. Test Your Changes
+```bash
+python app.py
+# Test the endpoints
+```
+
+### 4. Version and Commit Checklist
+Before considering your work complete:
+
+- [ ] Activate venv (`source venv/bin/activate`)
+- [ ] Test all changes work as expected
+- [ ] Update README.md if needed
+- [ ] Bump version number in commit message (v1.0, v1.1, v2.0, etc.)
+- [ ] Commit with descriptive message and todo list of what was completed
+- [ ] Example commit:
+  ```bash
+  git add .
+  git commit -m "v1.1 - Feature description
+  
+  - [x] Item 1 completed
+  - [x] Item 2 completed
+  - [x] Item 3 completed"
+  ```
+
+### Version Numbering
+- **Major version (v2.0)**: Breaking changes or major features
+- **Minor version (v1.1)**: New features, non-breaking changes
+- **Patch version (v1.0.1)**: Bug fixes only
 
 ## Security
 
