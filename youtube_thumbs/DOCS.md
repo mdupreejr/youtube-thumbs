@@ -1,6 +1,6 @@
 # YouTube Thumbs Rating Add-on Documentation
 
-**Version: 1.3.6**
+**Version: 1.3.7**
 
 Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant.
 
