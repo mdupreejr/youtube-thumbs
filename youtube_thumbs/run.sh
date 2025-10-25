@@ -42,37 +42,39 @@ export ERROR_LOG_FILE=/data/errors.log
 bashio::log.info "Checking for OAuth credentials..."
 
 # Try multiple possible locations
-if [ -f /data/credentials.json ]; then
+if [ -f /share/youtube_thumbs/credentials.json ]; then
+    bashio::log.info "Found credentials.json in /share/youtube_thumbs/"
+    ln -sf /share/youtube_thumbs/credentials.json /app/credentials.json
+    bashio::log.info "Created symlink: /app/credentials.json -> /share/youtube_thumbs/credentials.json"
+elif [ -f /data/credentials.json ]; then
     bashio::log.info "Found credentials.json in /data/"
     ln -sf /data/credentials.json /app/credentials.json
     bashio::log.info "Created symlink: /app/credentials.json -> /data/credentials.json"
-elif [ -f /root/addon_configs/youtube_thumbs/credentials.json ]; then
-    bashio::log.info "Found credentials.json in /root/addon_configs/youtube_thumbs/"
-    ln -sf /root/addon_configs/youtube_thumbs/credentials.json /app/credentials.json
-    bashio::log.info "Created symlink: /app/credentials.json -> /root/addon_configs/youtube_thumbs/credentials.json"
 else
-    bashio::log.warning "credentials.json NOT found in /data/ or /root/addon_configs/youtube_thumbs/"
-    bashio::log.warning "Please copy credentials.json to /addon_configs/youtube_thumbs/ via Samba or file editor"
+    bashio::log.warning "credentials.json NOT found in /share/youtube_thumbs/ or /data/"
+    bashio::log.warning "Please copy credentials.json to /share/youtube_thumbs/ via Samba (\\\\homeassistant.local\\share\\youtube_thumbs\\)"
 fi
 
-if [ -f /data/token.pickle ]; then
+if [ -f /share/youtube_thumbs/token.pickle ]; then
+    bashio::log.info "Found token.pickle in /share/youtube_thumbs/"
+    ln -sf /share/youtube_thumbs/token.pickle /app/token.pickle
+    bashio::log.info "Created symlink: /app/token.pickle -> /share/youtube_thumbs/token.pickle"
+elif [ -f /data/token.pickle ]; then
     bashio::log.info "Found token.pickle in /data/"
     ln -sf /data/token.pickle /app/token.pickle
     bashio::log.info "Created symlink: /app/token.pickle -> /data/token.pickle"
-elif [ -f /root/addon_configs/youtube_thumbs/token.pickle ]; then
-    bashio::log.info "Found token.pickle in /root/addon_configs/youtube_thumbs/"
-    ln -sf /root/addon_configs/youtube_thumbs/token.pickle /app/token.pickle
-    bashio::log.info "Created symlink: /app/token.pickle -> /root/addon_configs/youtube_thumbs/token.pickle"
 else
-    bashio::log.warning "token.pickle NOT found in /data/ or /root/addon_configs/youtube_thumbs/"
-    bashio::log.warning "Please copy token.pickle to /addon_configs/youtube_thumbs/ via Samba or file editor"
+    bashio::log.warning "token.pickle NOT found in /share/youtube_thumbs/ or /data/"
+    bashio::log.warning "Please copy token.pickle to /share/youtube_thumbs/ via Samba (\\\\homeassistant.local\\share\\youtube_thumbs\\)"
 fi
 
 # List what's actually in various directories for debugging
+bashio::log.info "Contents of /share/youtube_thumbs/ (if exists):"
+ls -la /share/youtube_thumbs/ 2>/dev/null || bashio::log.warning "Directory /share/youtube_thumbs/ does not exist"
 bashio::log.info "Contents of /data/:"
 ls -la /data/ || bashio::log.warning "Could not list /data/ directory"
-bashio::log.info "Contents of /root/addon_configs/youtube_thumbs/ (if exists):"
-ls -la /root/addon_configs/youtube_thumbs/ 2>/dev/null || bashio::log.warning "Directory /root/addon_configs/youtube_thumbs/ does not exist or is not accessible"
+bashio::log.info "Contents of /config (if exists):"
+ls -la /config 2>/dev/null || bashio::log.warning "Directory /config does not exist or is not accessible"
 
 bashio::log.info "Starting YouTube Thumbs service on ${HOST}:${PORT}..."
 bashio::log.info "Home Assistant URL: ${HOME_ASSISTANT_URL}"
