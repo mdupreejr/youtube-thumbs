@@ -69,7 +69,16 @@ log_level: INFO
 
 **Note:** The add-on automatically uses the Supervisor token for authentication, and connects to Home Assistant via `http://supervisor/core` (no configuration needed).
 
-**Security note:** The rating API and sqlite_web helper both listen on `127.0.0.1` and are therefore reachable only from Home Assistant/Supervisor. Use ingress or SSH tunneling if you need remote access; exposing them to your LAN is no longer supported.
+Need sqlite_web outside of Home Assistant ingress? Add
+
+```yaml
+sqlite_web_host: 0.0.0.0  # exposes the DB UI to your LAN
+sqlite_web_port: 8080     # optional, defaults to 8080
+```
+
+Only open the DB UI to networks you trust.
+
+**Security note:** The rating API always listens on `127.0.0.1` and cannot be exposed. The sqlite_web helper also defaults to `127.0.0.1`, but you can set `sqlite_web_host: 0.0.0.0` (and optionally adjust `sqlite_web_port`) if you intentionally want the DB UI reachable from your LAN.
 
 #### Finding your media player entity:
 1. Go to **Developer Tools** → **States**
@@ -93,7 +102,7 @@ log_level: INFO
 
 - Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**; it will launch sqlite_web in a new browser tab.
 - Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
-- Need a different port? Set the `sqlite_web_port` option (or `SQLITE_WEB_PORT` env var) and use HA ingress or an SSH tunnel to access the localhost-only endpoint.
+- Need a different binding? Set `sqlite_web_host` (defaults to `127.0.0.1`) and `sqlite_web_port` or export the `SQLITE_WEB_HOST` / `SQLITE_WEB_PORT` env vars. Only expose the DB UI to networks you trust.
 
 ### 7. Configure Home Assistant
 

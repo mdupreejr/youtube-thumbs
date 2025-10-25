@@ -1,7 +1,4 @@
 configuration:
-  home_assistant_url:
-    name: Home Assistant URL
-    description: Override only if Supervisor cannot resolve your core instance; defaults to the internal supervisor URL.
   home_assistant_token:
     name: Home Assistant token
     description: Optional manual token. Leave blank to automatically use the Supervisor-provided token.
@@ -11,6 +8,9 @@ configuration:
   port:
     name: Rating API port
     description: TCP port that Home Assistant automations call for /thumbs_up or /thumbs_down. Change only if 21812 conflicts with something else.
+  sqlite_web_host:
+    name: sqlite_web host
+    description: Bind address for the sqlite_web UI. Keep 127.0.0.1 for local-only access; use 0.0.0.0 to expose the DB UI to your LAN.
   sqlite_web_port:
     name: sqlite_web port
     description: Port for the sqlite_web database viewer opened via the OPEN WEB UI button (defaults to 8080).

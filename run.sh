@@ -4,17 +4,10 @@ bashio::log.info "YouTube Thumbs Rating Add-on Starting..."
 
 # Read configuration from add-on options
 bashio::log.info "Loading configuration..."
-HOME_ASSISTANT_URL_CONFIG=$(bashio::config 'home_assistant_url')
 HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
 
-# Use defaults if config is empty or "null"
-if [ -z "${HOME_ASSISTANT_URL_CONFIG}" ] || [ "${HOME_ASSISTANT_URL_CONFIG}" = "null" ]; then
-    export HOME_ASSISTANT_URL="http://supervisor/core"
-    bashio::log.info "Using default Home Assistant URL: http://supervisor/core"
-else
-    export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG}"
-    bashio::log.info "Using configured Home Assistant URL: ${HOME_ASSISTANT_URL_CONFIG}"
-fi
+export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL:-http://supervisor/core}"
+bashio::log.info "Home Assistant URL fixed to ${HOME_ASSISTANT_URL}"
 
 if [ -z "${HOME_ASSISTANT_TOKEN_CONFIG}" ] || [ "${HOME_ASSISTANT_TOKEN_CONFIG}" = "null" ]; then
     export HOME_ASSISTANT_TOKEN=""
@@ -43,12 +36,20 @@ else
     export PORT=21812
 fi
 
-# Always bind both the API and sqlite_web helper to localhost for safety
+# Always bind the thumbs API to localhost for safety
 export HOST="127.0.0.1"
-export SQLITE_WEB_HOST="127.0.0.1"
-
 bashio::log.info "API binding forced to localhost (${HOST})"
-bashio::log.info "sqlite_web binding forced to localhost (${SQLITE_WEB_HOST})"
+
+SQLITE_WEB_HOST_CONFIG=$(bashio::config 'sqlite_web_host')
+SQLITE_WEB_HOST_ENV="${SQLITE_WEB_HOST:-}"
+if bashio::var.has_value "${SQLITE_WEB_HOST_ENV}"; then
+    export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_ENV}"
+elif bashio::var.has_value "${SQLITE_WEB_HOST_CONFIG}"; then
+    export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_CONFIG}"
+else
+    export SQLITE_WEB_HOST="127.0.0.1"
+fi
+bashio::log.info "sqlite_web binding: ${SQLITE_WEB_HOST}"
 
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
