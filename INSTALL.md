@@ -1,46 +1,5 @@
 # Quick Installation Guide
 
-## Prerequisites
-
-You already have:
-- ✅ `credentials.json` (Google OAuth credentials)
-- ✅ `token.pickle` (YouTube API authentication token)
-- ✅ Home Assistant OS running
-
-## Installation Steps
-
-### 1. Copy Add-on to Home Assistant
-
-You need to copy the entire `addon/youtube_thumbs/` directory to your Home Assistant's local add-ons directory.
-
-**Option A: Using Samba/SMB Share + Terminal (Recommended for HA OS)**
-1. On your computer, browse to `\\homeassistant.local\addons\` (Windows) or `smb://homeassistant.local/addons/` (Mac)
-2. If the `addons` folder doesn't exist, create it
-3. Copy `youtube_thumbs.tar.gz` to `\\homeassistant.local\addons\`
-4. Open Terminal & SSH add-on in Home Assistant
-5. Run:
-   ```bash
-   cd /addons
-   mkdir -p local
-   tar -xzf youtube_thumbs.tar.gz -C local/
-   rm youtube_thumbs.tar.gz
-   ```
-
-**Option B: Using wget (if you host the tar.gz somewhere)**
-```bash
-# SSH into Home Assistant or use Terminal & SSH add-on
-cd /addons
-mkdir -p local
-wget https://your-server.com/youtube_thumbs.tar.gz
-tar -xzf youtube_thumbs.tar.gz -C local/
-rm youtube_thumbs.tar.gz
-```
-
-**Note**: The tar.gz includes all required files including `credentials.json` and `token.pickle`. These will be automatically moved to persistent storage (`/data/`) on first run.
-
-### 2. Verify Files
-
-After extraction, verify the files are in place at `\\homeassistant.local\addons\local\youtube_thumbs\` (or `/addons/local/youtube_thumbs/` via Terminal).
 
 ### 3. Install the Add-on
 
@@ -94,20 +53,6 @@ log_max_size_mb: 10
 2. Toggle **"Start on boot"** to ON (recommended)
 3. Toggle **"Watchdog"** to ON (auto-restart on crashes)
 4. Click **START**
-
-### 6. Verify It's Running
-
-1. Go to the **Log** tab
-2. You should see output like:
-   ```
-   [INFO] Copying credentials.json to /data for persistence...
-   [INFO] Copying token.pickle to /data for persistence...
-   [INFO] Starting YouTube Thumbs service on 0.0.0.0:21812...
-   [INFO] Home Assistant URL: http://supervisor/core
-   [INFO] Media Player Entity: media_player.apple_tv
-   ```
-
-If you see any errors, check the troubleshooting section in DOCS.md.
 
 ### 7. Configure Home Assistant
 
@@ -172,7 +117,6 @@ automation:
 
 ### Add-on won't start
 - Check logs for specific error messages
-- Verify `credentials.json` and `token.pickle` are in `/addons/local/youtube_thumbs/`
 - Verify Home Assistant token is valid
 - Verify media player entity ID is correct
 
@@ -185,8 +129,6 @@ automation:
 - Check `token.pickle` hasn't expired
 
 ### Can't find the add-on in the store
-- **IMPORTANT**: The path must be `/addons/local/youtube_thumbs/` (note the `local` subdirectory)
-- Verify files are visible via Samba share at `\\homeassistant.local\addons\local\youtube_thumbs\`
 - Try refreshing the Add-on Store page
 - Check Settings → Add-ons → Add-on Store → ⋮ → Check for updates
 - Restart Home Assistant if the add-on still doesn't appear
@@ -194,7 +136,6 @@ automation:
 ## Next Steps
 
 Once everything is working:
-- Set up automations for your Lutron remote or other triggers
 - Monitor the logs to ensure ratings are working correctly
 - Adjust rate limits if needed in the add-on configuration
 
