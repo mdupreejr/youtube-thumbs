@@ -2,7 +2,7 @@ from flask import Flask, jsonify, Response
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
-from logger import logger, user_action_logger
+from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
@@ -74,12 +74,14 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
     allowed, reason = rate_limiter.check_and_add_request()
     if not allowed:
         logger.warning(f"Request blocked: {reason}")
+        rating_logger.info(f"{rating_type.upper()} | BLOCKED | Reason: {reason}")
         return jsonify({"success": False, "error": reason}), 429
     
     try:
         ha_media = ha_api.get_current_media()
         if not ha_media:
             logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
+            rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
             return jsonify({"success": False, "error": "No media currently playing"}), 400
         
         video = search_and_match_video(ha_media)
@@ -88,6 +90,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             artist = ha_media.get('artist', '')
             media_info = format_media_info(title, artist)
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
+            rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: N/A | Reason: Video not found")
             logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
             return jsonify({"success": False, "error": "Video not found"}), 404
         
@@ -102,19 +105,23 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         if current_rating == rating_type:
             logger.info(f"Video {video_id} already rated '{rating_type}'")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | ALREADY_RATED")
+            rating_logger.info(f"{rating_type.upper()} | ALREADY_RATED | {media_info} | ID: {video_id}")
             return jsonify({"success": True, "message": f"Already rated {rating_type}", "video_id": video_id, "title": video_title}), 200
-        
+
         if yt_api.set_video_rating(video_id, rating_type):
             logger.info(f"Successfully rated video {video_id} {rating_type}")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | SUCCESS")
+            rating_logger.info(f"{rating_type.upper()} | SUCCESS | {media_info} | ID: {video_id}")
             return jsonify({"success": True, "message": f"Successfully rated {rating_type}", "video_id": video_id, "title": video_title}), 200
 
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | FAILED - API error")
+        rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: {video_id} | Reason: API error")
         logger.error(f"Failed to set rating | Context: rate_video ({rating_type}) | Video ID: {video_id} | Title: {video_title}")
         return jsonify({"success": False, "error": "Failed to set rating"}), 500
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
+        rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/thumbs_up', methods=['POST'])

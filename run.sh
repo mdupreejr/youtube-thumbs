@@ -1,30 +1,41 @@
 #!/usr/bin/with-contenv bashio
 
+bashio::log.info "YouTube Thumbs Rating Add-on Starting..."
+
 # Read configuration from add-on options
+bashio::log.info "Loading configuration..."
 HOME_ASSISTANT_URL_CONFIG=$(bashio::config 'home_assistant_url')
 HOME_ASSISTANT_TOKEN_CONFIG=$(bashio::config 'home_assistant_token')
 
 # Use defaults if config is empty or "null"
 if [ -z "${HOME_ASSISTANT_URL_CONFIG}" ] || [ "${HOME_ASSISTANT_URL_CONFIG}" = "null" ]; then
     export HOME_ASSISTANT_URL="http://supervisor/core"
+    bashio::log.info "Using default Home Assistant URL: http://supervisor/core"
 else
     export HOME_ASSISTANT_URL="${HOME_ASSISTANT_URL_CONFIG}"
+    bashio::log.info "Using configured Home Assistant URL: ${HOME_ASSISTANT_URL_CONFIG}"
 fi
 
 if [ -z "${HOME_ASSISTANT_TOKEN_CONFIG}" ] || [ "${HOME_ASSISTANT_TOKEN_CONFIG}" = "null" ]; then
     export HOME_ASSISTANT_TOKEN=""
+    bashio::log.info "No custom Home Assistant token configured, will use SUPERVISOR_TOKEN"
 else
     export HOME_ASSISTANT_TOKEN="${HOME_ASSISTANT_TOKEN_CONFIG}"
+    bashio::log.info "Using custom Home Assistant token"
 fi
 
 export MEDIA_PLAYER_ENTITY=$(bashio::config 'media_player_entity')
+bashio::log.info "Media Player Entity: ${MEDIA_PLAYER_ENTITY}"
 
 # Only export SUPERVISOR_TOKEN if it exists (it's automatically provided by Home Assistant)
 # Don't set it to empty string, let it be unset so Python can check for it properly
 if [ -n "${SUPERVISOR_TOKEN}" ]; then
     export SUPERVISOR_TOKEN
     bashio::log.info "SUPERVISOR_TOKEN is available for authentication"
+else
+    bashio::log.warning "SUPERVISOR_TOKEN not available - authentication may fail"
 fi
+
 export PORT=$(bashio::config 'port')
 export HOST=$(bashio::config 'host')
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
@@ -32,13 +43,19 @@ export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
 export RATE_LIMIT_PER_DAY=$(bashio::config 'rate_limit_per_day')
 export LOG_LEVEL=$(bashio::config 'log_level')
 
+bashio::log.info "Server configuration: ${HOST}:${PORT}"
+bashio::log.info "Rate limits: ${RATE_LIMIT_PER_MINUTE}/min, ${RATE_LIMIT_PER_HOUR}/hr, ${RATE_LIMIT_PER_DAY}/day"
+bashio::log.info "Log level: ${LOG_LEVEL}"
+
 # Check what files exist and where
 bashio::log.info "Checking for OAuth credentials..."
 
-# Create the addon_config directory if it doesn't exist
+# Create the addon_config directory if it doesn't exist (also used for logs)
 if [ ! -d /config/youtube_thumbs ]; then
     mkdir -p /config/youtube_thumbs
-    bashio::log.info "Created directory /config/youtube_thumbs/"
+    bashio::log.info "Created directory /config/youtube_thumbs/ for logs and credentials"
+else
+    bashio::log.info "Directory /config/youtube_thumbs/ already exists"
 fi
 
 # Try multiple possible locations (prioritize addon_config location)
@@ -70,9 +87,14 @@ else
     bashio::log.warning "Or via Samba to \\\\homeassistant.local\\addon_configs\\XXXXXXXX_youtube_thumbs\\"
 fi
 
-bashio::log.info "Starting YouTube Thumbs service on ${HOST}:${PORT}..."
+bashio::log.info "-------------------------------------------"
+bashio::log.info "Starting YouTube Thumbs Rating Service"
+bashio::log.info "-------------------------------------------"
+bashio::log.info "Service endpoint: http://${HOST}:${PORT}"
 bashio::log.info "Home Assistant URL: ${HOME_ASSISTANT_URL}"
-bashio::log.info "Media Player Entity: ${MEDIA_PLAYER_ENTITY}"
+bashio::log.info "Target media player: ${MEDIA_PLAYER_ENTITY}"
+bashio::log.info "Log files location: /config/youtube_thumbs/"
+bashio::log.info "-------------------------------------------"
 
 # Start the Flask application
 cd /app
