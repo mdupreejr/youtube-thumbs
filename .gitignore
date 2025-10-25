@@ -8,6 +8,12 @@ token.pickle
 # Log files
 log.txt
 log.txt.*
+app.log
+app.log.*
+user_actions.log
+user_actions.log.*
+errors.log
+errors.log.*
 
 # Python cache
 __pycache__/
