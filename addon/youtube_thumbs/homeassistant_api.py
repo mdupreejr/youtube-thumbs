@@ -1,4 +1,4 @@
-import requests
+ import requests
 from typing import Optional, Dict, Any
 import os
 from dotenv import load_dotenv
@@ -11,8 +11,14 @@ class HomeAssistantAPI:
     
     def __init__(self) -> None:
         self.url = os.getenv('HOME_ASSISTANT_URL')
-        self.token = os.getenv('HOME_ASSISTANT_TOKEN')
+        # Use SUPERVISOR_TOKEN if available (add-on environment), otherwise use HOME_ASSISTANT_TOKEN
+        self.token = os.getenv('SUPERVISOR_TOKEN') or os.getenv('HOME_ASSISTANT_TOKEN')
         self.entity = os.getenv('MEDIA_PLAYER_ENTITY')
+        
+        if self.token and os.getenv('SUPERVISOR_TOKEN'):
+            logger.info("Using Supervisor token for authentication")
+        elif self.token:
+            logger.info("Using long-lived access token for authentication")
         
         if not all([self.url, self.token, self.entity]):
             raise ValueError("Missing Home Assistant configuration in .env file")
