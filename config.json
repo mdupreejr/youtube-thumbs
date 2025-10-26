@@ -27,7 +27,8 @@
     "sqlite_web_host": "127.0.0.1",
     "sqlite_web_port": 8080,
     "history_tracker_enabled": true,
-    "history_poll_interval": 30
+    "history_poll_interval": 60,
+    "force_quota_unlock": false
   },
   "schema": {
     "media_player_entity": "str",
@@ -40,6 +41,7 @@
     "sqlite_web_host": "str?",
     "sqlite_web_port": "port?",
     "history_tracker_enabled": "bool?",
-    "history_poll_interval": "int(10,300)?"
+    "history_poll_interval": "int(10,300)?",
+    "force_quota_unlock": "bool?"
   }
 }

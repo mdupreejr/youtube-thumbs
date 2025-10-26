@@ -54,6 +54,13 @@ export LOG_LEVEL=$(bashio::config 'log_level')
 export ENABLE_HISTORY_TRACKER=$(bashio::config 'history_tracker_enabled')
 export HISTORY_POLL_INTERVAL=$(bashio::config 'history_poll_interval')
 
+if bashio::config.true 'force_quota_unlock'; then
+    export YTT_FORCE_QUOTA_UNLOCK=1
+    bashio::log.warning "force_quota_unlock enabled; quota guard state will be cleared on startup"
+else
+    unset YTT_FORCE_QUOTA_UNLOCK
+fi
+
 QUOTA_COOLDOWN_ENV="${YTT_QUOTA_COOLDOWN_SECONDS:-}"
 if bashio::var.has_value "${QUOTA_COOLDOWN_ENV}"; then
     export YTT_QUOTA_COOLDOWN_SECONDS="${QUOTA_COOLDOWN_ENV}"

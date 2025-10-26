@@ -3,9 +3,18 @@ import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from logger import logger
+
+
+FALSE_VALUES = {'false', '0', 'no', 'off', ''}
+
+
+def _is_truthy(value: Optional[str]) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() not in FALSE_VALUES
 
 
 class QuotaGuard:
@@ -19,15 +28,16 @@ class QuotaGuard:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             logger.warning("QuotaGuard could not create directory %s: %s", self.state_file.parent, exc)
+        self._maybe_force_unlock()
 
     @staticmethod
     def _resolve_cooldown() -> int:
-        raw = os.getenv('YTT_QUOTA_COOLDOWN_SECONDS', '86400')
+        raw = os.getenv('YTT_QUOTA_COOLDOWN_SECONDS', '43200')
         try:
             value = int(raw)
         except ValueError:
-            logger.warning("Invalid YTT_QUOTA_COOLDOWN_SECONDS '%s'; defaulting to 86400", raw)
-            return 86400
+            logger.warning("Invalid YTT_QUOTA_COOLDOWN_SECONDS '%s'; defaulting to 43200", raw)
+            return 43200
         return max(value, 60)
 
     def _load_state(self) -> Optional[Dict[str, Any]]:
@@ -54,60 +64,98 @@ class QuotaGuard:
         except OSError:
             pass
 
-    def is_blocked(self) -> bool:
+    def reset(self, reason: Optional[str] = None) -> None:
+        """Manually clear the cooldown file."""
+        self._clear_state()
+        logger.info("QuotaGuard reset: %s", reason or "manual request")
+
+    def _maybe_force_unlock(self) -> None:
+        if _is_truthy(os.getenv('YTT_FORCE_QUOTA_UNLOCK')):
+            if self.state_file.exists():
+                self._clear_state()
+                logger.warning(
+                    "YTT_FORCE_QUOTA_UNLOCK detected; cleared quota guard file %s",
+                    self.state_file,
+                )
+            else:
+                logger.info("YTT_FORCE_QUOTA_UNLOCK set but no cooldown file present")
+
+    def _state_with_remaining(self) -> Tuple[Optional[Dict[str, Any]], int]:
         state = self._load_state()
         if not state:
-            return False
+            return None, 0
 
         blocked_until = state.get('blocked_until_epoch')
         if not blocked_until:
+            logger.warning(
+                "QuotaGuard state missing 'blocked_until_epoch'; clearing %s",
+                self.state_file,
+            )
             self._clear_state()
-            return False
+            return None, 0
 
-        if time.time() >= blocked_until:
-            self._clear_state()
-            return False
-
-        return True
-
-    def blocked_until_iso(self) -> Optional[str]:
-        state = self._load_state()
-        if not state:
-            return None
-        return state.get('blocked_until_iso')
-
-    def remaining_seconds(self) -> int:
-        state = self._load_state()
-        if not state:
-            return 0
-        blocked_until = state.get('blocked_until_epoch', 0)
         remaining = int(blocked_until - time.time())
         if remaining <= 0:
+            logger.info(
+                "Quota cooldown expired at %s UTC; clearing guard file %s",
+                state.get('blocked_until_iso', 'unknown'),
+                self.state_file,
+            )
             self._clear_state()
-            return 0
-        return remaining
+            return None, 0
+
+        return state, remaining
+
+    def is_blocked(self) -> bool:
+        state, remaining = self._state_with_remaining()
+        return bool(state and remaining > 0)
+
+    def blocked_until_iso(self) -> Optional[str]:
+        status = self.status()
+        return status.get('blocked_until') if status.get('blocked') else None
+
+    def remaining_seconds(self) -> int:
+        return self.status().get('remaining_seconds', 0)
 
     def block_message(self) -> str:
-        state = self._load_state()
-        if not state:
-            return "YouTube quota available"
-
-        reason = state.get('reason', 'quotaExceeded')
-        blocked_until = state.get('blocked_until_iso', 'unknown time')
-        remaining = self.remaining_seconds()
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-        return (
-            f"YouTube quota exhausted ({reason}). "
-            f"Cooldown active for {hours}h{minutes:02d}m; access resumes at {blocked_until} UTC."
-        )
+        return self.status().get('message', "YouTube quota available")
 
     def describe_block(self) -> str:
         if not self.is_blocked():
             return "No quota cooldown in effect"
-        remaining = self.remaining_seconds()
-        blocked_until = self.blocked_until_iso()
+        status = self.status()
+        remaining = status.get('remaining_seconds', 0)
+        blocked_until = status.get('blocked_until')
         return f"Cooldown active until {blocked_until} UTC ({remaining // 3600}h remaining)."
+
+    def status(self) -> Dict[str, Any]:
+        state, remaining = self._state_with_remaining()
+        blocked = bool(state and remaining > 0)
+        if not blocked:
+            return {
+                "blocked": False,
+                "blocked_until": None,
+                "remaining_seconds": 0,
+                "reason": None,
+                "detail": None,
+                "message": "YouTube quota available",
+            }
+
+        reason = state.get('reason', 'quotaExceeded')
+        blocked_until = state.get('blocked_until_iso', 'unknown time')
+        hours = remaining // 3600
+        minutes = (remaining % 3600) // 60
+        return {
+            "blocked": True,
+            "blocked_until": blocked_until,
+            "remaining_seconds": remaining,
+            "reason": reason,
+            "detail": state.get('detail'),
+            "message": (
+                f"YouTube quota exhausted ({reason}). "
+                f"Cooldown active for {hours}h{minutes:02d}m; access resumes at {blocked_until} UTC."
+            ),
+        }
 
     def trip(self, reason: str, context: Optional[str] = None, detail: Optional[str] = None) -> None:
         now = datetime.utcnow()
@@ -117,22 +165,25 @@ class QuotaGuard:
         if existing_epoch and existing_epoch > block_until.timestamp():
             block_until = datetime.utcfromtimestamp(existing_epoch)
 
+        block_duration = max(int(block_until.timestamp() - now.timestamp()), 0)
+
         state = {
             "reason": reason or "quotaExceeded",
             "context": context,
             "detail": detail,
             "blocked_until_epoch": block_until.timestamp(),
             "blocked_until_iso": block_until.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            "cooldown_seconds": self.cooldown_seconds,
+            "cooldown_seconds": block_duration or self.cooldown_seconds,
             "set_at": now.strftime('%Y-%m-%dT%H:%M:%SZ'),
         }
         self._save_state(state)
         logger.error(
-            "YouTube quota exceeded (%s). Blocking API usage for %s seconds (until %s UTC). Context: %s",
+            "YouTube quota exceeded (%s). Blocking API usage for %s seconds (until %s UTC). Context: %s | Detail: %s",
             state["reason"],
-            self.cooldown_seconds,
+            state["cooldown_seconds"],
             state["blocked_until_iso"],
             context or "n/a",
+            detail or "n/a",
         )
 
 

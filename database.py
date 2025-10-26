@@ -14,6 +14,31 @@ DEFAULT_DB_PATH = Path(os.getenv('YTT_DB_PATH', '/config/youtube_thumbs/ratings.
 class Database:
     """Lightweight SQLite wrapper for tracking video ratings and play history."""
 
+    VIDEO_RATINGS_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS video_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id TEXT UNIQUE NOT NULL,
+            ha_title TEXT NOT NULL,
+            ha_artist TEXT,
+            yt_title TEXT,
+            yt_artist TEXT,
+            channel TEXT,
+            ha_duration INTEGER,
+            yt_duration INTEGER,
+            youtube_url TEXT,
+            rating TEXT DEFAULT 'none',
+            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            date_updated TIMESTAMP,
+            date_played TIMESTAMP,
+            play_count INTEGER DEFAULT 1,
+            rating_count INTEGER DEFAULT 0,
+            pending_match INTEGER DEFAULT 0,
+            source TEXT DEFAULT 'ha_live'
+        );
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -40,43 +65,26 @@ class Database:
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not exist."""
-        schema_sql = """
-        CREATE TABLE IF NOT EXISTS video_ratings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            video_id TEXT UNIQUE NOT NULL,
-            ha_title TEXT NOT NULL,
-            ha_artist TEXT,
-            ha_channel TEXT,
-            yt_title TEXT NOT NULL,
-            yt_artist TEXT,
-            yt_channel TEXT,
-            channel TEXT,
-            ha_duration INTEGER,
-            yt_duration INTEGER,
-            youtube_url TEXT,
-            rating TEXT DEFAULT 'none',
-            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            date_updated TIMESTAMP,
-            date_played TIMESTAMP,
-            play_count INTEGER DEFAULT 1,
-            rating_count INTEGER DEFAULT 0,
-            pending_match INTEGER DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
-        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
-        """
         with self._lock:
             try:
                 with self._conn:
-                    self._conn.executescript(schema_sql)
+                    self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._add_column_if_missing('video_ratings', 'ha_artist', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'ha_channel', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'yt_channel', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'pending_match', 'INTEGER DEFAULT 0')
+                    self._add_column_if_missing('video_ratings', 'source', "TEXT DEFAULT 'ha_live'")
+                self._rebuild_video_ratings_schema_if_needed()
+                self._cleanup_pending_metadata()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
+
+    def _table_info(self, table: str) -> List[Dict[str, Any]]:
+        cursor = self._conn.execute(f"PRAGMA table_info({table});")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def _table_columns(self, table: str) -> List[str]:
+        return [row['name'] for row in self._table_info(table)]
 
     def _add_column_if_missing(self, table: str, column: str, definition: str) -> None:
         cursor = self._conn.execute(f"PRAGMA table_info({table});")
@@ -88,6 +96,83 @@ class Database:
             logger.info("Added column %s.%s", table, column)
         except sqlite3.DatabaseError as exc:
             logger.error("Failed to add column %s.%s: %s", table, column, exc)
+
+    def _rebuild_video_ratings_schema_if_needed(self) -> None:
+        info = self._table_info('video_ratings')
+        if not info:
+            return
+
+        has_yt_channel = any(column['name'] == 'yt_channel' for column in info)
+        has_ha_channel = any(column['name'] == 'ha_channel' for column in info)
+        yt_title_notnull = any(column['name'] == 'yt_title' and column.get('notnull') == 1 for column in info)
+
+        has_source = any(column['name'] == 'source' for column in info)
+
+        needs_rebuild = has_yt_channel or has_ha_channel or yt_title_notnull or not has_source
+        if not needs_rebuild:
+            return
+
+        reasons = []
+        if has_yt_channel:
+            reasons.append('drop yt_channel')
+        if has_ha_channel:
+            reasons.append('drop ha_channel')
+        if yt_title_notnull:
+            reasons.append('allow NULL yt_title')
+        if not has_source:
+            reasons.append('add source column')
+
+        logger.info("Rebuilding video_ratings schema (%s)", ', '.join(reasons))
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute("ALTER TABLE video_ratings RENAME TO video_ratings_old;")
+                    self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
+                    column_list = (
+                        "id, video_id, ha_title, ha_artist, yt_title, yt_artist, "
+                        "channel, ha_duration, yt_duration, youtube_url, rating, "
+                        "date_added, date_updated, date_played, play_count, rating_count, pending_match, source"
+                    )
+                    self._conn.execute(
+                        f"""
+                        INSERT INTO video_ratings ({column_list})
+                        SELECT {column_list}
+                        FROM video_ratings_old;
+                        """
+                    )
+                    self._conn.execute("DROP TABLE video_ratings_old;")
+                    logger.info("Finished rebuilding video_ratings schema")
+            except sqlite3.DatabaseError as exc:
+                logger.error("Failed to migrate video_ratings schema: %s", exc)
+                raise
+
+    def _cleanup_pending_metadata(self) -> None:
+        """Normalize legacy rows that copied HA data into YT fields."""
+        cleanup_statements = [
+            (
+                "UPDATE video_ratings SET channel = NULL "
+                "WHERE pending_match = 1 OR lower(COALESCE(channel, '')) = 'youtube';"
+            ),
+            (
+                "UPDATE video_ratings SET yt_artist = NULL "
+                "WHERE pending_match = 1;"
+            ),
+            (
+                "UPDATE video_ratings SET yt_duration = NULL "
+                "WHERE pending_match = 1;"
+            ),
+            (
+                "UPDATE video_ratings SET yt_title = NULL "
+                "WHERE pending_match = 1;"
+            ),
+        ]
+        with self._lock:
+            try:
+                with self._conn:
+                    for statement in cleanup_statements:
+                        self._conn.execute(statement)
+            except sqlite3.DatabaseError as exc:
+                logger.error("Failed to cleanup pending metadata: %s", exc)
 
     @staticmethod
     def _timestamp(ts: Optional[str] = None) -> str:
@@ -138,53 +223,52 @@ class Database:
         Insert or update metadata for a video.
 
         Args:
-            video: Dict with keys video_id, ha_title, yt_title, yt_channel, ha_artist,
-                   ha_channel, yt_artist, ha_duration, yt_duration, youtube_url,
+            video: Dict with keys video_id, ha_title, yt_title, channel, ha_artist,
+                   yt_artist, ha_duration, yt_duration, youtube_url,
                    rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
         ha_title = video.get('ha_title') or video.get('yt_title') or 'Unknown Title'
-        yt_title = video.get('yt_title') or ha_title
+        yt_title = video.get('yt_title')
+        channel = video.get('channel')
 
         payload = {
             'video_id': video['video_id'],
             'ha_title': ha_title,
             'ha_artist': video.get('ha_artist'),
-            'ha_channel': video.get('ha_channel'),
             'yt_title': yt_title,
             'yt_artist': video.get('yt_artist'),
-            'yt_channel': video.get('yt_channel') or video.get('channel'),
-            'channel': video.get('channel') or video.get('yt_channel'),
+            'channel': channel,
             'ha_duration': video.get('ha_duration'),
             'yt_duration': video.get('yt_duration'),
             'youtube_url': video.get('youtube_url'),
             'rating': video.get('rating', 'none') or 'none',
             'pending_match': 1 if video.get('pending_match') else 0,
+            'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added),
         }
         payload['date_updated'] = payload['date_added']
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            video_id, ha_title, ha_artist, ha_channel, yt_title, yt_artist, yt_channel, channel,
-            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count, pending_match
+            video_id, ha_title, ha_artist, yt_title, yt_artist, channel,
+            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count, pending_match, source
         )
         VALUES (
-            :video_id, :ha_title, :ha_artist, :ha_channel, :yt_title, :yt_artist, :yt_channel, :channel,
-            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0, :pending_match
+            :video_id, :ha_title, :ha_artist, :yt_title, :yt_artist, :channel,
+            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0, :pending_match, :source
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
             ha_artist=excluded.ha_artist,
-            ha_channel=excluded.ha_channel,
             yt_title=excluded.yt_title,
             yt_artist=excluded.yt_artist,
-            yt_channel=excluded.yt_channel,
             channel=excluded.channel,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
             youtube_url=excluded.youtube_url,
-            pending_match=excluded.pending_match;
+            pending_match=excluded.pending_match,
+            source=excluded.source;
         """
         with self._lock:
             try:
@@ -330,7 +414,6 @@ class Database:
         """Persist Home Assistant metadata when YouTube lookups are unavailable."""
         title = media.get('title') or 'Unknown Title'
         artist = media.get('artist')
-        channel = media.get('channel')
         duration = media.get('duration')
         pending_id = self._pending_video_id(title, artist, duration)
 
@@ -338,16 +421,15 @@ class Database:
             'video_id': pending_id,
             'ha_title': title,
             'ha_artist': artist,
-            'ha_channel': channel,
-            'yt_title': title,
-            'yt_artist': artist,
-            'yt_channel': channel,
-            'channel': channel,
+            'yt_title': None,
+            'yt_artist': None,
+            'channel': None,
             'ha_duration': duration,
-            'yt_duration': duration,
+            'yt_duration': None,
             'youtube_url': None,
             'rating': 'none',
             'pending_match': 1,
+            'source': 'ha_live',
         }
         self.upsert_video(payload)
         return pending_id

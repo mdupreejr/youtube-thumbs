@@ -110,10 +110,10 @@ Health check with rate limiter and quota guard stats.
 
 ### Playback History Tracker
 
-- Every 30 seconds the add-on polls Home Assistant for the currently playing song.
+- Every 60 seconds the add-on polls Home Assistant for the currently playing song.
 - New titles (title + duration) are matched against YouTube, stored in `ratings.db`, and receive an initial play count.
 - Continuous playback only records once per hour; a second play increments `play_count` only if at least 60 minutes have passed since the last recorded listen (tweak via `HISTORY_PLAY_WINDOW_SECONDS` if needed).
-- Set `ENABLE_HISTORY_TRACKER=false` to disable the background thread or tweak the cadence with `HISTORY_POLL_INTERVAL=<seconds>` if you need a slower/faster poll rate (exposed in the add-on config as `history_tracker_enabled` / `history_poll_interval`).
+- Set `ENABLE_HISTORY_TRACKER=false` to disable the background thread or tweak the cadence with `HISTORY_POLL_INTERVAL=<seconds>` if you need a slower/faster poll rate (default 60s, exposed in the add-on config as `history_tracker_enabled` / `history_poll_interval`).
 
 ## Add-on Configuration Options
 
@@ -137,7 +137,8 @@ Configure these in the add-on Configuration tab:
 | `sqlite_web_host` | 127.0.0.1 | Bind address for sqlite_web (set to `0.0.0.0` only if you need LAN access) |
 | `sqlite_web_port` | 8080 | Port for sqlite_web when exposed to your LAN; ignored when using HA ingress (the default) |
 | `history_tracker_enabled` | true | Toggle the background poller that logs every song |
-| `history_poll_interval` | 30 | Seconds between Home Assistant polls (10–300 allowed) |
+| `history_poll_interval` | 60 | Seconds between Home Assistant polls (10–300 allowed) |
+| `force_quota_unlock` | false | Clear the quota guard file on startup to immediately re-enable YouTube API calls |
 
 **Note:** The add-on automatically handles authentication using the Supervisor token.
 
@@ -158,6 +159,7 @@ quota resets if you need to re-enable access early.
 - The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it via HA ingress.
   - Use the add-on's **OPEN WEB UI** button; Home Assistant proxies the sqlite_web instance into your browser even when it is bound to `127.0.0.1`.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
+- Each row includes a `source` column (default `ha_live`) so you can tag imports such as manual YouTube exports; set it when calling `db.upsert_video` to keep provenance straight.
 - Prefer a different bind target? Keep `sqlite_web_host` at `127.0.0.1` for ingress/HA-only access or set it to `0.0.0.0` to expose the DB UI to your LAN. Pair it with the `sqlite_web_port` option (or the `SQLITE_WEB_HOST`/`SQLITE_WEB_PORT` env vars) if you need custom settings.
 - When `sqlite_web_host` is not localhost, the **OPEN WEB UI** button is bypassed—browse to `http://<home-assistant-host>:<sqlite_web_port>` directly instead.
 - Every record tracks both the Home Assistant-reported artist/channel and the YouTube channel metadata so you can audit mismatches later.

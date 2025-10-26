@@ -17,6 +17,21 @@ class YouTubeAPI:
     SCOPES = ['https://www.googleapis.com/auth/youtube']
     DURATION_PATTERN = re.compile(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?')
     NO_RATING = 'none'  # YouTube API rating value for unrated videos
+    MAX_SEARCH_RESULTS = max(min(int(os.getenv('YTT_SEARCH_MAX_RESULTS', '25')), 50), 1)
+    MAX_CANDIDATES = max(min(int(os.getenv('YTT_SEARCH_MAX_CANDIDATES', '10')), 50), 1)
+    SEARCH_FIELDS = 'items(id/videoId)'
+    VIDEO_FIELDS = 'items(id,snippet(title,channelTitle),contentDetails(duration))'
+    QUOTA_REASON_CODES = {
+        'quotaExceeded',
+        'rateLimitExceeded',
+        'userRateLimitExceeded',
+        'dailyLimitExceeded',
+        'dailyLimitExceededUnreg',
+        'limitExceeded',
+        'usageLimits.rateLimitExceeded',
+    }
+    QUOTA_REASON_TOKENS = tuple(code.lower() for code in QUOTA_REASON_CODES)
+    QUOTA_MESSAGE_KEYWORDS = ('quota', 'rate limit', 'ratelimit', 'limit exceeded')
     
     def __init__(self) -> None:
         self.youtube = None
@@ -66,6 +81,21 @@ class YouTubeAPI:
 
     @staticmethod
     def _quota_error_detail(error: HttpError) -> Optional[str]:
+        def _message_indicates_quota(message: Optional[str]) -> bool:
+            if not message:
+                return False
+            lowered = message.lower()
+            return any(keyword in lowered for keyword in YouTubeAPI.QUOTA_MESSAGE_KEYWORDS)
+
+        def _text_matches_reason(text: Optional[str]) -> Optional[str]:
+            if not text:
+                return None
+            lowered = text.lower()
+            for token in YouTubeAPI.QUOTA_REASON_TOKENS:
+                if token in lowered:
+                    return text
+            return None
+
         content = getattr(error, 'content', None)
         if isinstance(content, bytes):
             try:
@@ -83,21 +113,33 @@ class YouTubeAPI:
         if payload:
             error_payload = payload.get('error', {})
             for item in error_payload.get('errors', []):
-                if item.get('reason') == 'quotaExceeded':
-                    return item.get('message') or error_payload.get('message') or 'quotaExceeded'
+                reason = item.get('reason')
+                match = _text_matches_reason(reason)
+                if match:
+                    return item.get('message') or error_payload.get('message') or match
             message = error_payload.get('message')
-            if message and 'quota' in message.lower():
+            if _message_indicates_quota(message):
                 return message
 
+        resp = getattr(error, 'resp', None)
+        if resp:
+            resp_reason = getattr(resp, 'reason', None)
+            match = _text_matches_reason(resp_reason)
+            if match:
+                return match
+
         text = str(error)
-        if 'quotaExceeded' in text:
+        match = _text_matches_reason(text)
+        if match:
+            return match
+        if _message_indicates_quota(text):
             return text
         return None
 
     def search_video_globally(self, title: str, expected_duration: Optional[int] = None) -> Optional[List[Dict]]:
         """Search for a video globally. Filters by duration (±2s) if provided."""
         if quota_guard.is_blocked():
-            logger.warning(
+            logger.info(
                 "Quota cooldown active; skipping YouTube global search for '%s': %s",
                 title,
                 quota_guard.describe_block(),
@@ -107,7 +149,11 @@ class YouTubeAPI:
             logger.info(f"Searching globally for: \"{title}\"")
 
             response = self.youtube.search().list(
-                part='snippet', q=title, type='video', maxResults=50
+                part='snippet',
+                q=title,
+                type='video',
+                maxResults=self.MAX_SEARCH_RESULTS,
+                fields=self.SEARCH_FIELDS,
             ).execute()
 
             items = response.get('items', [])
@@ -119,7 +165,9 @@ class YouTubeAPI:
 
             video_ids = [item['id']['videoId'] for item in items]
             details = self.youtube.videos().list(
-                part='contentDetails,snippet', id=','.join(video_ids)
+                part='contentDetails,snippet',
+                id=','.join(video_ids),
+                fields=self.VIDEO_FIELDS,
             ).execute()
 
             candidates = []
@@ -150,17 +198,26 @@ class YouTubeAPI:
                             f"(ID: {video_info['video_id']}); falling back to title match only"
                         )
                     candidates.append(video_info)
+                if len(candidates) >= self.MAX_CANDIDATES:
+                    break
 
             if not candidates and expected_duration:
                 logger.error(f"No videos match duration {expected_duration}s (±2s) | Query: '{title}'")
                 return None
+
+            if len(candidates) > self.MAX_CANDIDATES:
+                candidates = candidates[:self.MAX_CANDIDATES]
+                logger.debug(
+                    "Trimmed candidates to %s to minimize API comparisons",
+                    self.MAX_CANDIDATES,
+                )
 
             logger.info(f"Found {len(candidates)} duration-matched candidates")
             return candidates
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
-            if detail:
+            if detail is not None:
                 quota_guard.trip('quotaExceeded', context='search', detail=detail)
             logger.error(f"YouTube API error in search_video_globally | Query: '{title}' | Error: {str(e)}")
             return None
@@ -172,7 +229,7 @@ class YouTubeAPI:
     def get_video_rating(self, video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
         if quota_guard.is_blocked():
-            logger.warning(
+            logger.info(
                 "Quota cooldown active; skipping get_video_rating for %s: %s",
                 video_id,
                 quota_guard.describe_block(),
@@ -193,7 +250,7 @@ class YouTubeAPI:
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
-            if detail:
+            if detail is not None:
                 quota_guard.trip('quotaExceeded', context='get_rating', detail=detail)
             logger.error(f"YouTube API error getting rating | Video ID: {video_id} | Error: {str(e)}")
             return self.NO_RATING
@@ -205,7 +262,7 @@ class YouTubeAPI:
     def set_video_rating(self, video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
         if quota_guard.is_blocked():
-            logger.warning(
+            logger.info(
                 "Quota cooldown active; skipping set_video_rating for %s (%s): %s",
                 video_id,
                 rating,
@@ -226,7 +283,7 @@ class YouTubeAPI:
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
-            if detail:
+            if detail is not None:
                 quota_guard.trip('quotaExceeded', context='set_rating', detail=detail)
             logger.error(f"YouTube API error setting rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
             return False

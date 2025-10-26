@@ -29,6 +29,9 @@ configuration:
   history_poll_interval:
     name: History poll interval
     description: Seconds between history tracker polls (10-300). Lower values capture playback changes faster at the cost of more HA traffic.
+  force_quota_unlock:
+    name: Force quota unlock
+    description: Clear the quota cooldown file on startup so YouTube API calls resume immediately.
 network:
   21812/tcp:
     description: Rating API used by /thumbs_up and /thumbs_down commands.
