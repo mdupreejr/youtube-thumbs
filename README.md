@@ -78,7 +78,7 @@ Rate the currently playing song.
 ```
 
 ### `GET /health`
-Health check with rate limiter stats.
+Health check with rate limiter and quota guard stats.
 
 ```json
 {
@@ -88,6 +88,14 @@ Health check with rate limiter stats.
     "last_hour": 15,
     "last_day": 47,
     "limits": { ... }
+  },
+  "quota_guard": {
+    "blocked": false,
+    "blocked_until": null,
+    "remaining_seconds": 0,
+    "reason": null,
+    "detail": null,
+    "message": "YouTube quota available"
   }
 }
 ```
@@ -124,6 +132,7 @@ Configure these in the add-on Configuration tab:
 | `rate_limit_per_minute` | 10 | Max YouTube API calls in 60-second window |
 | `rate_limit_per_hour` | 100 | Max YouTube API calls in 3600-second window |
 | `rate_limit_per_day` | 500 | Max YouTube API calls in 24-hour period |
+| `quota_cooldown_hours` | 12 | Hours to pause YouTube API access after a quota/rate-limit error |
 | `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `sqlite_web_host` | 127.0.0.1 | Bind address for sqlite_web (set to `0.0.0.0` only if you need LAN access) |
 | `sqlite_web_port` | 8080 | Port for sqlite_web when exposed to your LAN; ignored when using HA ingress (the default) |
@@ -138,9 +147,11 @@ Configure these in the add-on Configuration tab:
 
 Any time Google responds with `quotaExceeded`, the add-on writes
 `/config/youtube_thumbs/quota_guard.json`, logs the failure, and pauses all YouTube
-API calls for 24 hours (configurable via `YTT_QUOTA_COOLDOWN_SECONDS`). During the
-cooldown the HTTP endpoints return `503` with a friendly error message, and the
-history tracker skips matching attempts. Delete the guard file only after your
+API calls for 12 hours (configurable via the `quota_cooldown_hours` option or `YTT_QUOTA_COOLDOWN_SECONDS`). During the
+cooldown the HTTP endpoints return `503` with a friendly error message. The
+history tracker still polls Home Assistant and stores the metadata with a
+placeholder ID so your play history remains intact, but it skips YouTube matching
+until the cooldown expires. Delete the guard file only after your
 quota resets if you need to re-enable access early.
 
 ## Data Storage & sqlite_web
@@ -195,7 +206,7 @@ Because the new service performs UPSERTs, duplicates are safe—the latest metad
 - The add-on will automatically create `token.pickle` on first run
 
 **`quotaExceeded` / 503 errors**
-- Hitting the YouTube quota triggers an automatic 24-hour cooldown saved in `/config/youtube_thumbs/quota_guard.json`.
+- Hitting the YouTube quota triggers an automatic 12-hour cooldown saved in `/config/youtube_thumbs/quota_guard.json` (set `quota_cooldown_hours` or `YTT_QUOTA_COOLDOWN_SECONDS` to tweak it).
 - The HTTP API responds with 503 during that window; history tracking will skip new matches.
 - Either wait for the cooldown to expire or delete the guard file after you’ve raised/reset your quota (only if you’re sure the quota has recovered).
 

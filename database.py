@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import threading
@@ -58,7 +59,8 @@ class Database:
             date_updated TIMESTAMP,
             date_played TIMESTAMP,
             play_count INTEGER DEFAULT 1,
-            rating_count INTEGER DEFAULT 0
+            rating_count INTEGER DEFAULT 0,
+            pending_match INTEGER DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
@@ -71,6 +73,7 @@ class Database:
                     self._add_column_if_missing('video_ratings', 'ha_channel', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'yt_channel', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'pending_match', 'INTEGER DEFAULT 0')
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -122,6 +125,14 @@ class Database:
         for column, count in updates:
             logger.info("Normalized %s timestamp values (%s rows)", column, count)
 
+    @staticmethod
+    def _pending_video_id(title: str, artist: Optional[str], duration: Optional[int]) -> str:
+        """Generate a deterministic placeholder ID for HA snapshots."""
+        parts = [title or '', artist or '', str(duration) if duration is not None else 'unknown']
+        normalized = '|'.join(part.strip().lower() for part in parts)
+        digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:16]
+        return f"ha_hash:{digest}"
+
     def upsert_video(self, video: Dict[str, Any], date_added: Optional[str] = None) -> None:
         """
         Insert or update metadata for a video.
@@ -148,6 +159,7 @@ class Database:
             'yt_duration': video.get('yt_duration'),
             'youtube_url': video.get('youtube_url'),
             'rating': video.get('rating', 'none') or 'none',
+            'pending_match': 1 if video.get('pending_match') else 0,
             'date_added': self._timestamp(date_added),
         }
         payload['date_updated'] = payload['date_added']
@@ -155,11 +167,11 @@ class Database:
         upsert_sql = """
         INSERT INTO video_ratings (
             video_id, ha_title, ha_artist, ha_channel, yt_title, yt_artist, yt_channel, channel,
-            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count
+            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count, pending_match
         )
         VALUES (
             :video_id, :ha_title, :ha_artist, :ha_channel, :yt_title, :yt_artist, :yt_channel, :channel,
-            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0
+            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0, :pending_match
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
@@ -171,7 +183,8 @@ class Database:
             channel=excluded.channel,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
-            youtube_url=excluded.youtube_url;
+            youtube_url=excluded.youtube_url,
+            pending_match=excluded.pending_match;
         """
         with self._lock:
             try:
@@ -201,9 +214,9 @@ class Database:
                             """
                             INSERT INTO video_ratings (
                                 video_id, ha_title, yt_title, rating,
-                                date_added, date_updated, date_played, play_count, rating_count
+                                date_added, date_updated, date_played, play_count, rating_count, pending_match
                             )
-                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, ?, 1, 0)
+                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, ?, 1, 0, 0)
                             """,
                             (video_id, ts, ts, ts),
                         )
@@ -232,9 +245,9 @@ class Database:
                             """
                             INSERT INTO video_ratings (
                                 video_id, ha_title, yt_title, rating,
-                                date_added, date_updated, play_count, rating_count
+                                date_added, date_updated, play_count, rating_count, pending_match
                             )
-                            VALUES (?, 'Unknown', 'Unknown', ?, ?, ?, 1, 1)
+                            VALUES (?, 'Unknown', 'Unknown', ?, ?, ?, 1, 1, 0)
                             """,
                             (video_id, normalized_rating, ts, ts),
                         )
@@ -259,7 +272,7 @@ class Database:
             cur = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE lower(ha_title) = ? OR lower(yt_title) = ?
+                WHERE pending_match = 0 AND (lower(ha_title) = ? OR lower(yt_title) = ?)
                 ORDER BY date_updated DESC, date_added DESC
                 LIMIT ?
                 """,
@@ -276,7 +289,7 @@ class Database:
             cur = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE ha_title = ?
+                WHERE ha_title = ? AND pending_match = 0
                 ORDER BY date_updated DESC, date_added DESC
                 LIMIT 1
                 """,
@@ -300,6 +313,7 @@ class Database:
         query = """
             SELECT * FROM video_ratings
             WHERE ha_title = ?
+              AND pending_match = 0
               AND (
                     (ha_duration IS NOT NULL AND ha_duration = ?)
                  OR (ha_duration IS NULL AND yt_duration IS NOT NULL AND yt_duration = ?)
@@ -311,6 +325,32 @@ class Database:
             cur = self._conn.execute(query, (title, duration, duration))
             row = cur.fetchone()
         return dict(row) if row else None
+
+    def upsert_pending_media(self, media: Dict[str, Any]) -> str:
+        """Persist Home Assistant metadata when YouTube lookups are unavailable."""
+        title = media.get('title') or 'Unknown Title'
+        artist = media.get('artist')
+        channel = media.get('channel')
+        duration = media.get('duration')
+        pending_id = self._pending_video_id(title, artist, duration)
+
+        payload = {
+            'video_id': pending_id,
+            'ha_title': title,
+            'ha_artist': artist,
+            'ha_channel': channel,
+            'yt_title': title,
+            'yt_artist': artist,
+            'yt_channel': channel,
+            'channel': channel,
+            'ha_duration': duration,
+            'yt_duration': duration,
+            'youtube_url': None,
+            'rating': 'none',
+            'pending_match': 1,
+        }
+        self.upsert_video(payload)
+        return pending_id
 
 
 _db_instance: Optional[Database] = None

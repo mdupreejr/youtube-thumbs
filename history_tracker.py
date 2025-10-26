@@ -4,6 +4,7 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 from logger import logger
+from quota_guard import quota_guard
 
 
 MediaDict = Dict[str, Any]
@@ -111,6 +112,24 @@ class HistoryTracker:
             })
 
         if not video:
+            if quota_guard.is_blocked():
+                pending_id = self.db.upsert_pending_media({
+                    'title': title,
+                    'artist': media.get('artist'),
+                    'channel': media.get('channel'),
+                    'duration': duration,
+                })
+                self.db.record_play(pending_id)
+                logger.info(
+                    "History tracker stored pending HA snapshot for '%s' (%s) due to YouTube cooldown: %s",
+                    title,
+                    pending_id,
+                    quota_guard.describe_block(),
+                )
+                self._active_media_key = media_key
+                self._last_failed_key = None
+                self._mark_play_recorded(media_key, now)
+                return
             if self._last_failed_key != media_key:
                 logger.warning(
                     "History tracker could not match '%s' (%ss) to a YouTube video",
