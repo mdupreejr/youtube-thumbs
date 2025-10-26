@@ -110,7 +110,13 @@ class QuotaGuard:
         return f"Cooldown active until {blocked_until} UTC ({remaining // 3600}h remaining)."
 
     def trip(self, reason: str, context: Optional[str] = None, detail: Optional[str] = None) -> None:
-        block_until = datetime.utcnow() + timedelta(seconds=self.cooldown_seconds)
+        now = datetime.utcnow()
+        block_until = now + timedelta(seconds=self.cooldown_seconds)
+        existing = self._load_state() or {}
+        existing_epoch = existing.get('blocked_until_epoch', 0)
+        if existing_epoch and existing_epoch > block_until.timestamp():
+            block_until = datetime.utcfromtimestamp(existing_epoch)
+
         state = {
             "reason": reason or "quotaExceeded",
             "context": context,
@@ -118,7 +124,7 @@ class QuotaGuard:
             "blocked_until_epoch": block_until.timestamp(),
             "blocked_until_iso": block_until.strftime('%Y-%m-%dT%H:%M:%SZ'),
             "cooldown_seconds": self.cooldown_seconds,
-            "set_at": datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "set_at": now.strftime('%Y-%m-%dT%H:%M:%SZ'),
         }
         self._save_state(state)
         logger.error(
