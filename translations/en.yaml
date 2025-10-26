@@ -11,12 +11,6 @@ configuration:
   sqlite_web_port:
     name: sqlite_web port
     description: Port for the sqlite_web database viewer when exposed to your LAN; ignored while using HA ingress (default).
-  use_invidious_search:
-    name: Use Invidious search
-    description: Enable fallback search via an Invidious instance to reduce YouTube API usage.
-  invidious_base_url:
-    name: Invidious base URL
-    description: Base URL of the Invidious instance (e.g., https://yewtu.be). Required when Invidious search is enabled.
   rate_limit_per_minute:
     name: Rate limit per minute
     description: Maximum YouTube Data API calls allowed every 60 seconds.

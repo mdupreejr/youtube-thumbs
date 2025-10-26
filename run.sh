@@ -54,22 +54,19 @@ export LOG_LEVEL=$(bashio::config 'log_level')
 export ENABLE_HISTORY_TRACKER=$(bashio::config 'history_tracker_enabled')
 export HISTORY_POLL_INTERVAL=$(bashio::config 'history_poll_interval')
 
-USE_INVIDIOUS_SEARCH_CONFIG=$(bashio::config 'use_invidious_search')
-if bashio::var.has_value "${USE_INVIDIOUS_SEARCH_CONFIG}" && [ "${USE_INVIDIOUS_SEARCH_CONFIG}" != "null" ]; then
-    export USE_INVIDIOUS_SEARCH="${USE_INVIDIOUS_SEARCH_CONFIG}"
+QUOTA_COOLDOWN_ENV="${YTT_QUOTA_COOLDOWN_SECONDS:-}"
+if bashio::var.has_value "${QUOTA_COOLDOWN_ENV}"; then
+    export YTT_QUOTA_COOLDOWN_SECONDS="${QUOTA_COOLDOWN_ENV}"
 else
-    export USE_INVIDIOUS_SEARCH="false"
-fi
-
-INVIDIOUS_BASE_URL_CONFIG=$(bashio::config 'invidious_base_url')
-if bashio::var.has_value "${INVIDIOUS_BASE_URL_CONFIG}" && [ "${INVIDIOUS_BASE_URL_CONFIG}" != "null" ]; then
-    export INVIDIOUS_BASE_URL="${INVIDIOUS_BASE_URL_CONFIG}"
-    if [ -z "${INVIDIOUS_BASE_URLS}" ]; then
-        export INVIDIOUS_BASE_URLS="${INVIDIOUS_BASE_URL_CONFIG}"
+    QUOTA_COOLDOWN_CONFIG=$(bashio::config 'quota_cooldown_hours')
+    if bashio::var.has_value "${QUOTA_COOLDOWN_CONFIG}" && [ "${QUOTA_COOLDOWN_CONFIG}" != "null" ]; then
+        QUOTA_COOLDOWN_SECONDS=$((QUOTA_COOLDOWN_CONFIG * 3600))
+    else
+        QUOTA_COOLDOWN_SECONDS=43200
     fi
-else
-    unset INVIDIOUS_BASE_URL
+    export YTT_QUOTA_COOLDOWN_SECONDS="${QUOTA_COOLDOWN_SECONDS}"
 fi
+bashio::log.info "Quota cooldown: ${YTT_QUOTA_COOLDOWN_SECONDS}s"
 
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 bashio::log.info "Rate limits: ${RATE_LIMIT_PER_MINUTE}/min, ${RATE_LIMIT_PER_HOUR}/hr, ${RATE_LIMIT_PER_DAY}/day"

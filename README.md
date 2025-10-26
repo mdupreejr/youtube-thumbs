@@ -136,8 +136,6 @@ Configure these in the add-on Configuration tab:
 | `log_level` | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `sqlite_web_host` | 127.0.0.1 | Bind address for sqlite_web (set to `0.0.0.0` only if you need LAN access) |
 | `sqlite_web_port` | 8080 | Port for sqlite_web when exposed to your LAN; ignored when using HA ingress (the default) |
-| `use_invidious_search` | false | Use an Invidious instance for search before falling back to the YouTube Data API |
-| `invidious_base_url` | (empty) | Base URL of your preferred Invidious instance (required when Invidious search is enabled) |
 | `history_tracker_enabled` | true | Toggle the background poller that logs every song |
 | `history_poll_interval` | 30 | Seconds between Home Assistant polls (10–300 allowed) |
 
@@ -264,13 +262,3 @@ For issues or questions:
 ## License
 
 Provided as-is for personal use.
-### Invidious Fallback Search
-
-Optionally point the add-on at an [Invidious](https://github.com/iv-org/invidious)
-instance. When `use_invidious_search` is true and `invidious_base_url` is set,
-the service searches through Invidious first and only hits the official YouTube
-Data API when Invidious fails to return a match. Provide multiple instances by
-comma- or newline-separating them (e.g., `https://yewtu.be,https://inv.tux.pizza`)
-and the add-on will rotate through the list, temporarily skipping hosts that
-fail before trying the next one. This dramatically reduces quota usage. If every
-Invidious host is unreachable the add-on gracefully falls back to Google’s API.

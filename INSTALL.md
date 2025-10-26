@@ -64,6 +64,7 @@ port: 21812
 rate_limit_per_minute: 10   # Max YouTube API calls in any 60-second window
 rate_limit_per_hour: 100    # Max YouTube API calls in any 3600-second window
 rate_limit_per_day: 500     # Max YouTube API calls in any 24-hour period
+quota_cooldown_hours: 12    # Cooldown after YouTube quota/rate limit errors
 log_level: INFO
 ```
 
@@ -74,17 +75,9 @@ Need sqlite_web outside of Home Assistant ingress? Add
 ```yaml
 sqlite_web_host: 0.0.0.0  # exposes the DB UI to your LAN
 sqlite_web_port: 8080     # optional, defaults to 8080
-use_invidious_search: true
-invidious_base_url: https://yewtu.be, https://inv.tux.pizza
 ```
 
 Only open the DB UI to networks you trust.
-
-Want to conserve YouTube quota? Enable `use_invidious_search` and point it at one
-or more Invidious instances (many public mirrors exist; `https://yewtu.be` and
-`https://inv.tux.pizza` are popular). When multiple URLs are provided (comma or
-newline separated) the add-on rotates through them and temporarily skips any host
-that errors before trying the next one.
 
 Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
 button will route through Home Assistant ingress automatically. If you override the
@@ -92,7 +85,7 @@ host, skip the button and browse directly to `http://<home-assistant-host>:<sqli
 
 If Google reports `quotaExceeded`, the add-on writes
 `/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic for
-24 hours (tweak with `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
+12 hours (tweak with the `quota_cooldown_hours` option or `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
 API returns `503` responses and the history tracker skips new matches.
 
 Every time a video is matched we store both the Home Assistant artist/channel

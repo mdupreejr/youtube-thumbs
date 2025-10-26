@@ -11,7 +11,6 @@ from matcher import matcher
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
-from invidious_api import get_invidious_client
 
 app = Flask(__name__)
 db = get_database()
@@ -54,32 +53,15 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
         search_query = title
     
     if quota_guard.is_blocked():
-        logger.warning(
+        logger.info(
             "Skipping YouTube search for '%s' due to quota cooldown: %s",
             title,
             quota_guard.describe_block(),
         )
         return None
 
-    candidates = None
-    provider = None
-
-    invidious_client = get_invidious_client()
-    if invidious_client.is_enabled():
-        candidates = invidious_client.search_videos(search_query, duration)
-        if candidates:
-            provider = 'Invidious'
-
-    if not candidates:
-        if quota_guard.is_blocked():
-            logger.warning(
-                "Skipping YouTube search for '%s' due to quota cooldown and no Invidious match",
-                title,
-            )
-            return None
-
-        candidates = yt_api.search_video_globally(search_query, duration)
-        provider = 'YouTube'
+    candidates = yt_api.search_video_globally(search_query, duration)
+    provider = 'YouTube'
 
     if not candidates:
         logger.error(
@@ -231,18 +213,27 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             return jsonify({"success": False, "error": "No media currently playing"}), 400
         
         if quota_guard.is_blocked():
-            cooldown_msg = quota_guard.block_message()
-            logger.warning("Blocking %s request: %s", rating_type, cooldown_msg)
+            guard_status = quota_guard.status()
+            cooldown_msg = guard_status.get('message')
+            remaining = guard_status.get('remaining_seconds', 0)
+            logger.warning(
+                "Blocking %s request: %s (remaining %dm%02ds)",
+                rating_type,
+                cooldown_msg,
+                remaining // 60,
+                remaining % 60,
+            )
             user_action_logger.info(f"{rating_type.upper()} | COOLDOWN_ACTIVE | {cooldown_msg}")
             rating_logger.info(
-                f"{rating_type.upper()} | BLOCKED | Reason: quota cooldown | Until: {quota_guard.blocked_until_iso()}"
+                f"{rating_type.upper()} | BLOCKED | Reason: quota cooldown | Until: {guard_status.get('blocked_until')}"
             )
             return (
                 jsonify(
                     {
                         "success": False,
                         "error": cooldown_msg,
-                        "cooldown_until": quota_guard.blocked_until_iso(),
+                        "cooldown_until": guard_status.get('blocked_until'),
+                        "cooldown_seconds_remaining": remaining,
                     }
                 ),
                 503,
@@ -321,9 +312,12 @@ def thumbs_down() -> Tuple[Response, int]:
 def health() -> Response:
     """Health check endpoint."""
     stats = rate_limiter.get_stats()
+    guard_status = quota_guard.status()
+    overall_status = "cooldown" if guard_status.get('blocked') else "healthy"
     return jsonify({
-        "status": "healthy",
-        "rate_limiter": stats
+        "status": overall_status,
+        "rate_limiter": stats,
+        "quota_guard": guard_status,
     })
 
 
