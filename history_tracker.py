@@ -129,33 +129,33 @@ class HistoryTracker:
                 self._last_failed_key = None
                 self._mark_play_recorded(media_key, now)
                 return
-        if self._last_failed_key != media_key:
-            logger.warning(
-                "History tracker could not match '%s' (%ss) to a YouTube video",
-                title,
-                duration,
-            )
-        self._last_failed_key = media_key
-        return
+            if self._last_failed_key != media_key:
+                logger.warning(
+                    "History tracker could not match '%s' (%ss) to a YouTube video",
+                    title,
+                    duration,
+                )
+            self._last_failed_key = media_key
+            return
 
-    video_id = video['video_id']
-    self.db.upsert_video({
-        'video_id': video_id,
-        'ha_title': title,
-        'ha_artist': media.get('artist'),
-        'yt_title': video.get('title', title),
-        'yt_artist': video.get('artist'),
-        'channel': video.get('channel'),
-        'ha_duration': duration,
-        'yt_duration': video.get('duration'),
-        'youtube_url': f"https://www.youtube.com/watch?v={video_id}",
-        'source': 'ha_live',
-    })
-    self.db.record_play(video_id)
-    logger.info("History tracker stored '%s' (video %s)", title, video_id)
-    self._active_media_key = media_key
-    self._last_failed_key = None
-    self._mark_play_recorded(media_key, now)
+        video_id = video['video_id']
+        self.db.upsert_video({
+            'video_id': video_id,
+            'ha_title': title,
+            'ha_artist': media.get('artist'),
+            'yt_title': video.get('title', title),
+            'yt_artist': video.get('artist'),
+            'channel': video.get('channel'),
+            'ha_duration': duration,
+            'yt_duration': video.get('duration'),
+            'youtube_url': f"https://www.youtube.com/watch?v={video_id}",
+            'source': 'ha_live',
+        })
+        self.db.record_play(video_id)
+        logger.info("History tracker stored '%s' (video %s)", title, video_id)
+        self._active_media_key = media_key
+        self._last_failed_key = None
+        self._mark_play_recorded(media_key, now)
 
     @staticmethod
     def _normalize_duration(value: Any) -> Optional[int]:
