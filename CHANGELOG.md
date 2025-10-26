@@ -1,3 +1,8 @@
+## 1.12.1 - 2025-10-26
+
+### Fixed
+- Resolved a regression in the history tracker that caused the add-on to crash at startup due to a stray block executing during module import.
+
 ## 1.12.0 - 2025-10-26
 
 ### Added
