@@ -22,6 +22,48 @@ def format_media_info(title: str, artist: str) -> str:
     """Format media information for logging."""
     return f'"{title}" by {artist}' if artist else f'"{title}"'
 
+def _queue_rating_request(video_id: str, rating_type: str, media_info: str, reason: str) -> Tuple[Response, int]:
+    db.enqueue_rating(video_id, rating_type)
+    db.record_rating_local(video_id, rating_type)
+    user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | QUEUED - {reason}")
+    rating_logger.info(f"{rating_type.upper()} | QUEUED | {media_info} | ID: {video_id} | Reason: {reason}")
+    return (
+        jsonify(
+            {
+                "success": True,
+                "message": f"Queued {rating_type} request; will sync when YouTube API is available ({reason}).",
+                "video_id": video_id,
+                "queued": True,
+            }
+        ),
+        202,
+    )
+
+def _sync_pending_ratings(yt_api: Any, batch_size: int = 5) -> None:
+    if quota_guard.is_blocked():
+        return
+    pending_jobs = db.list_pending_ratings(limit=batch_size)
+    if not pending_jobs:
+        return
+
+    for job in pending_jobs:
+        if quota_guard.is_blocked():
+            break
+        video_id = job['video_id']
+        desired_rating = job['rating']
+        media_info = f"queued video {video_id}"
+        try:
+            if yt_api.set_video_rating(video_id, desired_rating):
+                db.record_rating(video_id, desired_rating)
+                db.mark_pending_rating(video_id, True)
+                rating_logger.info(f"{desired_rating.upper()} | SYNCED | {media_info}")
+            else:
+                db.mark_pending_rating(video_id, False, "YouTube API returned False")
+                break
+        except Exception as exc:  # pragma: no cover - defensive
+            db.mark_pending_rating(video_id, False, str(exc))
+            logger.error("Failed to sync pending rating for %s: %s", video_id, exc)
+            break
 
 def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """
@@ -211,36 +253,27 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
             rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
             return jsonify({"success": False, "error": "No media currently playing"}), 400
-        
-        if quota_guard.is_blocked():
-            guard_status = quota_guard.status()
-            cooldown_msg = guard_status.get('message')
-            remaining = guard_status.get('remaining_seconds', 0)
-            logger.warning(
-                "Blocking %s request: %s (remaining %dm%02ds)",
-                rating_type,
-                cooldown_msg,
-                remaining // 60,
-                remaining % 60,
-            )
-            user_action_logger.info(f"{rating_type.upper()} | COOLDOWN_ACTIVE | {cooldown_msg}")
-            rating_logger.info(
-                f"{rating_type.upper()} | BLOCKED | Reason: quota cooldown | Until: {guard_status.get('blocked_until')}"
-            )
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": cooldown_msg,
-                        "cooldown_until": guard_status.get('blocked_until'),
-                        "cooldown_seconds_remaining": remaining,
-                    }
-                ),
-                503,
-            )
 
         video = find_cached_video(ha_media)
         if not video:
+            if quota_guard.is_blocked():
+                guard_status = quota_guard.status()
+                cooldown_msg = guard_status.get('message')
+                logger.error(
+                    "Cannot locate cached video while quota is blocked; rejecting %s request",
+                    rating_type,
+                )
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": cooldown_msg,
+                            "cooldown_until": guard_status.get('blocked_until'),
+                            "cooldown_seconds_remaining": guard_status.get('remaining_seconds', 0),
+                        }
+                    ),
+                    503,
+                )
             video = search_and_match_video(ha_media)
         if not video:
             title = ha_media.get('title', 'unknown')
@@ -279,19 +312,37 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             db.record_rating(video_id, rating_type)
             return jsonify({"success": True, "message": f"Already rated {rating_type}", "video_id": video_id, "title": video_title}), 200
 
+        if quota_guard.is_blocked():
+            guard_status = quota_guard.status()
+            logger.warning(
+                "Queuing %s request for %s due to quota cooldown",
+                rating_type,
+                video_id,
+            )
+            return _queue_rating_request(
+                video_id,
+                rating_type,
+                media_info,
+                guard_status.get('message', 'quota cooldown'),
+            )
+
         yt_api = get_youtube_api()
+        _sync_pending_ratings(yt_api)
 
         if yt_api.set_video_rating(video_id, rating_type):
             logger.info(f"Successfully rated video {video_id} {rating_type}")
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | SUCCESS")
             rating_logger.info(f"{rating_type.upper()} | SUCCESS | {media_info} | ID: {video_id}")
             db.record_rating(video_id, rating_type)
+            db.mark_pending_rating(video_id, True)
             return jsonify({"success": True, "message": f"Successfully rated {rating_type}", "video_id": video_id, "title": video_title}), 200
 
-        user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | FAILED - API error")
-        rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: {video_id} | Reason: API error")
-        logger.error(f"Failed to set rating | Context: rate_video ({rating_type}) | Video ID: {video_id} | Title: {video_title}")
-        return jsonify({"success": False, "error": "Failed to set rating"}), 500
+        logger.error(
+            "YouTube API returned failure for %s request (video %s). Queuing for retry.",
+            rating_type,
+            video_id,
+        )
+        return _queue_rating_request(video_id, rating_type, media_info, "YouTube API error")
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")

@@ -160,10 +160,12 @@ quota resets if you need to re-enable access early.
   - Use the add-on's **OPEN WEB UI** button; Home Assistant proxies the sqlite_web instance into your browser even when it is bound to `127.0.0.1`.
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Each row includes a `source` column (default `ha_live`) so you can tag imports such as manual YouTube exports; set it when calling `db.upsert_video` to keep provenance straight.
+- Failed thumbs requests are persisted in the `pending_ratings` table and automatically retried once the YouTube API/quota comes back, so every request is documented even when YouTube is offline.
 - Prefer a different bind target? Keep `sqlite_web_host` at `127.0.0.1` for ingress/HA-only access or set it to `0.0.0.0` to expose the DB UI to your LAN. Pair it with the `sqlite_web_port` option (or the `SQLITE_WEB_HOST`/`SQLITE_WEB_PORT` env vars) if you need custom settings.
 - When `sqlite_web_host` is not localhost, the **OPEN WEB UI** button is bypassed—browse to `http://<home-assistant-host>:<sqlite_web_port>` directly instead.
 - Every record tracks both the Home Assistant-reported artist/channel and the YouTube channel metadata so you can audit mismatches later.
 - Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
+- The `pending_ratings` table tracks queued thumbs requests; clear or inspect it via sqlite_web if you need to audit what still needs to sync.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
 
 ### Manual import from the legacy `ratings.log`

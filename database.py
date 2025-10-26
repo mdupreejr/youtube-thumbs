@@ -39,6 +39,17 @@ class Database:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
     """
 
+    PENDING_RATINGS_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS pending_ratings (
+            video_id TEXT PRIMARY KEY,
+            rating TEXT NOT NULL,
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_attempt TIMESTAMP,
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT
+        );
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +80,7 @@ class Database:
             try:
                 with self._conn:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
+                    self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
                     self._add_column_if_missing('video_ratings', 'ha_artist', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'pending_match', 'INTEGER DEFAULT 0')
@@ -309,20 +321,34 @@ class Database:
 
     def record_rating(self, video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
         """Update rating metadata and increment rating counter."""
+        self._record_rating_internal(video_id, rating or 'none', timestamp, increment_counter=True)
+
+    def record_rating_local(self, video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
+        """Update rating metadata without incrementing the rating counter."""
+        self._record_rating_internal(video_id, rating or 'none', timestamp, increment_counter=False)
+
+    def _record_rating_internal(
+        self,
+        video_id: str,
+        rating: str,
+        timestamp: Optional[str],
+        increment_counter: bool,
+    ) -> None:
         ts = self._timestamp(timestamp)
-        normalized_rating = rating or 'none'
+        counter_expr = "rating_count = COALESCE(rating_count, 0) + 1" if increment_counter else "rating_count = COALESCE(rating_count, 0)"
+        default_count = 1 if increment_counter else 0
         with self._lock:
             try:
                 with self._conn:
                     cur = self._conn.execute(
-                        """
+                        f"""
                         UPDATE video_ratings
                         SET rating = ?,
-                            rating_count = COALESCE(rating_count, 0) + 1,
+                            {counter_expr},
                             date_updated = ?
                         WHERE video_id = ?
                         """,
-                        (normalized_rating, ts, video_id),
+                        (rating, ts, video_id),
                     )
                     if cur.rowcount == 0:
                         self._conn.execute(
@@ -331,9 +357,9 @@ class Database:
                                 video_id, ha_title, yt_title, rating,
                                 date_added, date_updated, play_count, rating_count, pending_match
                             )
-                            VALUES (?, 'Unknown', 'Unknown', ?, ?, ?, 1, 1, 0)
+                            VALUES (?, 'Unknown', 'Unknown', ?, ?, ?, 1, ?, 0)
                             """,
-                            (video_id, normalized_rating, ts, ts),
+                            (video_id, rating, ts, ts, default_count),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to record rating for {video_id}: {exc}")
@@ -433,6 +459,61 @@ class Database:
         }
         self.upsert_video(payload)
         return pending_id
+
+    def enqueue_rating(self, video_id: str, rating: str) -> None:
+        payload = (video_id, rating, self._timestamp())
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        INSERT INTO pending_ratings (video_id, rating, requested_at, attempts, last_error, last_attempt)
+                        VALUES (?, ?, ?, 0, NULL, NULL)
+                        ON CONFLICT(video_id) DO UPDATE SET
+                            rating=excluded.rating,
+                            requested_at=excluded.requested_at,
+                            attempts=0,
+                            last_error=NULL,
+                            last_attempt=NULL;
+                        """,
+                        payload,
+                    )
+            except sqlite3.DatabaseError as exc:
+                logger.error("Failed to enqueue rating for %s: %s", video_id, exc)
+
+    def list_pending_ratings(self, limit: int = 10) -> List[Dict[str, Any]]:
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT video_id, rating, requested_at, attempts, last_error
+                FROM pending_ratings
+                ORDER BY requested_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_pending_rating(self, video_id: str, success: bool, error: Optional[str] = None) -> None:
+        with self._lock:
+            try:
+                with self._conn:
+                    if success:
+                        self._conn.execute("DELETE FROM pending_ratings WHERE video_id = ?", (video_id,))
+                    else:
+                        self._conn.execute(
+                            """
+                            UPDATE pending_ratings
+                            SET attempts = attempts + 1,
+                                last_error = ?,
+                                last_attempt = ?
+                            WHERE video_id = ?
+                            """,
+                            (error, self._timestamp(), video_id),
+                        )
+            except sqlite3.DatabaseError as exc:
+                logger.error("Failed to update pending rating for %s: %s", video_id, exc)
 
 
 _db_instance: Optional[Database] = None
