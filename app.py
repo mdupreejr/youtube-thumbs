@@ -22,8 +22,16 @@ def format_media_info(title: str, artist: str) -> str:
     """Format media information for logging."""
     return f'"{title}" by {artist}' if artist else f'"{title}"'
 
-def _queue_rating_request(video_id: str, rating_type: str, media_info: str, reason: str) -> Tuple[Response, int]:
+def _queue_rating_request(
+    video_id: str,
+    rating_type: str,
+    media_info: str,
+    reason: str,
+    record_attempt: bool = False,
+) -> Tuple[Response, int]:
     db.enqueue_rating(video_id, rating_type)
+    if record_attempt:
+        db.mark_pending_rating(video_id, False, reason)
     db.record_rating_local(video_id, rating_type)
     user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {video_id} | QUEUED - {reason}")
     rating_logger.info(f"{rating_type.upper()} | QUEUED | {media_info} | ID: {video_id} | Reason: {reason}")
@@ -342,7 +350,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             rating_type,
             video_id,
         )
-        return _queue_rating_request(video_id, rating_type, media_info, "YouTube API error")
+        return _queue_rating_request(video_id, rating_type, media_info, "YouTube API error", record_attempt=True)
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")

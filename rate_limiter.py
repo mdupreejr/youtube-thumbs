@@ -39,6 +39,15 @@ class RateLimiter:
         """Remove timestamps older than the provided window."""
         while queue and current_time - queue[0] > time_window:
             queue.popleft()
+
+    @staticmethod
+    def _retry_after(queue: deque, time_window: int, current_time: float) -> int:
+        """Estimate seconds until the current window has capacity again."""
+        if not queue:
+            return time_window
+        oldest = queue[0]
+        remaining = int(time_window - (current_time - oldest))
+        return max(remaining, 1)
     
     def _counts(self, current_time: float) -> Tuple[int, int, int]:
         """Return counts for each rate limit window."""
@@ -62,16 +71,34 @@ class RateLimiter:
         
         # Check limits
         if minute_count >= self.per_minute:
-            logger.warning(f"Rate limit exceeded: {self.per_minute} requests per minute")
-            return False, f"Rate limit exceeded: {self.per_minute} requests per minute"
-        
+            retry = self._retry_after(self.minute_requests, 60, current_time)
+            logger.warning(
+                "Rate limit exceeded (%s/min). Window count=%s; retry in ~%ss",
+                self.per_minute,
+                minute_count,
+                retry,
+            )
+            return False, f"Rate limit exceeded: {self.per_minute} requests per minute (retry in {retry}s)"
+
         if hour_count >= self.per_hour:
-            logger.warning(f"Rate limit exceeded: {self.per_hour} requests per hour")
-            return False, f"Rate limit exceeded: {self.per_hour} requests per hour"
-        
+            retry = self._retry_after(self.hour_requests, 3600, current_time)
+            logger.warning(
+                "Rate limit exceeded (%s/hr). Window count=%s; retry in ~%ss",
+                self.per_hour,
+                hour_count,
+                retry,
+            )
+            return False, f"Rate limit exceeded: {self.per_hour} requests per hour (retry in {retry}s)"
+
         if day_count >= self.per_day:
-            logger.warning(f"Rate limit exceeded: {self.per_day} requests per day")
-            return False, f"Rate limit exceeded: {self.per_day} requests per day"
+            retry = self._retry_after(self.day_requests, 86400, current_time)
+            logger.warning(
+                "Rate limit exceeded (%s/day). Window count=%s; retry in ~%ss",
+                self.per_day,
+                day_count,
+                retry,
+            )
+            return False, f"Rate limit exceeded: {self.per_day} requests per day (retry in {retry}s)"
         
         # Add request timestamp to each queue
         self.minute_requests.append(current_time)

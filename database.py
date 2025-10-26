@@ -50,6 +50,16 @@ class Database:
         );
     """
 
+    IMPORT_HISTORY_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS import_history (
+            entry_id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            video_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_import_history_video_id ON import_history(video_id);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +91,7 @@ class Database:
                 with self._conn:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
+                    self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._add_column_if_missing('video_ratings', 'ha_artist', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'pending_match', 'INTEGER DEFAULT 0')
@@ -514,6 +525,28 @@ class Database:
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error("Failed to update pending rating for %s: %s", video_id, exc)
+
+    def import_entry_exists(self, entry_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT 1 FROM import_history WHERE entry_id = ?",
+                (entry_id,),
+            )
+            return cur.fetchone() is not None
+
+    def log_import_entry(self, entry_id: str, source: str, video_id: str) -> None:
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        INSERT OR IGNORE INTO import_history (entry_id, source, video_id)
+                        VALUES (?, ?, ?)
+                        """,
+                        (entry_id, source, video_id),
+                    )
+            except sqlite3.DatabaseError as exc:
+                logger.error("Failed to log import entry %s: %s", entry_id, exc)
 
 
 _db_instance: Optional[Database] = None

@@ -166,7 +166,18 @@ quota resets if you need to re-enable access early.
 - Every record tracks both the Home Assistant-reported artist/channel and the YouTube channel metadata so you can audit mismatches later.
 - Every successful match is cached, so follow-up requests for the exact same Home Assistant title reuse the stored video ID and skip the expensive YouTube search entirely.
 - The `pending_ratings` table tracks queued thumbs requests; clear or inspect it via sqlite_web if you need to audit what still needs to sync.
+- The `import_history` table records which external exports have already been ingested so you can safely rerun the importer without double-counting plays.
 - If you repeat the same thumbs action as last time, the cached rating prevents us from pinging YouTube at all.
+
+### Importing YouTube Activity HTML exports
+
+Run the helper script to ingest the files you dropped in `youtube_exports/`:
+
+```bash
+./import_youtube_exports.py
+```
+
+Each `Watched …` entry becomes a cached video (`source='yt_export'`), the play is recorded with the original timestamp, and the `(filename, video_id, timestamp)` tuple is hashed into `import_history` so reruns stay idempotent.
 
 ### Manual import from the legacy `ratings.log`
 
