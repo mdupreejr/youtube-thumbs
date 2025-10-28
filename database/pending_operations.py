@@ -57,7 +57,7 @@ class PendingOperations:
         return pending_id
 
     def enqueue_rating(self, yt_video_id: str, rating: str) -> None:
-        payload = (yt_video_id, rating, self._timestamp())
+        payload = (yt_video_id, rating, self._timestamp(''))
         with self._lock:
             try:
                 with self._conn:
@@ -106,7 +106,7 @@ class PendingOperations:
                                 last_attempt = ?
                             WHERE yt_video_id = ?
                             """,
-                            (error, self._timestamp(), yt_video_id),
+                            (error, self._timestamp(''), yt_video_id),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error("Failed to update pending rating for %s: %s", yt_video_id, exc)

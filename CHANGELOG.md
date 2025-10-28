@@ -1,3 +1,14 @@
+## 1.16.3 - 2025-10-28
+
+### Fixed
+- Actually fixed date_added NULL bug (previous fix wasn't working)
+- Changed all timestamp calls to pass empty string '' instead of no argument
+- The timestamp() function returns None when called with None, now we explicitly request current time
+
+### Technical
+- Fixed calls to self._timestamp() to use self._timestamp('') for current timestamp
+- Affected files: video_operations.py and pending_operations.py
+
 ## 1.16.2 - 2025-10-28
 
 ### Fixed

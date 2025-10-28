@@ -48,7 +48,7 @@ class VideoOperations:
             'rating': video.get('rating', 'none') or 'none',
             'pending_match': 1 if video.get('pending_match') else 0,
             'source': video.get('source') or 'ha_live',
-            'date_added': self._timestamp(date_added) if date_added else self._timestamp(),
+            'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
         }
 
         upsert_sql = """
@@ -93,7 +93,7 @@ class VideoOperations:
 
     def record_play(self, yt_video_id: str, timestamp: Optional[str] = None) -> None:
         """Increment play counter and update last played timestamp."""
-        ts = self._timestamp(timestamp) if timestamp else self._timestamp()
+        ts = self._timestamp(timestamp) if timestamp else self._timestamp('')
         with self._lock:
             try:
                 with self._conn:
@@ -135,7 +135,7 @@ class VideoOperations:
         timestamp: Optional[str],
         increment_counter: bool,
     ) -> None:
-        ts = self._timestamp(timestamp) if timestamp else self._timestamp()
+        ts = self._timestamp(timestamp) if timestamp else self._timestamp('')
 
         with self._lock:
             try:
