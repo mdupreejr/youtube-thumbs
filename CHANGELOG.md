@@ -1,3 +1,27 @@
+## 1.15.2 - 2025-10-28
+
+### Fixed
+- Fixed duplicated `FALSE_VALUES` constants with different values
+  - `app.py` had `{'false', '0', 'no', 'off'}`
+  - `quota_guard.py` had `{'false', '0', 'no', 'off', ''}` (included empty string)
+  - Could cause subtle bugs with environment variable parsing
+  - Now using shared constant from `constants.py`
+- Fixed inconsistent parameter naming in `youtube_api.py`
+  - Methods now use `yt_video_id` instead of `video_id` for consistency
+
+### Improved
+- Eliminated ~30 lines of duplicated code between `app.py` and `history_tracker.py`
+  - Created `video_helpers.py` with shared `prepare_video_upsert()` function
+  - Reduces maintenance burden and ensures consistency
+- Better code organization with new modules:
+  - `constants.py` for shared constants
+  - `video_helpers.py` for shared video operations
+
+### Technical
+- No duplicate processes found running
+- Codebase now has consistent naming throughout all modules
+- Better separation of concerns with helper modules
+
 ## 1.15.1 - 2025-10-28
 
 ### Fixed

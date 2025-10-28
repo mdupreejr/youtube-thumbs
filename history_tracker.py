@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Optional
 
 from logger import logger
 from quota_guard import quota_guard
+from video_helpers import prepare_video_upsert
 
 
 MediaDict = Dict[str, Any]
@@ -162,24 +163,15 @@ class HistoryTracker:
             return
 
         yt_video_id = video['yt_video_id']
-        self.db.upsert_video({
-            'yt_video_id': yt_video_id,
-            'ha_title': title,
-            'ha_artist': media.get('artist'),
-            'yt_title': video.get('title', title),
-            'yt_channel': video.get('channel'),
-            'yt_channel_id': video.get('channel_id'),
-            'yt_description': video.get('description'),
-            'yt_published_at': video.get('published_at'),
-            'yt_category_id': video.get('category_id'),
-            'yt_live_broadcast': video.get('live_broadcast'),
-            'yt_location': video.get('location'),
-            'yt_recording_date': video.get('recording_date'),
-            'ha_duration': duration,
-            'yt_duration': video.get('duration'),
-            'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
-            'source': 'ha_live',
-        })
+
+        # Use helper function to prepare video data
+        ha_media = {
+            'title': title,
+            'artist': media.get('artist'),
+            'duration': duration
+        }
+        video_data = prepare_video_upsert(video, ha_media, source='ha_live')
+        self.db.upsert_video(video_data)
         self.db.record_play(yt_video_id)
         logger.info("History tracker stored '%s' (video %s)", title, yt_video_id)
         self._active_media_key = media_key

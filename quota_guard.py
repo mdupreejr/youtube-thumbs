@@ -6,9 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from logger import logger
-
-
-FALSE_VALUES = {'false', '0', 'no', 'off', ''}
+from constants import FALSE_VALUES
 
 
 def _is_truthy(value: Optional[str]) -> bool:

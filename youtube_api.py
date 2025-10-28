@@ -245,24 +245,24 @@ class YouTubeAPI:
             logger.debug(f"Traceback for search error: {traceback.format_exc()}")
             return None
 
-    def get_video_rating(self, video_id: str) -> str:
+    def get_video_rating(self, yt_video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
         if quota_guard.is_blocked():
             logger.info(
                 "Quota cooldown active; skipping get_video_rating for %s: %s",
-                video_id,
+                yt_video_id,
                 quota_guard.describe_block(),
             )
             return self.NO_RATING
         try:
-            logger.info(f"Checking rating for video ID: {video_id}")
+            logger.info(f"Checking rating for video ID: {yt_video_id}")
 
-            request = self.youtube.videos().getRating(id=video_id)
+            request = self.youtube.videos().getRating(id=yt_video_id)
             response = request.execute()
 
             if response.get('items'):
                 rating = response['items'][0].get('rating', self.NO_RATING)
-                logger.info(f"Current rating for {video_id}: {rating}")
+                logger.info(f"Current rating for {yt_video_id}: {rating}")
                 return rating
 
             return self.NO_RATING
@@ -271,43 +271,43 @@ class YouTubeAPI:
             detail = self._quota_error_detail(e)
             if detail is not None:
                 quota_guard.trip('quotaExceeded', context='get_rating', detail=detail)
-            logger.error(f"YouTube API error getting rating | Video ID: {video_id} | Error: {str(e)}")
+            logger.error(f"YouTube API error getting rating | Video ID: {yt_video_id} | Error: {str(e)}")
             return self.NO_RATING
         except Exception as e:
-            logger.error(f"Unexpected error getting video rating | Video ID: {video_id} | Error: {str(e)}")
+            logger.error(f"Unexpected error getting video rating | Video ID: {yt_video_id} | Error: {str(e)}")
             logger.debug(f"Traceback for get_video_rating error: {traceback.format_exc()}")
             return self.NO_RATING
 
-    def set_video_rating(self, video_id: str, rating: str) -> bool:
+    def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
         if quota_guard.is_blocked():
             logger.info(
                 "Quota cooldown active; skipping set_video_rating for %s (%s): %s",
-                video_id,
+                yt_video_id,
                 rating,
                 quota_guard.describe_block(),
             )
             return False
         try:
-            logger.info(f"Setting rating '{rating}' for video ID: {video_id}")
+            logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
 
             request = self.youtube.videos().rate(
-                id=video_id,
+                id=yt_video_id,
                 rating=rating
             )
             request.execute()
 
-            logger.info(f"Successfully rated video {video_id} as '{rating}'")
+            logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
             return True
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
             if detail is not None:
                 quota_guard.trip('quotaExceeded', context='set_rating', detail=detail)
-            logger.error(f"YouTube API error setting rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
+            logger.error(f"YouTube API error setting rating | Video ID: {yt_video_id} | Rating: {rating} | Error: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error setting video rating | Video ID: {video_id} | Rating: {rating} | Error: {str(e)}")
+            logger.error(f"Unexpected error setting video rating | Video ID: {yt_video_id} | Rating: {rating} | Error: {str(e)}")
             logger.debug(f"Traceback for set_video_rating error: {traceback.format_exc()}")
             return False
 

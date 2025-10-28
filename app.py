@@ -12,11 +12,11 @@ from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
 from startup_checks import run_startup_checks
+from constants import FALSE_VALUES
+from video_helpers import prepare_video_upsert
 
 app = Flask(__name__)
 db = get_database()
-
-FALSE_VALUES = {'false', '0', 'no', 'off'}
 
 
 def format_media_info(title: str, artist: str) -> str:
@@ -296,24 +296,9 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         artist = ha_media.get('artist', '')
         media_info = format_media_info(video_title, artist)
 
-        db.upsert_video({
-            'yt_video_id': yt_video_id,
-            'ha_title': ha_media.get('title', video_title),
-            'ha_artist': ha_media.get('artist'),
-            'yt_title': video_title,
-            'yt_channel': video.get('channel'),
-            'yt_channel_id': video.get('channel_id'),
-            'yt_description': video.get('description'),
-            'yt_published_at': video.get('published_at'),
-            'yt_category_id': video.get('category_id'),
-            'yt_live_broadcast': video.get('live_broadcast'),
-            'yt_location': video.get('location'),
-            'yt_recording_date': video.get('recording_date'),
-            'ha_duration': ha_media.get('duration'),
-            'yt_duration': video.get('duration'),
-            'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
-            'source': 'ha_live',
-        })
+        # Use helper function to prepare video data
+        video_data = prepare_video_upsert(video, ha_media, source='ha_live')
+        db.upsert_video(video_data)
         db.record_play(yt_video_id)
 
         cached_video_row = db.get_video(yt_video_id)
