@@ -203,6 +203,13 @@ Because the new service performs UPSERTs, duplicates are safe—the latest metad
 
 ## Troubleshooting
 
+**No new videos being added to database**
+- **Most common cause:** Missing YouTube API credentials
+- Check if `credentials.json` and `token.pickle` exist in `/addon_configs/XXXXXXXX_youtube_thumbs/`
+- Without these files, the addon cannot authenticate with YouTube API
+- Solution: Copy both files from your project directory to the addon_configs location
+- Restart the addon after copying credentials
+
 **"No media currently playing"**
 - Verify AppleTV is playing music
 - Check media player entity ID is correct in add-on configuration
@@ -214,9 +221,11 @@ Because the new service performs UPSERTs, duplicates are safe—the latest metad
 
 **OAuth/Credentials errors**
 - Verify `credentials.json` is in `/addon_configs/XXXXXXXX_youtube_thumbs/`
+- Also ensure `token.pickle` is present (contains authenticated session)
 - Check add-on logs for specific error messages
+- Look for: "credentials.json NOT found" or "token.pickle NOT found" in logs
 - Ensure OAuth credentials are from Google Cloud Console with YouTube Data API v3 enabled
-- The add-on will automatically create `token.pickle` on first run
+- The add-on will automatically create `token.pickle` on first run if only `credentials.json` exists
 
 **`quotaExceeded` / 503 errors**
 - Hitting the YouTube quota triggers an automatic 12-hour cooldown saved in `/config/youtube_thumbs/quota_guard.json` (set `quota_cooldown_hours` or `YTT_QUOTA_COOLDOWN_SECONDS` to tweak it).

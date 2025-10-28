@@ -1,3 +1,15 @@
+## 1.12.2 - 2025-10-28
+
+### Fixed
+- Enhanced troubleshooting documentation for missing YouTube API credentials issue
+- Added clear instructions for when videos aren't being added to the database
+- Improved credential setup documentation in README
+
+### Documentation
+- Added "No new videos being added to database" as the first troubleshooting item
+- Clarified that both `credentials.json` and `token.pickle` are required for authentication
+- Added specific log messages to look for when diagnosing credential issues
+
 ## 1.12.1 - 2025-10-26
 
 ### Fixed
