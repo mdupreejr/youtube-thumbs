@@ -1,3 +1,14 @@
+## 1.16.2 - 2025-10-28
+
+### Fixed
+- Fixed date_added field being NULL for all new videos
+- Database now properly records timestamp when videos are first discovered from HA API or YouTube API
+- Fixed upsert_video, record_play, and record_rating methods to use current timestamp instead of NULL
+
+### Technical
+- All database insert operations now properly set date_added to current timestamp when creating new records
+- Preserves ability to override date_added for imports and migrations
+
 ## 1.16.1 - 2025-10-28
 
 ### Fixed
