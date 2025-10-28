@@ -56,15 +56,15 @@ class VideoOperations:
             yt_video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
-            ha_duration, yt_duration, yt_url, rating, date_added,
+            ha_duration, yt_duration, yt_url, rating, date_added, date_last_played,
             play_count, rating_score, pending_match, source
         )
         VALUES (
             :yt_video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
-            :ha_duration, :yt_duration, :yt_url, :rating, :date_added,
-            0, 0, :pending_match, :source
+            :ha_duration, :yt_duration, :yt_url, :rating, :date_added, :date_added,
+            1, 0, :pending_match, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_title=excluded.ha_title,

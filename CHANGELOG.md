@@ -1,3 +1,14 @@
+## 1.16.4 - 2025-10-28
+
+### Fixed
+- Fixed date_last_played being NULL for all videos
+- Videos now properly record date_last_played when first inserted
+- Changed initial play_count from 0 to 1 when video is first added (since it's being played)
+
+### Technical
+- Added date_last_played to INSERT statement in upsert_video, set to same value as date_added
+- Ensures date_last_played is never NULL for videos in the database
+
 ## 1.16.3 - 2025-10-28
 
 ### Fixed
