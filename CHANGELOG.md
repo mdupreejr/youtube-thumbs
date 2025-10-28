@@ -1,3 +1,15 @@
+## 1.12.3 - 2025-10-28
+
+### Fixed
+- Fixed database schema migration that was incorrectly rebuilding on every restart
+- The migration now properly handles missing columns and deprecated columns
+- Schema rebuild will only occur once when actually needed, not repeatedly
+
+### Technical Details
+- Dynamic column detection prevents trying to select non-existent columns during migration
+- Properly excludes deprecated columns (yt_channel, ha_channel) from migration
+- Adds proper defaults for new columns that don't exist in old schema
+
 ## 1.12.2 - 2025-10-28
 
 ### Fixed

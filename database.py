@@ -149,20 +149,53 @@ class Database:
         with self._lock:
             try:
                 with self._conn:
+                    # Get the actual columns that exist in the old table
+                    old_columns = self._table_columns('video_ratings')
+
+                    # Define the target columns we want to migrate
+                    target_columns = [
+                        'id', 'video_id', 'ha_title', 'ha_artist', 'yt_title', 'yt_artist',
+                        'channel', 'ha_duration', 'yt_duration', 'youtube_url', 'rating',
+                        'date_added', 'date_updated', 'date_played', 'play_count', 'rating_count',
+                        'pending_match', 'source'
+                    ]
+
+                    # Only include columns that exist in the old table
+                    # Exclude deprecated columns like yt_channel and ha_channel
+                    columns_to_migrate = [col for col in target_columns if col in old_columns]
+
+                    # For missing columns, we'll use defaults from the new schema
+                    missing_columns = [col for col in target_columns if col not in old_columns]
+
                     self._conn.execute("ALTER TABLE video_ratings RENAME TO video_ratings_old;")
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
-                    column_list = (
-                        "id, video_id, ha_title, ha_artist, yt_title, yt_artist, "
-                        "channel, ha_duration, yt_duration, youtube_url, rating, "
-                        "date_added, date_updated, date_played, play_count, rating_count, pending_match, source"
-                    )
-                    self._conn.execute(
-                        f"""
-                        INSERT INTO video_ratings ({column_list})
-                        SELECT {column_list}
-                        FROM video_ratings_old;
-                        """
-                    )
+
+                    if columns_to_migrate:
+                        # Build the column list for migration
+                        column_list_str = ', '.join(columns_to_migrate)
+
+                        # Build the SELECT clause with defaults for missing columns
+                        select_parts = []
+                        for col in target_columns:
+                            if col in columns_to_migrate:
+                                select_parts.append(col)
+                            elif col == 'source':
+                                select_parts.append("'ha_live' as source")
+                            elif col == 'pending_match':
+                                select_parts.append("0 as pending_match")
+                            else:
+                                select_parts.append(f"NULL as {col}")
+
+                        select_clause = ', '.join(select_parts)
+
+                        self._conn.execute(
+                            f"""
+                            INSERT INTO video_ratings ({', '.join(target_columns)})
+                            SELECT {select_clause}
+                            FROM video_ratings_old;
+                            """
+                        )
+
                     self._conn.execute("DROP TABLE video_ratings_old;")
                     logger.info("Finished rebuilding video_ratings schema")
             except sqlite3.DatabaseError as exc:
