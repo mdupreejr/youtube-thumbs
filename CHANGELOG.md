@@ -1,3 +1,28 @@
+## 1.16.0 - 2025-10-28
+
+### Changed
+- **MAJOR REFACTOR**: Split large database.py (526 lines) into modular components
+- Database operations now organized into focused modules:
+  - `database/connection.py` - Connection management and schema (151 lines)
+  - `database/video_operations.py` - Video CRUD operations (244 lines)
+  - `database/pending_operations.py` - Pending queue management (107 lines)
+  - `database/import_operations.py` - Import tracking (36 lines)
+  - `database/__init__.py` - Unified interface (105 lines)
+- Maintained 100% backward compatibility - no code changes needed
+
+### Improved
+- **Much easier debugging** - Each module has single responsibility
+- **Better maintainability** - Smaller files are easier to understand
+- **Cleaner separation of concerns** - Clear boundaries between operations
+- **Reduced complexity** - No more 75-line methods in a 500+ line file
+- **Better testability** - Can test each module independently
+
+### Technical
+- Database operations split from 526 lines to 5 files averaging ~130 lines each
+- Longest method reduced from 75 lines to manageable chunks
+- All existing imports continue to work unchanged
+- Singleton pattern preserved for database instance
+
 ## 1.15.2 - 2025-10-28
 
 ### Fixed
