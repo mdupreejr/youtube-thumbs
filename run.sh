@@ -183,5 +183,7 @@ cleanup() {
 
 trap cleanup EXIT
 
+bashio::log.info "Running startup health checks..."
+
 # Start the Flask application
 exec python3 app.py

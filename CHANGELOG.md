@@ -1,3 +1,18 @@
+## 1.13.0 - 2025-10-28
+
+### Added
+- Comprehensive startup health checks for all components
+- On startup, addon now tests:
+  - Home Assistant API connectivity and media player status
+  - YouTube API authentication and quota availability
+  - Database connectivity and shows video count statistics
+- Detailed status report in logs showing what's working and what's not
+- Shows recent plays and pending ratings count in database check
+
+### Changed
+- Improved startup logging with clear status indicators (✓/✗/⚠)
+- Better error messages when components aren't configured properly
+
 ## 1.12.4 - 2025-10-28
 
 ### Fixed

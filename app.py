@@ -11,6 +11,7 @@ from matcher import matcher
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
+from startup_checks import run_startup_checks
 
 app = Flask(__name__)
 db = get_database()
@@ -385,10 +386,15 @@ if __name__ == '__main__':
 
     logger.info(f"Starting YouTube Thumbs service on {host}:{port}")
 
+    # Initialize YouTube API
+    yt_api = None
     try:
-        get_youtube_api()
+        yt_api = get_youtube_api()
     except Exception as e:
         logger.error(f"Failed to initialize YouTube API: {str(e)}")
         logger.error("Please ensure credentials.json exists and run the OAuth flow")
+
+    # Run startup health checks
+    run_startup_checks(ha_api, yt_api, db)
 
     app.run(host=host, port=port, debug=False)
