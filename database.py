@@ -278,29 +278,50 @@ class Database:
         increment_counter: bool,
     ) -> None:
         ts = self._timestamp(timestamp)
-        # Calculate score change: +1 for like, -1 for dislike, 0 for none
-        score_delta = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
-
-        if increment_counter and score_delta != 0:
-            score_expr = f"rating_score = COALESCE(rating_score, 0) + {score_delta}"
-        else:
-            score_expr = "rating_score = COALESCE(rating_score, 0)"
-
-        default_score = score_delta if increment_counter else 0
 
         with self._lock:
             try:
                 with self._conn:
+                    # Get current rating to calculate proper score delta
                     cur = self._conn.execute(
-                        f"""
-                        UPDATE video_ratings
-                        SET rating = ?,
-                            {score_expr}
-                        WHERE yt_video_id = ?
-                        """,
-                        (rating, video_id),
+                        "SELECT rating, rating_score FROM video_ratings WHERE yt_video_id = ?",
+                        (video_id,)
                     )
-                    if cur.rowcount == 0:
+                    current = cur.fetchone()
+
+                    if current:
+                        old_rating = current['rating'] or 'none'
+                        current_score = current['rating_score'] or 0
+
+                        # Calculate score change based on transition
+                        old_value = 1 if old_rating == 'like' else (-1 if old_rating == 'dislike' else 0)
+                        new_value = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
+                        score_delta = new_value - old_value
+
+                        if increment_counter and score_delta != 0:
+                            self._conn.execute(
+                                """
+                                UPDATE video_ratings
+                                SET rating = ?,
+                                    rating_score = COALESCE(rating_score, 0) + ?
+                                WHERE yt_video_id = ?
+                                """,
+                                (rating, score_delta, video_id),
+                            )
+                        else:
+                            self._conn.execute(
+                                """
+                                UPDATE video_ratings
+                                SET rating = ?
+                                WHERE yt_video_id = ?
+                                """,
+                                (rating, video_id),
+                            )
+                    else:
+                        # New video - set initial score based on rating
+                        initial_score = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
+                        initial_score = initial_score if increment_counter else 0
+
                         self._conn.execute(
                             """
                             INSERT INTO video_ratings (
@@ -309,7 +330,7 @@ class Database:
                             )
                             VALUES (?, 'Unknown', 'Unknown', ?, ?, 1, ?, 0)
                             """,
-                            (video_id, rating, ts, default_score),
+                            (video_id, rating, ts, initial_score),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to record rating for {video_id}: {exc}")

@@ -205,10 +205,10 @@ If you have historical data in `/config/youtube_thumbs/ratings.log`, you can ent
 
 ```sql
 INSERT OR IGNORE INTO video_ratings (
-  video_id, ha_title, yt_title, channel, rating, date_added, date_updated, play_count, rating_count
+  yt_video_id, ha_title, yt_title, yt_channel, rating, date_added, play_count, rating_score
 ) VALUES (
   'ZmLIxKpgEPw', 'Song Title', 'Song Title', 'Artist', 'like',
-  '2024-05-01 12:00:00', '2024-05-01 12:00:00', 1, 1
+  '2024-05-01 12:00:00', 1, 1
 );
 ```
 

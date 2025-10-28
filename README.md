@@ -192,10 +192,10 @@ Tip: For larger imports, you can paste SQL like the snippet below directly into 
 
 ```sql
 INSERT OR IGNORE INTO video_ratings (
-  video_id, ha_title, yt_title, channel, rating, date_added, date_updated, play_count, rating_count
+  yt_video_id, ha_title, yt_title, yt_channel, rating, date_added, play_count, rating_score
 ) VALUES (
   'ZmLIxKpgEPw', 'Song Title', 'Song Title', 'Artist', 'like',
-  '2024-05-01 12:00:00', '2024-05-01 12:00:00', 1, 1
+  '2024-05-01 12:00:00', 1, 1
 );
 ```
 
