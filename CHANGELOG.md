@@ -1,3 +1,20 @@
+## 1.13.2 - 2025-10-28
+
+### Changed
+- Removed all database migration logic - fresh start approach
+- Simplified database initialization code
+- Cleaner codebase without complex migration handling
+
+### Removed
+- `_rebuild_video_ratings_schema_if_needed()` method
+- `_cleanup_pending_metadata()` method
+- `_add_column_if_missing()` method
+- All backward compatibility migration code
+
+### Note
+- Delete `/config/youtube_thumbs/ratings.db` before updating for a clean start
+- Database will be recreated with the new schema automatically
+
 ## 1.13.1 - 2025-10-28
 
 ### Changed
