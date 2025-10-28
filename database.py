@@ -233,7 +233,7 @@ class Database:
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to upsert video {video['yt_video_id']}: {exc}")
 
-    def record_play(self, video_id: str, timestamp: Optional[str] = None) -> None:
+    def record_play(self, yt_video_id: str, timestamp: Optional[str] = None) -> None:
         """Increment play counter and update last played timestamp."""
         ts = self._timestamp(timestamp)
         with self._lock:
@@ -246,7 +246,7 @@ class Database:
                             date_last_played = ?
                         WHERE yt_video_id = ?
                         """,
-                        (ts, video_id),
+                        (ts, yt_video_id),
                     )
                     if cur.rowcount == 0:
                         self._conn.execute(
@@ -257,22 +257,22 @@ class Database:
                             )
                             VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, 1, 0, 0)
                             """,
-                            (video_id, ts, ts),
+                            (yt_video_id, ts, ts),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to record play for {video_id}: {exc}")
+                logger.error(f"Failed to record play for {yt_video_id}: {exc}")
 
-    def record_rating(self, video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
+    def record_rating(self, yt_video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
         """Update rating metadata and increment rating counter."""
-        self._record_rating_internal(video_id, rating or 'none', timestamp, increment_counter=True)
+        self._record_rating_internal(yt_video_id, rating or 'none', timestamp, increment_counter=True)
 
-    def record_rating_local(self, video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
+    def record_rating_local(self, yt_video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
         """Update rating metadata without incrementing the rating counter."""
-        self._record_rating_internal(video_id, rating or 'none', timestamp, increment_counter=False)
+        self._record_rating_internal(yt_video_id, rating or 'none', timestamp, increment_counter=False)
 
     def _record_rating_internal(
         self,
-        video_id: str,
+        yt_video_id: str,
         rating: str,
         timestamp: Optional[str],
         increment_counter: bool,
@@ -285,7 +285,7 @@ class Database:
                     # Get current rating to calculate proper score delta
                     cur = self._conn.execute(
                         "SELECT rating, rating_score FROM video_ratings WHERE yt_video_id = ?",
-                        (video_id,)
+                        (yt_video_id,)
                     )
                     current = cur.fetchone()
 
@@ -306,7 +306,7 @@ class Database:
                                     rating_score = COALESCE(rating_score, 0) + ?
                                 WHERE yt_video_id = ?
                                 """,
-                                (rating, score_delta, video_id),
+                                (rating, score_delta, yt_video_id),
                             )
                         else:
                             self._conn.execute(
@@ -315,7 +315,7 @@ class Database:
                                 SET rating = ?
                                 WHERE yt_video_id = ?
                                 """,
-                                (rating, video_id),
+                                (rating, yt_video_id),
                             )
                     else:
                         # New video - set initial score based on rating
@@ -330,16 +330,16 @@ class Database:
                             )
                             VALUES (?, 'Unknown', 'Unknown', ?, ?, 1, ?, 0)
                             """,
-                            (video_id, rating, ts, initial_score),
+                            (yt_video_id, rating, ts, initial_score),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to record rating for {video_id}: {exc}")
+                logger.error(f"Failed to record rating for {yt_video_id}: {exc}")
 
-    def get_video(self, video_id: str) -> Optional[Dict[str, Any]]:
+    def get_video(self, yt_video_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             cur = self._conn.execute(
                 "SELECT * FROM video_ratings WHERE yt_video_id = ?",
-                (video_id,),
+                (yt_video_id,),
             )
             row = cur.fetchone()
         return dict(row) if row else None
@@ -437,8 +437,8 @@ class Database:
         self.upsert_video(payload)
         return pending_id
 
-    def enqueue_rating(self, video_id: str, rating: str) -> None:
-        payload = (video_id, rating, self._timestamp())
+    def enqueue_rating(self, yt_video_id: str, rating: str) -> None:
+        payload = (yt_video_id, rating, self._timestamp())
         with self._lock:
             try:
                 with self._conn:
@@ -456,7 +456,7 @@ class Database:
                         payload,
                     )
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to enqueue rating for %s: %s", video_id, exc)
+                logger.error("Failed to enqueue rating for %s: %s", yt_video_id, exc)
 
     def list_pending_ratings(self, limit: int = 10) -> List[Dict[str, Any]]:
         with self._lock:
@@ -472,12 +472,12 @@ class Database:
             rows = cur.fetchall()
         return [dict(row) for row in rows]
 
-    def mark_pending_rating(self, video_id: str, success: bool, error: Optional[str] = None) -> None:
+    def mark_pending_rating(self, yt_video_id: str, success: bool, error: Optional[str] = None) -> None:
         with self._lock:
             try:
                 with self._conn:
                     if success:
-                        self._conn.execute("DELETE FROM pending_ratings WHERE yt_video_id = ?", (video_id,))
+                        self._conn.execute("DELETE FROM pending_ratings WHERE yt_video_id = ?", (yt_video_id,))
                     else:
                         self._conn.execute(
                             """
@@ -487,10 +487,10 @@ class Database:
                                 last_attempt = ?
                             WHERE yt_video_id = ?
                             """,
-                            (error, self._timestamp(), video_id),
+                            (error, self._timestamp(), yt_video_id),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to update pending rating for %s: %s", video_id, exc)
+                logger.error("Failed to update pending rating for %s: %s", yt_video_id, exc)
 
     def import_entry_exists(self, entry_id: str) -> bool:
         with self._lock:
@@ -500,7 +500,7 @@ class Database:
             )
             return cur.fetchone() is not None
 
-    def log_import_entry(self, entry_id: str, source: str, video_id: str) -> None:
+    def log_import_entry(self, entry_id: str, source: str, yt_video_id: str) -> None:
         with self._lock:
             try:
                 with self._conn:
@@ -509,7 +509,7 @@ class Database:
                         INSERT OR IGNORE INTO import_history (entry_id, source, yt_video_id)
                         VALUES (?, ?, ?)
                         """,
-                        (entry_id, source, video_id),
+                        (entry_id, source, yt_video_id),
                     )
             except sqlite3.DatabaseError as exc:
                 logger.error("Failed to log import entry %s: %s", entry_id, exc)

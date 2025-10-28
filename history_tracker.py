@@ -161,9 +161,9 @@ class HistoryTracker:
             self._last_failed_key = media_key
             return
 
-        video_id = video['yt_video_id']
+        yt_video_id = video['yt_video_id']
         self.db.upsert_video({
-            'yt_video_id': video_id,
+            'yt_video_id': yt_video_id,
             'ha_title': title,
             'ha_artist': media.get('artist'),
             'yt_title': video.get('title', title),
@@ -177,11 +177,11 @@ class HistoryTracker:
             'yt_recording_date': video.get('recording_date'),
             'ha_duration': duration,
             'yt_duration': video.get('duration'),
-            'yt_url': f"https://www.youtube.com/watch?v={video_id}",
+            'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
             'source': 'ha_live',
         })
-        self.db.record_play(video_id)
-        logger.info("History tracker stored '%s' (video %s)", title, video_id)
+        self.db.record_play(yt_video_id)
+        logger.info("History tracker stored '%s' (video %s)", title, yt_video_id)
         self._active_media_key = media_key
         self._last_failed_key = None
         self._mark_play_recorded(media_key, now)

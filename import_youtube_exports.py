@@ -117,8 +117,8 @@ def main() -> int:
     processed = skipped = deduped = 0
     for html_file in files:
         logger.info("Processing %s", html_file.name)
-        for video_id, title, channel, timestamp, video_url in parse_entries(html_file):
-            entry_key = f"{html_file.name}|{video_id}|{timestamp}"
+        for yt_video_id, title, channel, timestamp, video_url in parse_entries(html_file):
+            entry_key = f"{html_file.name}|{yt_video_id}|{timestamp}"
             entry_id = hashlib.sha1(entry_key.encode('utf-8')).hexdigest()
             if db.import_entry_exists(entry_id):
                 deduped += 1
@@ -126,7 +126,7 @@ def main() -> int:
 
             db.upsert_video(
                 {
-                    'yt_video_id': video_id,
+                    'yt_video_id': yt_video_id,
                     'ha_title': title,
                     'ha_artist': None,
                     'yt_title': title,
@@ -146,8 +146,8 @@ def main() -> int:
                 },
                 date_added=timestamp,
             )
-            db.record_play(video_id, timestamp)
-            db.log_import_entry(entry_id, SOURCE_NAME, video_id)
+            db.record_play(yt_video_id, timestamp)
+            db.log_import_entry(entry_id, SOURCE_NAME, yt_video_id)
             processed += 1
         logger.info("Finished %s", html_file.name)
 

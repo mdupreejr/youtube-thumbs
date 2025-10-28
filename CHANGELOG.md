@@ -1,3 +1,25 @@
+## 1.15.1 - 2025-10-28
+
+### Fixed
+- Fixed critical rating score logic bug that incorrectly calculated score transitions
+  - When users changed ratings (e.g., like to dislike), the score wasn't properly updated
+  - Now correctly accounts for the previous rating when calculating score changes
+- Fixed all parameter naming inconsistencies
+  - All database methods now consistently use `yt_video_id` parameter instead of `video_id`
+  - Makes codebase more maintainable and less confusing
+- Updated documentation with correct field names in SQL examples
+- Removed potentially unsafe SQL string interpolation patterns
+
+### Improved
+- Consistent parameter naming throughout entire codebase
+- Better code clarity and maintainability
+- Safer SQL query construction
+
+### Technical
+- All database method parameters renamed from `video_id` to `yt_video_id`
+- Updated all calling code in app.py, history_tracker.py, and import_youtube_exports.py
+- Cleaned up leftover test processes from development
+
 ## 1.15.0 - 2025-10-28
 
 ### Changed
