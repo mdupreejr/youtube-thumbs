@@ -146,10 +146,10 @@ def check_database(db) -> Tuple[bool, str]:
 
             # Get recent videos
             cursor = db._conn.execute("""
-                SELECT ha_title, date_played
+                SELECT ha_title, date_last_played
                 FROM video_ratings
-                WHERE date_played IS NOT NULL
-                ORDER BY date_played DESC
+                WHERE date_last_played IS NOT NULL
+                ORDER BY date_last_played DESC
                 LIMIT 3
             """)
             recent_videos = cursor.fetchall()

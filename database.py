@@ -17,7 +17,7 @@ class Database:
     VIDEO_RATINGS_SCHEMA = """
         CREATE TABLE IF NOT EXISTS video_ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            video_id TEXT UNIQUE NOT NULL,
+            yt_video_id TEXT UNIQUE NOT NULL,
             ha_title TEXT NOT NULL,
             ha_artist TEXT,
             yt_title TEXT,
@@ -31,17 +31,16 @@ class Database:
             yt_recording_date TIMESTAMP,
             ha_duration INTEGER,
             yt_duration INTEGER,
-            youtube_url TEXT,
+            yt_url TEXT,
             rating TEXT DEFAULT 'none',
             date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            date_updated TIMESTAMP,
-            date_played TIMESTAMP,
+            date_last_played TIMESTAMP,
             play_count INTEGER DEFAULT 1,
-            rating_count INTEGER DEFAULT 0,
+            rating_score INTEGER DEFAULT 0,
             pending_match INTEGER DEFAULT 0,
             source TEXT DEFAULT 'ha_live'
         );
-        CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
@@ -49,7 +48,7 @@ class Database:
 
     PENDING_RATINGS_SCHEMA = """
         CREATE TABLE IF NOT EXISTS pending_ratings (
-            video_id TEXT PRIMARY KEY,
+            yt_video_id TEXT PRIMARY KEY,
             rating TEXT NOT NULL,
             requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_attempt TIMESTAMP,
@@ -62,10 +61,10 @@ class Database:
         CREATE TABLE IF NOT EXISTS import_history (
             entry_id TEXT PRIMARY KEY,
             source TEXT NOT NULL,
-            video_id TEXT NOT NULL,
+            yt_video_id TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE INDEX IF NOT EXISTS idx_import_history_video_id ON import_history(video_id);
+        CREATE INDEX IF NOT EXISTS idx_import_history_yt_video_id ON import_history(yt_video_id);
     """
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -128,7 +127,7 @@ class Database:
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
-        columns = ('date_added', 'date_updated', 'date_played')
+        columns = ('date_added', 'date_last_played')
         updates = []
         with self._lock:
             try:
@@ -163,8 +162,8 @@ class Database:
         Insert or update metadata for a video.
 
         Args:
-            video: Dict with keys video_id, ha_title, yt_title, yt_channel, ha_artist,
-                   ha_duration, yt_duration, youtube_url,
+            video: Dict with keys yt_video_id, ha_title, yt_title, yt_channel, ha_artist,
+                   ha_duration, yt_duration, yt_url,
                    rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
@@ -173,7 +172,7 @@ class Database:
         yt_channel = video.get('yt_channel')
 
         payload = {
-            'video_id': video['video_id'],
+            'yt_video_id': video['yt_video_id'],
             'ha_title': ha_title,
             'ha_artist': video.get('ha_artist'),
             'yt_title': yt_title,
@@ -187,30 +186,29 @@ class Database:
             'yt_recording_date': self._timestamp(video.get('yt_recording_date')),
             'ha_duration': video.get('ha_duration'),
             'yt_duration': video.get('yt_duration'),
-            'youtube_url': video.get('youtube_url'),
+            'yt_url': video.get('yt_url'),
             'rating': video.get('rating', 'none') or 'none',
             'pending_match': 1 if video.get('pending_match') else 0,
             'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added),
         }
-        payload['date_updated'] = payload['date_added']
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
+            yt_video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
-            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated,
-            play_count, rating_count, pending_match, source
+            ha_duration, yt_duration, yt_url, rating, date_added,
+            play_count, rating_score, pending_match, source
         )
         VALUES (
-            :video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
+            :yt_video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
-            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated,
+            :ha_duration, :yt_duration, :yt_url, :rating, :date_added,
             0, 0, :pending_match, :source
         )
-        ON CONFLICT(video_id) DO UPDATE SET
+        ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
             ha_artist=excluded.ha_artist,
             yt_title=excluded.yt_title,
@@ -224,7 +222,7 @@ class Database:
             yt_recording_date=excluded.yt_recording_date,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
-            youtube_url=excluded.youtube_url,
+            yt_url=excluded.yt_url,
             pending_match=excluded.pending_match,
             source=excluded.source;
         """
@@ -233,7 +231,7 @@ class Database:
                 with self._conn:
                     self._conn.execute(upsert_sql, payload)
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to upsert video {video['video_id']}: {exc}")
+                logger.error(f"Failed to upsert video {video['yt_video_id']}: {exc}")
 
     def record_play(self, video_id: str, timestamp: Optional[str] = None) -> None:
         """Increment play counter and update last played timestamp."""
@@ -245,22 +243,21 @@ class Database:
                         """
                         UPDATE video_ratings
                         SET play_count = COALESCE(play_count, 0) + 1,
-                            date_played = ?,
-                            date_updated = COALESCE(date_updated, ?)
-                        WHERE video_id = ?
+                            date_last_played = ?
+                        WHERE yt_video_id = ?
                         """,
-                        (ts, ts, video_id),
+                        (ts, video_id),
                     )
                     if cur.rowcount == 0:
                         self._conn.execute(
                             """
                             INSERT INTO video_ratings (
-                                video_id, ha_title, yt_title, rating,
-                                date_added, date_updated, date_played, play_count, rating_count, pending_match
+                                yt_video_id, ha_title, yt_title, rating,
+                                date_added, date_last_played, play_count, rating_score, pending_match
                             )
-                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, ?, 1, 0, 0)
+                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, 1, 0, 0)
                             """,
-                            (video_id, ts, ts, ts),
+                            (video_id, ts, ts),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to record play for {video_id}: {exc}")
@@ -281,8 +278,16 @@ class Database:
         increment_counter: bool,
     ) -> None:
         ts = self._timestamp(timestamp)
-        counter_expr = "rating_count = COALESCE(rating_count, 0) + 1" if increment_counter else "rating_count = COALESCE(rating_count, 0)"
-        default_count = 1 if increment_counter else 0
+        # Calculate score change: +1 for like, -1 for dislike, 0 for none
+        score_delta = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
+
+        if increment_counter and score_delta != 0:
+            score_expr = f"rating_score = COALESCE(rating_score, 0) + {score_delta}"
+        else:
+            score_expr = "rating_score = COALESCE(rating_score, 0)"
+
+        default_score = score_delta if increment_counter else 0
+
         with self._lock:
             try:
                 with self._conn:
@@ -290,22 +295,21 @@ class Database:
                         f"""
                         UPDATE video_ratings
                         SET rating = ?,
-                            {counter_expr},
-                            date_updated = ?
-                        WHERE video_id = ?
+                            {score_expr}
+                        WHERE yt_video_id = ?
                         """,
-                        (rating, ts, video_id),
+                        (rating, video_id),
                     )
                     if cur.rowcount == 0:
                         self._conn.execute(
                             """
                             INSERT INTO video_ratings (
-                                video_id, ha_title, yt_title, rating,
-                                date_added, date_updated, play_count, rating_count, pending_match
+                                yt_video_id, ha_title, yt_title, rating,
+                                date_added, play_count, rating_score, pending_match
                             )
-                            VALUES (?, 'Unknown', 'Unknown', ?, ?, ?, 1, ?, 0)
+                            VALUES (?, 'Unknown', 'Unknown', ?, ?, 1, ?, 0)
                             """,
-                            (video_id, rating, ts, ts, default_count),
+                            (video_id, rating, ts, default_score),
                         )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to record rating for {video_id}: {exc}")
@@ -313,7 +317,7 @@ class Database:
     def get_video(self, video_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             cur = self._conn.execute(
-                "SELECT * FROM video_ratings WHERE video_id = ?",
+                "SELECT * FROM video_ratings WHERE yt_video_id = ?",
                 (video_id,),
             )
             row = cur.fetchone()
@@ -329,7 +333,7 @@ class Database:
                 """
                 SELECT * FROM video_ratings
                 WHERE pending_match = 0 AND (lower(ha_title) = ? OR lower(yt_title) = ?)
-                ORDER BY date_updated DESC, date_added DESC
+                ORDER BY date_last_played DESC, date_added DESC
                 LIMIT ?
                 """,
                 (normalized, normalized, limit),
@@ -346,7 +350,7 @@ class Database:
                 """
                 SELECT * FROM video_ratings
                 WHERE ha_title = ? AND pending_match = 0
-                ORDER BY date_updated DESC, date_added DESC
+                ORDER BY date_last_played DESC, date_added DESC
                 LIMIT 1
                 """,
                 (title,),
@@ -374,7 +378,7 @@ class Database:
                     (ha_duration IS NOT NULL AND ha_duration = ?)
                  OR (ha_duration IS NULL AND yt_duration IS NOT NULL AND yt_duration = ?)
               )
-            ORDER BY date_updated DESC, date_added DESC
+            ORDER BY date_last_played DESC, date_added DESC
             LIMIT 1
         """
         with self._lock:
@@ -390,14 +394,21 @@ class Database:
         pending_id = self._pending_video_id(title, artist, duration)
 
         payload = {
-            'video_id': pending_id,
+            'yt_video_id': pending_id,
             'ha_title': title,
             'ha_artist': artist,
             'yt_title': None,
             'yt_channel': None,
+            'yt_channel_id': None,
+            'yt_description': None,
+            'yt_published_at': None,
+            'yt_category_id': None,
+            'yt_live_broadcast': None,
+            'yt_location': None,
+            'yt_recording_date': None,
             'ha_duration': duration,
             'yt_duration': None,
-            'youtube_url': None,
+            'yt_url': None,
             'rating': 'none',
             'pending_match': 1,
             'source': 'ha_live',
@@ -412,9 +423,9 @@ class Database:
                 with self._conn:
                     self._conn.execute(
                         """
-                        INSERT INTO pending_ratings (video_id, rating, requested_at, attempts, last_error, last_attempt)
+                        INSERT INTO pending_ratings (yt_video_id, rating, requested_at, attempts, last_error, last_attempt)
                         VALUES (?, ?, ?, 0, NULL, NULL)
-                        ON CONFLICT(video_id) DO UPDATE SET
+                        ON CONFLICT(yt_video_id) DO UPDATE SET
                             rating=excluded.rating,
                             requested_at=excluded.requested_at,
                             attempts=0,
@@ -430,7 +441,7 @@ class Database:
         with self._lock:
             cur = self._conn.execute(
                 """
-                SELECT video_id, rating, requested_at, attempts, last_error
+                SELECT yt_video_id, rating, requested_at, attempts, last_error
                 FROM pending_ratings
                 ORDER BY requested_at ASC
                 LIMIT ?
@@ -445,7 +456,7 @@ class Database:
             try:
                 with self._conn:
                     if success:
-                        self._conn.execute("DELETE FROM pending_ratings WHERE video_id = ?", (video_id,))
+                        self._conn.execute("DELETE FROM pending_ratings WHERE yt_video_id = ?", (video_id,))
                     else:
                         self._conn.execute(
                             """
@@ -453,7 +464,7 @@ class Database:
                             SET attempts = attempts + 1,
                                 last_error = ?,
                                 last_attempt = ?
-                            WHERE video_id = ?
+                            WHERE yt_video_id = ?
                             """,
                             (error, self._timestamp(), video_id),
                         )
@@ -474,7 +485,7 @@ class Database:
                 with self._conn:
                     self._conn.execute(
                         """
-                        INSERT OR IGNORE INTO import_history (entry_id, source, video_id)
+                        INSERT OR IGNORE INTO import_history (entry_id, source, yt_video_id)
                         VALUES (?, ?, ?)
                         """,
                         (entry_id, source, video_id),

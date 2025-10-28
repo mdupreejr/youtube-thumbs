@@ -1,3 +1,29 @@
+## 1.15.0 - 2025-10-28
+
+### Changed
+- **BREAKING CHANGE**: Complete database schema overhaul for consistency
+- All YouTube fields now use `yt_` prefix (e.g., `video_id` → `yt_video_id`)
+- All Home Assistant fields use `ha_` prefix for clarity
+- Renamed `youtube_url` to `yt_url` for consistency
+- Removed redundant `date_updated` column (using `date_last_played` only)
+- Renamed `rating_count` to `rating_score` with proper +1/-1 scoring system
+
+### Improved
+- Rating system now uses cumulative scoring: +1 for like, -1 for dislike
+- Videos can now have negative scores if disliked more than liked
+- Cleaner, more consistent field naming throughout codebase
+
+### Technical
+- Updated all SQL queries and database methods to use new field names
+- Updated all Python modules to use consistent field references
+- Fixed pending_ratings table to use `yt_video_id` consistently
+- Fixed import_history table to use `yt_video_id` consistently
+
+### Note
+- **Database Reset Required**: Delete `/config/youtube_thumbs/ratings.db` before updating
+- The database will be recreated automatically with the new schema
+- All existing data will be lost - export any important data before updating
+
 ## 1.14.1 - 2025-10-28
 
 ### Note

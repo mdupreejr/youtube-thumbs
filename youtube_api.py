@@ -189,7 +189,7 @@ class YouTubeAPI:
                             location += f",{loc['altitude']}"
 
                 video_info = {
-                    'video_id': video['id'],
+                    'yt_video_id': video['id'],
                     'title': snippet.get('title'),
                     'channel': snippet.get('channelTitle'),
                     'channel_id': snippet.get('channelId'),
@@ -214,7 +214,7 @@ class YouTubeAPI:
                     if duration is None and expected_duration is not None:
                         logger.warning(
                             f"Duration missing for '{video_info['title']}' "
-                            f"(ID: {video_info['video_id']}); falling back to title match only"
+                            f"(ID: {video_info['yt_video_id']}); falling back to title match only"
                         )
                     candidates.append(video_info)
                 if len(candidates) >= self.MAX_CANDIDATES:

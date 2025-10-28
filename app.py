@@ -58,7 +58,7 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 5) -> None:
     for job in pending_jobs:
         if quota_guard.is_blocked():
             break
-        video_id = job['video_id']
+        video_id = job['yt_video_id']
         desired_rating = job['rating']
         media_info = f"queued video {video_id}"
         try:
@@ -156,7 +156,7 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
         provider or 'unknown',
         video['title'],
         video.get('channel'),
-        video['video_id'],
+        video['yt_video_id'],
     )
     return video
 
@@ -174,12 +174,12 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if exact_match:
         logger.info(
             "Using exact cached video ID %s for title '%s'",
-            exact_match['video_id'],
+            exact_match['yt_video_id'],
             title,
         )
         yt_channel = exact_match.get('yt_channel')
         return {
-            'video_id': exact_match['video_id'],
+            'yt_video_id': exact_match['yt_video_id'],
             'title': exact_match.get('yt_title') or exact_match.get('ha_title') or title,
             'channel': yt_channel,
             'duration': exact_match.get('yt_duration') or exact_match.get('ha_duration')
@@ -200,12 +200,12 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
         logger.info(
             "Using cached video ID %s for title '%s' (channel: %s)",
-            row['video_id'],
+            row['yt_video_id'],
             title,
             yt_channel or 'unknown',
         )
         return {
-            'video_id': row['video_id'],
+            'yt_video_id': row['yt_video_id'],
             'title': row.get('yt_title') or row.get('ha_title') or title,
             'channel': yt_channel,
             'duration': row.get('yt_duration') or row.get('ha_duration')
@@ -291,13 +291,13 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
             return jsonify({"success": False, "error": "Video not found"}), 404
         
-        video_id = video['video_id']
+        video_id = video['yt_video_id']
         video_title = video['title']
         artist = ha_media.get('artist', '')
         media_info = format_media_info(video_title, artist)
 
         db.upsert_video({
-            'video_id': video_id,
+            'yt_video_id': video_id,
             'ha_title': ha_media.get('title', video_title),
             'ha_artist': ha_media.get('artist'),
             'yt_title': video_title,
@@ -311,7 +311,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             'yt_recording_date': video.get('recording_date'),
             'ha_duration': ha_media.get('duration'),
             'yt_duration': video.get('duration'),
-            'youtube_url': f"https://www.youtube.com/watch?v={video_id}",
+            'yt_url': f"https://www.youtube.com/watch?v={video_id}",
             'source': 'ha_live',
         })
         db.record_play(video_id)

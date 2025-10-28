@@ -126,7 +126,7 @@ def main() -> int:
 
             db.upsert_video(
                 {
-                    'video_id': video_id,
+                    'yt_video_id': video_id,
                     'ha_title': title,
                     'ha_artist': None,
                     'yt_title': title,
@@ -140,7 +140,7 @@ def main() -> int:
                     'yt_recording_date': None,
                     'ha_duration': None,
                     'yt_duration': None,
-                    'youtube_url': video_url,
+                    'yt_url': video_url,
                     'rating': 'none',
                     'source': SOURCE_NAME,
                 },

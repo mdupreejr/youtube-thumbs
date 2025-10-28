@@ -115,7 +115,7 @@ class HistoryTracker:
 
         existing = self.db.find_by_title_and_duration(title, duration)
         if existing:
-            self.db.record_play(existing['video_id'])
+            self.db.record_play(existing['yt_video_id'])
             logger.debug("History tracker recorded repeat play for '%s'", title)
             self._active_media_key = media_key
             self._last_failed_key = None
@@ -161,9 +161,9 @@ class HistoryTracker:
             self._last_failed_key = media_key
             return
 
-        video_id = video['video_id']
+        video_id = video['yt_video_id']
         self.db.upsert_video({
-            'video_id': video_id,
+            'yt_video_id': video_id,
             'ha_title': title,
             'ha_artist': media.get('artist'),
             'yt_title': video.get('title', title),
@@ -177,7 +177,7 @@ class HistoryTracker:
             'yt_recording_date': video.get('recording_date'),
             'ha_duration': duration,
             'yt_duration': video.get('duration'),
-            'youtube_url': f"https://www.youtube.com/watch?v={video_id}",
+            'yt_url': f"https://www.youtube.com/watch?v={video_id}",
             'source': 'ha_live',
         })
         self.db.record_play(video_id)
