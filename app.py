@@ -177,12 +177,11 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             exact_match['video_id'],
             title,
         )
-        channel = exact_match.get('channel')
+        yt_channel = exact_match.get('yt_channel')
         return {
             'video_id': exact_match['video_id'],
             'title': exact_match.get('yt_title') or exact_match.get('ha_title') or title,
-            'channel': channel,
-            'artist': exact_match.get('yt_artist'),
+            'channel': yt_channel,
             'duration': exact_match.get('yt_duration') or exact_match.get('ha_duration')
         }
 
@@ -195,21 +194,20 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if duration and stored_duration and abs(stored_duration - duration) > 2:
             continue
 
-        channel = row.get('channel')
-        if artist and channel and channel.lower() != artist:
+        yt_channel = row.get('yt_channel')
+        if artist and yt_channel and yt_channel.lower() != artist:
             continue
 
         logger.info(
             "Using cached video ID %s for title '%s' (channel: %s)",
             row['video_id'],
             title,
-            channel or 'unknown',
+            yt_channel or 'unknown',
         )
         return {
             'video_id': row['video_id'],
             'title': row.get('yt_title') or row.get('ha_title') or title,
-            'channel': channel,
-            'artist': row.get('yt_artist'),
+            'channel': yt_channel,
             'duration': row.get('yt_duration') or row.get('ha_duration')
         }
 
@@ -303,8 +301,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             'ha_title': ha_media.get('title', video_title),
             'ha_artist': ha_media.get('artist'),
             'yt_title': video_title,
-            'yt_artist': video.get('artist'),
-            'channel': video.get('channel'),
+            'yt_channel': video.get('channel'),
             'ha_duration': ha_media.get('duration'),
             'yt_duration': video.get('duration'),
             'youtube_url': f"https://www.youtube.com/watch?v={video_id}",

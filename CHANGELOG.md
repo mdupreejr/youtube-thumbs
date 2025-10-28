@@ -1,3 +1,19 @@
+## 1.13.1 - 2025-10-28
+
+### Changed
+- Renamed database column `channel` to `yt_channel` for consistency (ha_* for Home Assistant, yt_* for YouTube)
+- Removed redundant `yt_artist` column (was always identical to channel/yt_channel)
+- Cleaner schema with no duplicate data storage
+
+### Fixed
+- Database migration now properly handles the column rename
+- Removed confusion about artist data (only comes from Home Assistant, not YouTube)
+
+### Technical Details
+- YouTube API only provides channel name, not artist information
+- Artist information exclusively comes from Home Assistant media player
+- Schema now clearly differentiates data sources with consistent naming
+
 ## 1.13.0 - 2025-10-28
 
 ### Added

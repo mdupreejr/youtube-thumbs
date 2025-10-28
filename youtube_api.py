@@ -179,7 +179,6 @@ class YouTubeAPI:
                     'video_id': video['id'],
                     'title': video['snippet']['title'],
                     'channel': video['snippet']['channelTitle'],
-                    'artist': video['snippet']['channelTitle'],
                     'duration': duration
                 }
 

@@ -21,8 +21,7 @@ class Database:
             ha_title TEXT NOT NULL,
             ha_artist TEXT,
             yt_title TEXT,
-            yt_artist TEXT,
-            channel TEXT,
+            yt_channel TEXT,
             ha_duration INTEGER,
             yt_duration INTEGER,
             youtube_url TEXT,
@@ -93,7 +92,7 @@ class Database:
                     self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._add_column_if_missing('video_ratings', 'ha_artist', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'yt_artist', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'yt_channel', 'TEXT')
                     self._add_column_if_missing('video_ratings', 'pending_match', 'INTEGER DEFAULT 0')
                     self._add_column_if_missing('video_ratings', 'source', "TEXT DEFAULT 'ha_live'")
                 self._rebuild_video_ratings_schema_if_needed()
@@ -125,19 +124,23 @@ class Database:
         if not info:
             return
 
-        has_yt_channel = any(column['name'] == 'yt_channel' for column in info)
+        # Check for old column names
+        has_channel = any(column['name'] == 'channel' for column in info)
+        has_yt_artist = any(column['name'] == 'yt_artist' for column in info)
         has_ha_channel = any(column['name'] == 'ha_channel' for column in info)
         yt_title_notnull = any(column['name'] == 'yt_title' and column.get('notnull') == 1 for column in info)
 
         has_source = any(column['name'] == 'source' for column in info)
 
-        needs_rebuild = has_yt_channel or has_ha_channel or yt_title_notnull or not has_source
+        needs_rebuild = has_channel or has_yt_artist or has_ha_channel or yt_title_notnull or not has_source
         if not needs_rebuild:
             return
 
         reasons = []
-        if has_yt_channel:
-            reasons.append('drop yt_channel')
+        if has_channel:
+            reasons.append('rename channel to yt_channel')
+        if has_yt_artist:
+            reasons.append('drop yt_artist')
         if has_ha_channel:
             reasons.append('drop ha_channel')
         if yt_title_notnull:
@@ -154,8 +157,8 @@ class Database:
 
                     # Define the target columns we want to migrate
                     target_columns = [
-                        'id', 'video_id', 'ha_title', 'ha_artist', 'yt_title', 'yt_artist',
-                        'channel', 'ha_duration', 'yt_duration', 'youtube_url', 'rating',
+                        'id', 'video_id', 'ha_title', 'ha_artist', 'yt_title',
+                        'yt_channel', 'ha_duration', 'yt_duration', 'youtube_url', 'rating',
                         'date_added', 'date_updated', 'date_played', 'play_count', 'rating_count',
                         'pending_match', 'source'
                     ]
@@ -179,6 +182,9 @@ class Database:
                         for col in target_columns:
                             if col in columns_to_migrate:
                                 select_parts.append(col)
+                            elif col == 'yt_channel' and 'channel' in old_columns:
+                                # Rename channel to yt_channel
+                                select_parts.append("channel as yt_channel")
                             elif col == 'source':
                                 select_parts.append("'ha_live' as source")
                             elif col == 'pending_match':
@@ -206,12 +212,8 @@ class Database:
         """Normalize legacy rows that copied HA data into YT fields."""
         cleanup_statements = [
             (
-                "UPDATE video_ratings SET channel = NULL "
-                "WHERE pending_match = 1 OR lower(COALESCE(channel, '')) = 'youtube';"
-            ),
-            (
-                "UPDATE video_ratings SET yt_artist = NULL "
-                "WHERE pending_match = 1;"
+                "UPDATE video_ratings SET yt_channel = NULL "
+                "WHERE pending_match = 1 OR lower(COALESCE(yt_channel, '')) = 'youtube';"
             ),
             (
                 "UPDATE video_ratings SET yt_duration = NULL "
@@ -279,22 +281,21 @@ class Database:
         Insert or update metadata for a video.
 
         Args:
-            video: Dict with keys video_id, ha_title, yt_title, channel, ha_artist,
-                   yt_artist, ha_duration, yt_duration, youtube_url,
+            video: Dict with keys video_id, ha_title, yt_title, yt_channel, ha_artist,
+                   ha_duration, yt_duration, youtube_url,
                    rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
         ha_title = video.get('ha_title') or video.get('yt_title') or 'Unknown Title'
         yt_title = video.get('yt_title')
-        channel = video.get('channel')
+        yt_channel = video.get('yt_channel')
 
         payload = {
             'video_id': video['video_id'],
             'ha_title': ha_title,
             'ha_artist': video.get('ha_artist'),
             'yt_title': yt_title,
-            'yt_artist': video.get('yt_artist'),
-            'channel': channel,
+            'yt_channel': yt_channel,
             'ha_duration': video.get('ha_duration'),
             'yt_duration': video.get('yt_duration'),
             'youtube_url': video.get('youtube_url'),
@@ -307,19 +308,18 @@ class Database:
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            video_id, ha_title, ha_artist, yt_title, yt_artist, channel,
+            video_id, ha_title, ha_artist, yt_title, yt_channel,
             ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count, pending_match, source
         )
         VALUES (
-            :video_id, :ha_title, :ha_artist, :yt_title, :yt_artist, :channel,
+            :video_id, :ha_title, :ha_artist, :yt_title, :yt_channel,
             :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0, :pending_match, :source
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
             ha_artist=excluded.ha_artist,
             yt_title=excluded.yt_title,
-            yt_artist=excluded.yt_artist,
-            channel=excluded.channel,
+            yt_channel=excluded.yt_channel,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
             youtube_url=excluded.youtube_url,
@@ -492,8 +492,7 @@ class Database:
             'ha_title': title,
             'ha_artist': artist,
             'yt_title': None,
-            'yt_artist': None,
-            'channel': None,
+            'yt_channel': None,
             'ha_duration': duration,
             'yt_duration': None,
             'youtube_url': None,
