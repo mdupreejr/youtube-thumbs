@@ -22,6 +22,13 @@ class Database:
             ha_artist TEXT,
             yt_title TEXT,
             yt_channel TEXT,
+            yt_channel_id TEXT,
+            yt_description TEXT,
+            yt_published_at TIMESTAMP,
+            yt_category_id INTEGER,
+            yt_live_broadcast TEXT,
+            yt_location TEXT,
+            yt_recording_date TIMESTAMP,
             ha_duration INTEGER,
             yt_duration INTEGER,
             youtube_url TEXT,
@@ -36,6 +43,8 @@ class Database:
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_video_id ON video_ratings(video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
     """
 
     PENDING_RATINGS_SCHEMA = """
@@ -103,15 +112,18 @@ class Database:
         return [row['name'] for row in self._table_info(table)]
 
     @staticmethod
-    def _timestamp(ts: Optional[str] = None) -> str:
+    def _timestamp(ts: Optional[str] = None) -> Optional[str]:
         """
         Return timestamps in a format compatible with sqlite's built-in converters.
         sqlite3 expects 'YYYY-MM-DD HH:MM:SS' (space separator) for TIMESTAMP columns.
+        Returns None if ts is None (for optional timestamp fields).
         """
+        if ts is None:
+            return None
         if ts:
             cleaned = ts.replace('T', ' ').replace('Z', '').strip()
             if cleaned:
-                return cleaned
+                return cleaned[:19]  # Truncate to 'YYYY-MM-DD HH:MM:SS'
         return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
     def _normalize_existing_timestamps(self) -> None:
@@ -166,6 +178,13 @@ class Database:
             'ha_artist': video.get('ha_artist'),
             'yt_title': yt_title,
             'yt_channel': yt_channel,
+            'yt_channel_id': video.get('yt_channel_id'),
+            'yt_description': video.get('yt_description'),
+            'yt_published_at': self._timestamp(video.get('yt_published_at')),
+            'yt_category_id': video.get('yt_category_id'),
+            'yt_live_broadcast': video.get('yt_live_broadcast'),
+            'yt_location': video.get('yt_location'),
+            'yt_recording_date': self._timestamp(video.get('yt_recording_date')),
             'ha_duration': video.get('ha_duration'),
             'yt_duration': video.get('yt_duration'),
             'youtube_url': video.get('youtube_url'),
@@ -178,18 +197,31 @@ class Database:
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            video_id, ha_title, ha_artist, yt_title, yt_channel,
-            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated, play_count, rating_count, pending_match, source
+            video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
+            yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
+            yt_location, yt_recording_date,
+            ha_duration, yt_duration, youtube_url, rating, date_added, date_updated,
+            play_count, rating_count, pending_match, source
         )
         VALUES (
-            :video_id, :ha_title, :ha_artist, :yt_title, :yt_channel,
-            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated, 0, 0, :pending_match, :source
+            :video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
+            :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
+            :yt_location, :yt_recording_date,
+            :ha_duration, :yt_duration, :youtube_url, :rating, :date_added, :date_updated,
+            0, 0, :pending_match, :source
         )
         ON CONFLICT(video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
             ha_artist=excluded.ha_artist,
             yt_title=excluded.yt_title,
             yt_channel=excluded.yt_channel,
+            yt_channel_id=excluded.yt_channel_id,
+            yt_description=excluded.yt_description,
+            yt_published_at=excluded.yt_published_at,
+            yt_category_id=excluded.yt_category_id,
+            yt_live_broadcast=excluded.yt_live_broadcast,
+            yt_location=excluded.yt_location,
+            yt_recording_date=excluded.yt_recording_date,
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
             youtube_url=excluded.youtube_url,

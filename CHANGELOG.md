@@ -1,3 +1,27 @@
+## 1.14.0 - 2025-10-28
+
+### Added
+- Capture ALL YouTube metadata without additional API calls
+- New database columns for rich YouTube data:
+  - `yt_channel_id` - Unique channel identifier
+  - `yt_description` - Full video description
+  - `yt_published_at` - When video was published
+  - `yt_category_id` - YouTube category (10=Music, etc)
+  - `yt_live_broadcast` - Live content status
+  - `yt_location` - Recording location (if available)
+  - `yt_recording_date` - When video was recorded (if available)
+- Added indexes on yt_channel_id and yt_category_id for faster queries
+
+### Changed
+- YouTube API now requests all available snippet fields
+- Added recordingDetails to API parts for location/date data
+- No increase in API quota usage - same single API call
+
+### Technical
+- Expanded VIDEO_FIELDS to include all snippet and recordingDetails fields
+- Updated _timestamp() to handle None values for optional fields
+- All modules updated to pass through new metadata fields
+
 ## 1.13.2 - 2025-10-28
 
 ### Changed

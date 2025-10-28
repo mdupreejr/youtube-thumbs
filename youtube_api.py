@@ -20,7 +20,7 @@ class YouTubeAPI:
     MAX_SEARCH_RESULTS = max(min(int(os.getenv('YTT_SEARCH_MAX_RESULTS', '25')), 50), 1)
     MAX_CANDIDATES = max(min(int(os.getenv('YTT_SEARCH_MAX_CANDIDATES', '10')), 50), 1)
     SEARCH_FIELDS = 'items(id/videoId)'
-    VIDEO_FIELDS = 'items(id,snippet(title,channelTitle),contentDetails(duration))'
+    VIDEO_FIELDS = 'items(id,snippet(title,channelTitle,channelId,description,publishedAt,categoryId,liveBroadcastContent),contentDetails(duration),recordingDetails(location,recordingDate))'
     QUOTA_REASON_CODES = {
         'quotaExceeded',
         'rateLimitExceeded',
@@ -165,20 +165,40 @@ class YouTubeAPI:
 
             video_ids = [item['id']['videoId'] for item in items]
             details = self.youtube.videos().list(
-                part='contentDetails,snippet',
+                part='contentDetails,snippet,recordingDetails',
                 id=','.join(video_ids),
                 fields=self.VIDEO_FIELDS,
             ).execute()
 
             candidates = []
             for video in details.get('items', []):
+                snippet = video.get('snippet') or {}
                 content_details = video.get('contentDetails') or {}
+                recording_details = video.get('recordingDetails') or {}
+
                 duration_str = content_details.get('duration')
                 duration = self._parse_duration(duration_str) if duration_str else None
+
+                # Extract location if available
+                location = None
+                if recording_details.get('location'):
+                    loc = recording_details['location']
+                    if loc.get('latitude') and loc.get('longitude'):
+                        location = f"{loc['latitude']},{loc['longitude']}"
+                        if loc.get('altitude'):
+                            location += f",{loc['altitude']}"
+
                 video_info = {
                     'video_id': video['id'],
-                    'title': video['snippet']['title'],
-                    'channel': video['snippet']['channelTitle'],
+                    'title': snippet.get('title'),
+                    'channel': snippet.get('channelTitle'),
+                    'channel_id': snippet.get('channelId'),
+                    'description': snippet.get('description'),
+                    'published_at': snippet.get('publishedAt'),
+                    'category_id': snippet.get('categoryId'),
+                    'live_broadcast': snippet.get('liveBroadcastContent'),
+                    'location': location,
+                    'recording_date': recording_details.get('recordingDate'),
                     'duration': duration
                 }
 
