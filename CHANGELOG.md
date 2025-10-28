@@ -1,3 +1,9 @@
+## 1.14.1 - 2025-10-28
+
+### Note
+- Checkpoint release before major schema refactoring
+- Preparing for consistent field naming and removal of redundant columns
+
 ## 1.14.0 - 2025-10-28
 
 ### Added
