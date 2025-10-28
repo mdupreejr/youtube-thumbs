@@ -1,3 +1,15 @@
+## 1.16.1 - 2025-10-28
+
+### Fixed
+- Fixed Docker build to include database module directory
+- Fixed ModuleNotFoundError preventing addon from starting
+- Startup health checks now run properly on addon initialization
+- Removed unused database_old.py backup file
+
+### Technical
+- Updated Dockerfile to copy database/ directory and all new helper files
+- Ensures all Python modules are properly packaged in the Docker image
+
 ## 1.16.0 - 2025-10-28
 
 ### Changed
