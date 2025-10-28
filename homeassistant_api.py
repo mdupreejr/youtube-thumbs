@@ -33,7 +33,7 @@ class HomeAssistantAPI:
     def get_current_media(self) -> Optional[Dict[str, Any]]:
         """Get current playing media information."""
         try:
-            logger.info(f"Fetching current media from Home Assistant entity: {self.entity}")
+            logger.debug(f"Fetching current media from Home Assistant entity: {self.entity}")
 
             url = f"{self.url}/api/states/{self.entity}"
 
@@ -48,7 +48,7 @@ class HomeAssistantAPI:
             state = data.get('state')
             
             if state != 'playing':
-                logger.warning(f"Media player state is '{state}', not 'playing'")
+                logger.debug(f"Media player state is '{state}', not 'playing'")
                 return None
             
             attributes = data.get('attributes', {})

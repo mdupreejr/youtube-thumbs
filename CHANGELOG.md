@@ -1,3 +1,16 @@
+## 1.12.4 - 2025-10-28
+
+### Fixed
+- Improved history tracker logging to show when it's actively polling
+- Added log message when new media is detected
+- Reduced log verbosity for routine polling operations
+
+### Changed
+- Home Assistant API polling now logs at DEBUG level instead of INFO
+- Media player state changes now log at DEBUG level instead of WARNING
+- Added periodic heartbeat logging every 10 polls to confirm tracker is running
+- History tracker now logs when media starts/stops playing at INFO level
+
 ## 1.12.3 - 2025-10-28
 
 ### Fixed

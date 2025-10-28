@@ -36,6 +36,8 @@ class HistoryTracker:
         self._active_media_key: Optional[str] = None
         self._play_window_seconds = self._resolve_play_window()
         self._last_play_timestamps: Dict[str, float] = {}
+        self._poll_count = 0
+        self._last_status_log = 0
 
     def start(self) -> None:
         if not self.enabled:
@@ -66,8 +68,21 @@ class HistoryTracker:
                 self._stop_event.wait(self.poll_interval)
 
     def _poll_once(self) -> None:
+        self._poll_count += 1
+
+        # Log status every 10 polls (10 minutes by default)
+        if self._poll_count % 10 == 0:
+            logger.debug(
+                "History tracker status: poll #%d, active for %d minutes",
+                self._poll_count,
+                (self._poll_count * self.poll_interval) // 60
+            )
+
         media = self.ha_api.get_current_media()
         if not media:
+            # Log when media stops playing (transition from active to none)
+            if self._active_media_key:
+                logger.debug("History tracker: Media stopped playing")
             self._active_media_key = None
             return
 
@@ -80,6 +95,14 @@ class HistoryTracker:
 
         media_key = f"{title}|{duration}"
         now = time.time()
+
+        # Log when new media starts playing
+        if self._active_media_key != media_key:
+            logger.info(
+                "History tracker detected new media: '%s' (%ss)",
+                title,
+                duration
+            )
 
         if not self._can_record_play(media_key, now):
             logger.debug(
