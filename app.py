@@ -24,6 +24,31 @@ app = Flask(__name__)
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# Request/Response logging middleware
+@app.before_request
+def log_request_info():
+    """Log all incoming requests."""
+    logger.debug("="*60)
+    logger.debug(f"INCOMING REQUEST: {request.method} {request.path}")
+    logger.debug(f"  Remote addr: {request.remote_addr}")
+    logger.debug(f"  Query string: {request.query_string.decode('utf-8')}")
+    logger.debug(f"  Headers: {dict(request.headers)}")
+    logger.debug("="*60)
+
+@app.after_request
+def log_response_info(response):
+    """Log all outgoing responses."""
+    logger.debug("-"*60)
+    logger.debug(f"OUTGOING RESPONSE: {request.method} {request.path}")
+    logger.debug(f"  Status: {response.status_code}")
+    logger.debug(f"  Content-Type: {response.content_type}")
+    if response.content_type and 'json' in response.content_type:
+        logger.debug(f"  JSON Body: {response.get_data(as_text=True)[:500]}")  # First 500 chars
+    elif response.content_type and 'html' in response.content_type:
+        logger.debug(f"  HTML Body (first 200 chars): {response.get_data(as_text=True)[:200]}")
+    logger.debug("-"*60)
+    return response
+
 # Add error handler to show actual errors
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -291,31 +316,64 @@ def index() -> str:
 @app.route('/test/youtube')
 def test_youtube() -> Response:
     """Test YouTube API connectivity and quota status."""
+    logger.debug("=== /test/youtube endpoint called ===")
     try:
         yt_api = get_youtube_api()
         success, message = check_youtube_api(yt_api)
-        return jsonify({"success": success, "message": message})
+        logger.debug(f"YouTube test result: success={success}, message={message}")
+        response = jsonify({"success": success, "message": message})
+        logger.debug(f"Returning JSON response: {response.get_json()}")
+        return response
     except Exception as e:
+        logger.error(f"=== ERROR in /test/youtube endpoint ===")
+        logger.error(f"Exception: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({"success": False, "message": f"Error testing YouTube API: {str(e)}"})
 
 @app.route('/test/ha')
 def test_ha() -> Response:
     """Test Home Assistant API connectivity."""
-    success, message = check_home_assistant_api(ha_api)
-    return jsonify({"success": success, "message": message})
+    logger.debug("=== /test/ha endpoint called ===")
+    try:
+        success, message = check_home_assistant_api(ha_api)
+        logger.debug(f"HA test result: success={success}, message={message}")
+        response = jsonify({"success": success, "message": message})
+        logger.debug(f"Returning JSON response: {response.get_json()}")
+        return response
+    except Exception as e:
+        logger.error(f"=== ERROR in /test/ha endpoint ===")
+        logger.error(f"Exception: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({"success": False, "message": f"Error: {str(e)}"})
 
 @app.route('/test/db')
 def test_db() -> Response:
     """Test database connectivity and integrity."""
-    success, message = check_database(db)
-    return jsonify({"success": success, "message": message})
+    logger.debug("=== /test/db endpoint called ===")
+    try:
+        success, message = check_database(db)
+        logger.debug(f"DB test result: success={success}, message={message}")
+        response = jsonify({"success": success, "message": message})
+        logger.debug(f"Returning JSON response: {response.get_json()}")
+        return response
+    except Exception as e:
+        logger.error(f"=== ERROR in /test/db endpoint ===")
+        logger.error(f"Exception: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({"success": False, "message": f"Error: {str(e)}"})
 
 @app.route('/api/unrated')
 def get_unrated_songs() -> Response:
     """Get unrated songs for bulk rating interface."""
+    logger.debug("=== /api/unrated endpoint called ===")
+    logger.debug(f"Request method: {request.method}")
+    logger.debug(f"Request path: {request.path}")
+    logger.debug(f"Request args: {request.args}")
+
     try:
-        from flask import request
         page = int(request.args.get('page', 1))
+        logger.debug(f"Fetching page {page} of unrated songs")
+
         limit = 50
         offset = (page - 1) * limit
 
@@ -325,6 +383,7 @@ def get_unrated_songs() -> Response:
                 "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0"
             )
             total_count = cursor.fetchone()['count']
+            logger.debug(f"Total unrated songs: {total_count}")
 
             # Get unrated songs, sorted by play count (most played first)
             cursor = db._conn.execute(
@@ -338,6 +397,7 @@ def get_unrated_songs() -> Response:
                 (limit, offset)
             )
             songs = cursor.fetchall()
+            logger.debug(f"Retrieved {len(songs)} songs for page {page}")
 
         # Format results
         songs_list = []
@@ -351,15 +411,24 @@ def get_unrated_songs() -> Response:
 
         total_pages = (total_count + limit - 1) // limit  # Ceiling division
 
-        return jsonify({
+        response_data = {
             'success': True,
             'songs': songs_list,
             'page': page,
             'total_pages': total_pages,
             'total_count': total_count
-        })
+        }
+
+        logger.debug(f"Returning JSON response with {len(songs_list)} songs")
+        logger.debug(f"Response data: success={response_data['success']}, songs_count={len(response_data['songs'])}, page={response_data['page']}, total_pages={response_data['total_pages']}")
+
+        return jsonify(response_data)
+
     except Exception as e:
-        logger.error(f"Error fetching unrated songs: {e}")
+        logger.error(f"=== ERROR in /api/unrated endpoint ===")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Exception message: {str(e)}")
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/rate/<video_id>/like', methods=['POST'])
