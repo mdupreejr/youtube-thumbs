@@ -286,6 +286,73 @@ class VideoOperations:
             row = cur.fetchone()
         return dict(row) if row else None
 
+    def find_fuzzy_matches(self, title: str, threshold: float = 85.0, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Find videos with fuzzy title matching.
+
+        Args:
+            title: Title to search for
+            threshold: Minimum similarity percentage (0-100)
+            limit: Maximum number of candidates to check
+
+        Returns:
+            List of matching videos sorted by similarity
+        """
+        from fuzzy_matcher import fuzzy_match_titles
+
+        if not title:
+            return []
+
+        # Get a broader set of candidates for fuzzy matching
+        # We'll get more candidates than needed and then filter by similarity
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT * FROM video_ratings
+                WHERE pending_match = 0
+                ORDER BY date_last_played DESC, date_added DESC
+                LIMIT ?
+                """,
+                (limit * 3,)  # Get more candidates for fuzzy matching
+            )
+            candidates = [dict(row) for row in cur.fetchall()]
+
+        if not candidates:
+            return []
+
+        # Perform fuzzy matching
+        fuzzy_matches = fuzzy_match_titles(
+            title,
+            candidates,
+            threshold=threshold,
+            title_key='ha_title',
+            use_levenshtein=True
+        )
+
+        # Also check against YouTube titles
+        yt_title_matches = fuzzy_match_titles(
+            title,
+            candidates,
+            threshold=threshold,
+            title_key='yt_title',
+            use_levenshtein=True
+        )
+
+        # Combine and deduplicate matches
+        all_matches = {}
+        for candidate, score in fuzzy_matches:
+            video_id = candidate['yt_video_id']
+            all_matches[video_id] = (candidate, score)
+
+        for candidate, score in yt_title_matches:
+            video_id = candidate['yt_video_id']
+            if video_id not in all_matches or score > all_matches[video_id][1]:
+                all_matches[video_id] = (candidate, score)
+
+        # Sort by score and return top matches
+        sorted_matches = sorted(all_matches.values(), key=lambda x: x[1], reverse=True)
+        return [match[0] for match in sorted_matches[:limit]]
+
     def find_by_content_hash(self, title: str, duration: Optional[int], artist: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Find a video by its content hash (title + duration + artist).

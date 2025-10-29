@@ -3,7 +3,7 @@ import os
 import pickle
 import re
 import traceback
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any, Tuple
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -180,8 +180,93 @@ class YouTubeAPI:
             return None
         return duration
 
-    def search_video_globally(self, title: str, expected_duration: Optional[int] = None) -> Optional[List[Dict]]:
-        """Search for a video globally. Filters by duration (±2s) if provided."""
+    def _build_smart_search_query(self, title: str, artist: Optional[str] = None) -> str:
+        """
+        Build a smart search query using YouTube search operators.
+
+        Strategies:
+        1. Use intitle: for better title matching
+        2. Use quotes for exact phrase matching when appropriate
+        3. Include artist/channel information when available
+        4. Handle special characters and formatting
+
+        Args:
+            title: The song/video title to search for
+            artist: Optional artist/channel name
+
+        Returns:
+            Optimized search query string
+        """
+        # Clean the title first
+        clean_title = title.strip()
+
+        # Check if title already contains quotes - if so, keep them
+        has_quotes = '"' in clean_title
+
+        # Remove common suffixes that might interfere with search
+        suffixes_to_remove = [
+            ' (Official Video)',
+            ' (Official Audio)',
+            ' (Lyric Video)',
+            ' (Audio)',
+            ' [Official Video]',
+            ' [Official Audio]',
+            ' [Lyric Video]',
+            ' [Audio]',
+        ]
+        for suffix in suffixes_to_remove:
+            if clean_title.endswith(suffix):
+                clean_title = clean_title[:-len(suffix)].strip()
+                break
+
+        # Build query components
+        query_parts = []
+
+        # Strategy 1: Use intitle for exact title matching
+        # If title contains special characters or multiple words, use quotes
+        if not has_quotes and (' ' in clean_title or any(c in clean_title for c in ['(', ')', '[', ']', '-'])):
+            # For complex titles, use intitle with quotes for exact phrase
+            query_parts.append(f'intitle:"{clean_title}"')
+        else:
+            # For simple titles or those already with quotes
+            query_parts.append(f'intitle:{clean_title}')
+
+        # Strategy 2: Add artist/channel if provided
+        if artist:
+            # Clean artist name
+            clean_artist = artist.strip()
+
+            # Remove common prefixes/suffixes from artist
+            if clean_artist.lower().startswith('the '):
+                alt_artist = clean_artist[4:]
+            else:
+                alt_artist = clean_artist
+
+            # Add artist as additional search term (not in intitle)
+            # This helps find videos on the artist's channel
+            if ' ' in clean_artist:
+                query_parts.append(f'"{clean_artist}"')
+            else:
+                query_parts.append(clean_artist)
+
+        # Join query parts
+        search_query = ' '.join(query_parts)
+
+        # Fallback: if query is too complex, try simpler version
+        if len(search_query) > 100:
+            # Fallback to simpler query
+            if artist:
+                search_query = f'"{clean_title}" {artist}'
+            else:
+                search_query = f'"{clean_title}"'
+
+        return search_query
+
+    def search_video_globally(self, title: str, expected_duration: Optional[int] = None, artist: Optional[str] = None) -> Optional[List[Dict]]:
+        """
+        Search for a video globally. Filters by duration (±2s) if provided.
+        Uses smart query building with exact phrase matching and intitle parameter.
+        """
         if quota_guard.is_blocked():
             logger.info(
                 "Quota cooldown active; skipping YouTube global search for '%s': %s",
@@ -190,11 +275,13 @@ class YouTubeAPI:
             )
             return None
         try:
-            logger.info(f"Searching globally for: \"{title}\"")
+            # Build smart search query
+            search_query = self._build_smart_search_query(title, artist)
+            logger.info(f"Searching globally with smart query: {search_query}")
 
             response = self.youtube.search().list(
                 part='snippet',
-                q=title,
+                q=search_query,
                 type='video',
                 maxResults=self.MAX_SEARCH_RESULTS,
                 fields=self.SEARCH_FIELDS,
@@ -388,6 +475,127 @@ class YouTubeAPI:
                 level="error",
                 return_value=False
             )
+
+    def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch video details for multiple videos in a single API call.
+        YouTube API allows up to 50 video IDs per call.
+
+        Args:
+            video_ids: List of YouTube video IDs to fetch
+
+        Returns:
+            Dict mapping video ID to video details (or None if not found)
+        """
+        if not video_ids:
+            return {}
+
+        if quota_guard.is_blocked():
+            logger.info(
+                "Quota cooldown active; skipping batch_get_videos for %d videos: %s",
+                len(video_ids),
+                quota_guard.describe_block(),
+            )
+            return {}
+
+        # YouTube API allows max 50 IDs per call
+        batch_size = 50
+        all_videos = {}
+
+        for i in range(0, len(video_ids), batch_size):
+            batch = video_ids[i:i + batch_size]
+            try:
+                logger.info(f"Fetching batch of {len(batch)} videos")
+
+                request = self.youtube.videos().list(
+                    part='snippet,contentDetails',
+                    id=','.join(batch)
+                )
+                response = request.execute()
+
+                # Process response
+                for item in response.get('items', []):
+                    video_id = item['id']
+                    snippet = item.get('snippet', {})
+                    content_details = item.get('contentDetails', {})
+
+                    all_videos[video_id] = {
+                        'yt_video_id': video_id,
+                        'yt_title': snippet.get('title'),
+                        'yt_channel': snippet.get('channelTitle'),
+                        'yt_channel_id': snippet.get('channelId'),
+                        'yt_description': snippet.get('description'),
+                        'yt_published_at': snippet.get('publishedAt'),
+                        'yt_category_id': snippet.get('categoryId'),
+                        'yt_live_broadcast': snippet.get('liveBroadcastContent'),
+                        'yt_duration': self._parse_duration(content_details.get('duration')),
+                        'yt_url': f"https://www.youtube.com/watch?v={video_id}",
+                        'exists': True
+                    }
+
+                # Mark videos not found in response
+                for vid in batch:
+                    if vid not in all_videos:
+                        all_videos[vid] = {'yt_video_id': vid, 'exists': False}
+
+                # Record successful API call for quota recovery tracking
+                quota_guard.record_success()
+                logger.info(f"Successfully fetched {len(response.get('items', []))} videos from batch of {len(batch)}")
+
+            except HttpError as e:
+                detail = self._quota_error_detail(e)
+                if detail is not None:
+                    quota_guard.trip('quotaExceeded', context='batch_get_videos', detail=detail)
+                log_and_suppress(
+                    e,
+                    f"YouTube API error fetching batch of videos",
+                    level="error"
+                )
+                # Return partial results if we hit quota
+                break
+            except Exception as e:
+                log_and_suppress(
+                    e,
+                    f"Unexpected error fetching batch of videos",
+                    level="error"
+                )
+                # Continue with next batch on other errors
+                continue
+
+        return all_videos
+
+    def batch_set_ratings(self, ratings: List[Tuple[str, str]]) -> Dict[str, bool]:
+        """
+        Set ratings for multiple videos. While YouTube API doesn't support batch rating,
+        this method optimizes by first checking which videos exist.
+
+        Args:
+            ratings: List of (video_id, rating) tuples
+
+        Returns:
+            Dict mapping video ID to success status
+        """
+        if not ratings:
+            return {}
+
+        results = {}
+        video_ids = [vid for vid, _ in ratings]
+
+        # First, batch check which videos exist
+        video_details = self.batch_get_videos(video_ids)
+
+        # Now rate only the videos that exist
+        for video_id, rating in ratings:
+            if video_id in video_details and video_details[video_id].get('exists', False):
+                # Video exists, try to rate it
+                success = self.set_video_rating(video_id, rating)
+                results[video_id] = success
+            else:
+                # Video doesn't exist, mark as failed
+                logger.warning(f"Video {video_id} not found, skipping rating")
+                results[video_id] = False
+
+        return results
 
 # Create global instance (will be initialized when module is imported)
 yt_api = None
