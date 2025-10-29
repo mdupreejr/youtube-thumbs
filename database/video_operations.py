@@ -225,52 +225,13 @@ class VideoOperations:
             row = cur.fetchone()
         return dict(row) if row else None
 
-    def find_by_title(self, title: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Return cached videos whose HA or YT title matches (case-insensitive)."""
-        if not title:
-            return []
-        normalized = title.strip().lower()
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                WHERE pending_match = 0 AND (lower(ha_title) = ? OR lower(yt_title) = ?)
-                ORDER BY date_last_played DESC, date_added DESC
-                LIMIT ?
-                """,
-                (normalized, normalized, limit),
-            )
-            rows = cur.fetchall()
-        return [dict(row) for row in rows]
-
-    def find_by_exact_ha_title(self, title: str) -> Optional[Dict[str, Any]]:
-        """Return most recent video entry whose HA title exactly matches the provided string."""
-        if not title:
-            return None
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                WHERE ha_title = ? AND pending_match = 0
-                ORDER BY date_last_played DESC, date_added DESC
-                LIMIT 1
-                """,
-                (title,),
-            )
-            row = cur.fetchone()
-        return dict(row) if row else None
-
-    def find_by_title_and_duration(self, title: str, duration: Optional[int]) -> Optional[Dict[str, Any]]:
+    def find_by_title_and_duration(self, title: str, duration: int) -> Optional[Dict[str, Any]]:
         """
         Return the most recent video whose HA title matches and whose duration aligns.
-
-        If duration is omitted, falls back to exact HA title lookup.
+        Duration must be provided (always available from HA).
         """
         if not title:
             return None
-
-        if duration is None:
-            return self.find_by_exact_ha_title(title)
 
         query = """
             SELECT * FROM video_ratings

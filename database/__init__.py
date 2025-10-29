@@ -64,12 +64,6 @@ class Database:
     def get_video(self, yt_video_id):
         return self._video_ops.get_video(yt_video_id)
 
-    def find_by_title(self, title, limit=5):
-        return self._video_ops.find_by_title(title, limit)
-
-    def find_by_exact_ha_title(self, title):
-        return self._video_ops.find_by_exact_ha_title(title)
-
     def find_by_title_and_duration(self, title, duration):
         return self._video_ops.find_by_title_and_duration(title, duration)
 
