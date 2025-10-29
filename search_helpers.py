@@ -47,7 +47,7 @@ def should_skip_search(db, title: str, duration: int) -> bool:
     # Check if this search recently failed (negative result cache)
     if db.is_recently_not_found(title, None, duration):
         metrics.record_not_found_cache_hit(title)
-        logger.info("Skipping search for '%s' - recently marked as not found", title)
+        logger.debug("Skipping search for '%s' - recently marked as not found", title)
         return True
 
     # Check if quota is blocked

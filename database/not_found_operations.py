@@ -73,7 +73,7 @@ class NotFoundOperations:
         if row:
             last_attempted = row['last_attempted']
             attempt_count = row['attempt_count']
-            logger.info(
+            logger.debug(
                 "Skipping search for '%s' - not found %d times, last attempt: %s",
                 title, attempt_count, last_attempted
             )

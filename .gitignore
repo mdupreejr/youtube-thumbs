@@ -5,6 +5,12 @@
 credentials.json
 token.pickle
 
+# Database files (may contain personal viewing history)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Distribution archives (may contain credentials)
 *.tar.gz
 *.zip

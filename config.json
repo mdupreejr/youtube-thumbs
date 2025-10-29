@@ -17,7 +17,7 @@
   "host_network": true,
   "map": ["addon_config:rw"],
   "options": {
-    "media_player_entity": "media_player.atv_officebig",
+    "media_player_entity": "media_player.your_appletv",
     "port": 21812,
     "rate_limit_per_minute": 10,
     "rate_limit_per_hour": 100,
