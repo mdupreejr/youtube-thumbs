@@ -200,8 +200,13 @@ class YouTubeAPI:
         # Clean the title first
         clean_title = title.strip()
 
-        # Check if title already contains quotes - if so, keep them
-        has_quotes = '"' in clean_title
+        # Remove ALL quotes to prevent injection and query malformation
+        clean_title = clean_title.replace('"', '').replace("'", '')
+
+        # Remove YouTube search operators to prevent injection
+        youtube_operators = ['intitle:', 'inurl:', 'site:', 'filetype:', 'inauthor:', 'allintitle:']
+        for operator in youtube_operators:
+            clean_title = clean_title.replace(operator, '')
 
         # Remove common suffixes that might interfere with search
         suffixes_to_remove = [
@@ -223,18 +228,20 @@ class YouTubeAPI:
         query_parts = []
 
         # Strategy 1: Use intitle for exact title matching
-        # If title contains special characters or multiple words, use quotes
-        if not has_quotes and (' ' in clean_title or any(c in clean_title for c in ['(', ')', '[', ']', '-'])):
+        # Since we removed all quotes, check for complexity differently
+        if ' ' in clean_title or any(c in clean_title for c in ['(', ')', '[', ']', '-']):
             # For complex titles, use intitle with quotes for exact phrase
             query_parts.append(f'intitle:"{clean_title}"')
         else:
-            # For simple titles or those already with quotes
+            # For simple titles
             query_parts.append(f'intitle:{clean_title}')
 
         # Strategy 2: Add artist/channel if provided
         if artist:
-            # Clean artist name
-            clean_artist = artist.strip()
+            # Clean artist name - remove quotes and operators
+            clean_artist = artist.strip().replace('"', '').replace("'", '')
+            for operator in youtube_operators:
+                clean_artist = clean_artist.replace(operator, '')
 
             # Remove common prefixes/suffixes from artist
             if clean_artist.lower().startswith('the '):
@@ -252,13 +259,19 @@ class YouTubeAPI:
         # Join query parts
         search_query = ' '.join(query_parts)
 
-        # Fallback: if query is too complex, try simpler version
-        if len(search_query) > 100:
-            # Fallback to simpler query
-            if artist:
-                search_query = f'"{clean_title}" {artist}'
+        # Validate and limit query length (YouTube limit is ~500 chars)
+        MAX_QUERY_LENGTH = 500
+        if len(search_query) > MAX_QUERY_LENGTH:
+            logger.warning("Search query too long (%d chars), truncating", len(search_query))
+            # Fallback to simpler query with intitle preserved
+            if artist and len(clean_artist) < 50:
+                search_query = f'intitle:"{clean_title[:200]}" {clean_artist}'
             else:
-                search_query = f'"{clean_title}"'
+                search_query = f'intitle:"{clean_title[:250]}"'
+
+            # Final truncation if still too long
+            if len(search_query) > MAX_QUERY_LENGTH:
+                search_query = search_query[:MAX_QUERY_LENGTH]
 
         return search_query
 
@@ -566,8 +579,7 @@ class YouTubeAPI:
 
     def batch_set_ratings(self, ratings: List[Tuple[str, str]]) -> Dict[str, bool]:
         """
-        Set ratings for multiple videos. While YouTube API doesn't support batch rating,
-        this method optimizes by first checking which videos exist.
+        Set ratings for multiple videos. Optimized with early exit on quota exhaustion.
 
         Args:
             ratings: List of (video_id, rating) tuples
@@ -579,21 +591,33 @@ class YouTubeAPI:
             return {}
 
         results = {}
-        video_ids = [vid for vid, _ in ratings]
 
-        # First, batch check which videos exist
-        video_details = self.batch_get_videos(video_ids)
+        # Check quota before starting
+        if quota_guard.is_blocked():
+            logger.info("Quota blocked, returning all failures for batch rating")
+            return {vid: False for vid, _ in ratings}
 
-        # Now rate only the videos that exist
+        # Process ratings one by one with early exit on quota exhaustion
         for video_id, rating in ratings:
-            if video_id in video_details and video_details[video_id].get('exists', False):
-                # Video exists, try to rate it
-                success = self.set_video_rating(video_id, rating)
-                results[video_id] = success
-            else:
-                # Video doesn't exist, mark as failed
-                logger.warning(f"Video {video_id} not found, skipping rating")
+            # Check quota before each rating
+            if quota_guard.is_blocked():
+                logger.warning("Quota exhausted mid-batch at video %s, stopping", video_id)
+                # Mark remaining as failed
                 results[video_id] = False
+                continue
+
+            # Try to rate the video
+            success = self.set_video_rating(video_id, rating)
+            results[video_id] = success
+
+            # Early exit if we hit quota (set_video_rating will have tripped quota_guard)
+            if not success and quota_guard.is_blocked():
+                logger.warning("Quota exhausted after rating %s, marking remaining as failed", video_id)
+                # Mark any remaining ratings as failed
+                for remaining_vid, _ in ratings:
+                    if remaining_vid not in results:
+                        results[remaining_vid] = False
+                break
 
         return results
 

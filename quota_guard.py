@@ -263,32 +263,33 @@ class QuotaGuard:
                 try:
                     handle.seek(0)
                     state = json.load(handle)
-                except json.JSONDecodeError:
+
+                    # Increment success count
+                    success_count = state.get('success_count', 0) + 1
+                    state['success_count'] = success_count
+
+                    # Check if we should reset attempts using adaptive threshold
+                    attempt_number = state.get('attempt_number', 0)
+                    threshold = self._get_adaptive_threshold(attempt_number)
+                    if success_count >= threshold:
+                        logger.info(
+                            "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
+                            success_count,
+                            state.get('attempt_number', 0)
+                        )
+                        # Reset attempts but keep state for monitoring
+                        state['attempt_number'] = 0
+                        state['success_count'] = 0
+
+                    # Write back to file
+                    handle.seek(0)
+                    json.dump(state, handle, indent=2)
+                    handle.truncate()
+                except (json.JSONDecodeError, OSError) as e:
+                    logger.error("Failed to update success count: %s", e)
+                finally:
+                    # Always release the lock
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-                    return
-
-                # Increment success count
-                success_count = state.get('success_count', 0) + 1
-                state['success_count'] = success_count
-
-                # Check if we should reset attempts using adaptive threshold
-                attempt_number = state.get('attempt_number', 0)
-                threshold = self._get_adaptive_threshold(attempt_number)
-                if success_count >= threshold:
-                    logger.info(
-                        "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
-                        success_count,
-                        state.get('attempt_number', 0)
-                    )
-                    # Reset attempts but keep state for monitoring
-                    state['attempt_number'] = 0
-                    state['success_count'] = 0
-
-                # Write back to file
-                handle.seek(0)
-                json.dump(state, handle, indent=2)
-                handle.truncate()
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         except OSError as exc:
             logger.error("Failed to record success: %s", exc)
 

@@ -303,18 +303,34 @@ class VideoOperations:
         if not title:
             return []
 
-        # Get a broader set of candidates for fuzzy matching
-        # We'll get more candidates than needed and then filter by similarity
+        # Pre-filter with SQL to get relevant candidates
+        # Extract first few significant words for LIKE query
+        words = title.lower().split()[:3]  # First 3 words
+        where_clauses = []
+        params = []
+
+        for word in words:
+            # Only use substantial words (length > 2) to avoid common articles
+            if len(word) > 2:
+                where_clauses.append("(LOWER(ha_title) LIKE ? OR LOWER(yt_title) LIKE ?)")
+                params.extend([f"%{word}%", f"%{word}%"])
+
+        # Build WHERE clause
+        if where_clauses:
+            where_clause = f"pending_match = 0 AND ({' OR '.join(where_clauses)})"
+        else:
+            # Fallback to basic filtering if no substantial words
+            where_clause = "pending_match = 0"
+
+        # Get candidates with SQL pre-filtering
         with self._lock:
-            cur = self._conn.execute(
-                """
+            query = f"""
                 SELECT * FROM video_ratings
-                WHERE pending_match = 0
+                WHERE {where_clause}
                 ORDER BY date_last_played DESC, date_added DESC
                 LIMIT ?
-                """,
-                (limit * 3,)  # Get more candidates for fuzzy matching
-            )
+            """
+            cur = self._conn.execute(query, (*params, limit * 3))
             candidates = [dict(row) for row in cur.fetchall()]
 
         if not candidates:

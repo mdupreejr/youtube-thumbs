@@ -19,7 +19,8 @@ class MetricsTracker:
 
         # API call tracking
         self._api_calls = deque(maxlen=10000)  # Store last 10k API calls
-        self._api_calls_by_type = defaultdict(deque)
+        # Use lambda to create bounded deques for each API type
+        self._api_calls_by_type = defaultdict(lambda: deque(maxlen=1000))
 
         # Cache performance tracking
         self._cache_hits = deque(maxlen=10000)
@@ -321,15 +322,26 @@ class MetricsTracker:
         }
 
     def get_all_metrics(self) -> Dict[str, Any]:
-        """Get all metrics in a single call."""
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'cache': self.get_cache_stats(),
-            'api': self.get_api_stats(),
-            'ratings': self.get_rating_stats(),
-            'search': self.get_search_stats(),
-            'system': self.get_system_stats()
-        }
+        """Get all metrics in a single call with error resilience."""
+        result = {'timestamp': datetime.now().isoformat()}
+
+        # Safely gather each metric category
+        metric_methods = [
+            ('cache', self.get_cache_stats),
+            ('api', self.get_api_stats),
+            ('ratings', self.get_rating_stats),
+            ('search', self.get_search_stats),
+            ('system', self.get_system_stats)
+        ]
+
+        for key, method in metric_methods:
+            try:
+                result[key] = method()
+            except Exception as e:
+                logger.error("Failed to get %s metrics: %s", key, e)
+                result[key] = {'error': str(e), 'status': 'failed'}
+
+        return result
 
     def get_health_score(self) -> Tuple[int, List[str]]:
         """

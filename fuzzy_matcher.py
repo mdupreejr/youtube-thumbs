@@ -11,6 +11,8 @@ def calculate_levenshtein_distance(s1: str, s2: str) -> int:
     """
     Calculate the Levenshtein distance between two strings.
 
+    For performance and memory safety, strings longer than MAX_LENGTH are truncated.
+
     Args:
         s1: First string
         s2: Second string
@@ -18,8 +20,16 @@ def calculate_levenshtein_distance(s1: str, s2: str) -> int:
     Returns:
         The minimum number of single-character edits required to change s1 into s2
     """
+    # Add length protection to prevent memory issues with very long strings
+    MAX_LENGTH = 500
+    if len(s1) > MAX_LENGTH or len(s2) > MAX_LENGTH:
+        # Truncate to prevent excessive memory usage
+        s1 = s1[:MAX_LENGTH]
+        s2 = s2[:MAX_LENGTH]
+
+    # Direct swap without recursion to avoid function call overhead
     if len(s1) < len(s2):
-        return calculate_levenshtein_distance(s2, s1)
+        s1, s2 = s2, s1
 
     if len(s2) == 0:
         return len(s1)

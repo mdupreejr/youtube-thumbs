@@ -55,6 +55,9 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
     Sync pending ratings using batch operations for efficiency.
     Processes up to batch_size pending ratings, using batch API calls where possible.
     """
+    # Validate batch size (YouTube API supports max 50 IDs per videos.list call)
+    batch_size = max(1, min(batch_size, 50))
+
     if quota_guard.is_blocked():
         return
 
@@ -132,6 +135,7 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     
     # Check if this search recently failed (Phase 3: Cache Negative Results)
     if db.is_recently_not_found(title, artist, duration):
+        metrics.record_not_found_cache_hit(title)
         return None  # Skip search, already logged by is_recently_not_found
 
     if quota_guard.is_blocked():
@@ -155,6 +159,7 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
             provider or 'none',
         )
         # Record this failed search to prevent repeated API calls
+        metrics.record_failed_search(title, artist, reason='not_found')
         db.record_not_found(title, artist, duration, f"{title} {artist}" if artist else title)
         return None
     
@@ -295,6 +300,7 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             title,
             yt_channel or 'unknown',
         )
+        metrics.record_cache_hit('title_with_filters')
         return {
             'yt_video_id': row['yt_video_id'],
             'title': row.get('yt_title') or row.get('ha_title') or title,
