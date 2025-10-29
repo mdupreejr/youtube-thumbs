@@ -20,9 +20,10 @@ class NotFoundOperations:
         self._lock = db_connection.lock
         self._timestamp = db_connection.timestamp
         # Make cache duration configurable via environment variable
+        # Default to 7 days (168 hours) to prevent wasting quota on failed searches
         self.cache_hours = validate_environment_variable(
             'NOT_FOUND_CACHE_HOURS',
-            default=24,
+            default=168,
             converter=int,
             validator=lambda x: 1 <= x <= 168  # 1 hour to 1 week
         )

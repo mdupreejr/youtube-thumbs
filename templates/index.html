@@ -471,6 +471,17 @@
             text-overflow: ellipsis;
         }
 
+        .song-title a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .song-title a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
         .song-meta {
             font-size: 14px;
             color: #999;
@@ -837,7 +848,11 @@
                     ${songs.map(song => `
                         <div class="song-item" id="song-${song.id}">
                             <div class="song-info">
-                                <div class="song-title">${escapeHtml(song.title)}</div>
+                                <div class="song-title">
+                                    <a href="${escapeHtml(song.url)}" target="_blank" rel="noopener noreferrer">
+                                        ${escapeHtml(song.title)}
+                                    </a>
+                                </div>
                                 <div class="song-meta">${escapeHtml(song.artist)}</div>
                             </div>
                             <div class="play-count">▶ ${song.play_count}</div>

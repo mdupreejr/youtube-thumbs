@@ -388,7 +388,7 @@ def get_unrated_songs() -> Response:
             # Get unrated songs, sorted by play count (most played first)
             cursor = db._conn.execute(
                 """
-                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count
+                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url
                 FROM video_ratings
                 WHERE rating = 'none' AND pending_match = 0
                 ORDER BY play_count DESC, date_last_played DESC
@@ -402,11 +402,15 @@ def get_unrated_songs() -> Response:
         # Format results
         songs_list = []
         for song in songs:
+            # Build YouTube URL if not stored
+            yt_url = song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
+
             songs_list.append({
                 'id': song['yt_video_id'],
                 'title': song['yt_title'] or song['ha_title'] or 'Unknown',
                 'artist': song['ha_artist'] or song['yt_channel'] or 'Unknown',
-                'play_count': song['play_count'] or 0
+                'play_count': song['play_count'] or 0,
+                'url': yt_url
             })
 
         total_pages = (total_count + limit - 1) // limit  # Ceiling division
