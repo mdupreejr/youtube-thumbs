@@ -283,6 +283,40 @@ For issues or questions:
 - Check add-on logs first (Settings → Add-ons → YouTube Thumbs Rating → Log)
 - Review [INSTALL.md](INSTALL.md) for complete documentation and troubleshooting
 
+## TODO - Next API Optimization Phases
+
+### Phase 3: Cache Negative Results
+- Create `not_found_searches` table to track failed lookups
+- Don't re-search same content for 24-48 hours
+- Prevent repeated API calls for content that doesn't exist on YouTube
+
+### Phase 4: Exponential Backoff for Quota Recovery
+- Track attempt number in quota guard state
+- Implement progressive cooldown: 2h → 4h → 8h → 16h → 24h (max)
+- Reset attempt counter after successful API period
+- Better recovery from quota exhaustion
+
+### Phase 2: Enhanced Local Caching
+- Add fuzzy title matching with Levenshtein distance
+- Implement similarity threshold (e.g., 85% match)
+- Check multiple variations before calling API
+
+### Phase 5: Batch Pending Operations
+- Collect multiple video IDs for batch processing
+- Use `videos.list` API with up to 50 IDs per call
+- Reduce per-video API quota cost
+
+### Phase 6: Smarter Search Queries
+- Use exact phrase matching with quotes in search
+- Add `intitle:` parameter for better YouTube search results
+- Consider channel filter if artist is consistently the channel
+
+### Phase 8: Monitoring and Metrics
+- Track cache hit rate, API calls per hour
+- Add `/metrics` endpoint for API usage stats
+- Alert when cache performance drops
+- Identify patterns in failed searches
+
 ## License
 
 Provided as-is for personal use.
