@@ -113,232 +113,20 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
 def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """
     Find matching video using global search with duration and title matching.
-    Either finds it or fails fast.
-
-    Returns:
-        video_dict or None
+    Uses the refactored implementation from search_helpers module.
     """
+    from search_helpers import search_and_match_video_refactored
     yt_api = get_youtube_api()
-    
-    title = ha_media.get('title')
-    artist = ha_media.get('artist')
-    duration = ha_media.get('duration')
-    
-    # Validate required fields
-    if not title:
-        logger.error("Missing title in media info")
-        return None
-
-    if not duration:
-        logger.error("Missing duration in media info")
-        return None
-    
-    # Check if this search recently failed (Phase 3: Cache Negative Results)
-    if db.is_recently_not_found(title, artist, duration):
-        metrics.record_not_found_cache_hit(title)
-        return None  # Skip search, already logged by is_recently_not_found
-
-    if quota_guard.is_blocked():
-        logger.info(
-            "Skipping YouTube search for '%s' due to quota cooldown: %s",
-            title,
-            quota_guard.describe_block(),
-        )
-        return None
-
-    # Use the improved search with smart query building
-    candidates = yt_api.search_video_globally(title, duration, artist)
-    provider = 'YouTube'
-
-    if not candidates:
-        logger.error(
-            "No videos found matching title and duration | Title: '%s' | Artist: '%s' | Duration: %ss | Providers attempted: %s",
-            title,
-            artist or 'N/A',
-            duration,
-            provider or 'none',
-        )
-        # Record this failed search to prevent repeated API calls
-        metrics.record_failed_search(title, artist, reason='not_found')
-        db.record_not_found(title, artist, duration, f"{title} {artist}" if artist else title)
-        return None
-    
-    # Step 2: Filter candidates by title text matching
-    matches = matcher.filter_candidates_by_title(title, candidates, artist)
-    if not matches:
-        logger.error(f"No videos matched title text: '{title}' | Candidates checked: {len(candidates)}")
-        # Record this failed search to prevent repeated API calls
-        db.record_not_found(title, artist, duration, f"{title} {artist}" if artist else title)
-        return None
-    
-    # Step 3: Select best match (first one = highest search relevance)
-    video = matches[0]
-    match_score = video.pop('_match_score', None)
-
-    if len(matches) > 1:
-        runner_up = matches[1]
-        logger.warning(
-            "Multiple matches found (%s). Using '%s' (score %.2f) over '%s' (score %.2f)",
-            len(matches),
-            video['title'],
-            match_score or 0,
-            runner_up.get('title'),
-            runner_up.get('_match_score', 0),
-        )
-    elif match_score is not None:
-        logger.info(
-            "Matched '%s' on '%s' (score %.2f)",
-            video['title'],
-            video.get('channel'),
-            match_score,
-        )
-
-    logger.info(
-        "Successfully found video via %s: '%s' on '%s' (ID: %s)",
-        provider or 'unknown',
-        video['title'],
-        video.get('channel'),
-        video['yt_video_id'],
-    )
-    return video
+    return search_and_match_video_refactored(ha_media, yt_api, db, matcher)
 
 
 def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Attempt to reuse an existing DB record before querying YouTube."""
-    title = ha_media.get('title')
-    duration = ha_media.get('duration')
-    artist = (ha_media.get('artist') or '').lower() if ha_media.get('artist') else None
-
-    if not title:
-        return None
-
-    # First check by content hash (title+duration+artist) for exact duplicate detection
-    hash_match = db.find_by_content_hash(title, duration, artist)
-    if hash_match:
-        logger.info(
-            "Using hash-cached video ID %s for title '%s' (duration %s)",
-            hash_match['yt_video_id'],
-            title,
-            duration,
-        )
-        metrics.record_cache_hit('content_hash')
-        return {
-            'yt_video_id': hash_match['yt_video_id'],
-            'title': hash_match.get('yt_title') or hash_match.get('ha_title') or title,
-            'channel': hash_match.get('yt_channel'),
-            'duration': hash_match.get('yt_duration') or hash_match.get('ha_duration')
-        }
-
-    exact_match = db.find_by_exact_ha_title(title)
-    if exact_match:
-        logger.info(
-            "Using exact cached video ID %s for title '%s'",
-            exact_match['yt_video_id'],
-            title,
-        )
-        metrics.record_cache_hit('exact_title')
-        yt_channel = exact_match.get('yt_channel')
-        return {
-            'yt_video_id': exact_match['yt_video_id'],
-            'title': exact_match.get('yt_title') or exact_match.get('ha_title') or title,
-            'channel': yt_channel,
-            'duration': exact_match.get('yt_duration') or exact_match.get('ha_duration')
-        }
-
-    cached_rows = db.find_by_title(title)
-    if not cached_rows:
-        # Try fuzzy matching as a fallback
-        logger.debug("No exact title match found, trying fuzzy matching for '%s'", title)
-        fuzzy_matches = db.find_fuzzy_matches(title, threshold=85.0, limit=10)
-
-        if fuzzy_matches:
-            from fuzzy_matcher import find_best_fuzzy_match
-            best_match = find_best_fuzzy_match(
-                title,
-                fuzzy_matches,
-                duration=duration,
-                artist=artist,
-                threshold=85.0,
-                title_key='ha_title'
-            )
-
-            if best_match:
-                logger.info(
-                    "Using fuzzy-matched cached video ID %s for title '%s' (matched: '%s')",
-                    best_match['yt_video_id'],
-                    title,
-                    best_match.get('ha_title') or best_match.get('yt_title')
-                )
-                metrics.record_cache_hit('fuzzy')
-                metrics.record_fuzzy_match(
-                    title,
-                    best_match.get('ha_title') or best_match.get('yt_title'),
-                    85.0  # threshold used
-                )
-                return {
-                    'yt_video_id': best_match['yt_video_id'],
-                    'title': best_match.get('yt_title') or best_match.get('ha_title') or title,
-                    'channel': best_match.get('yt_channel'),
-                    'duration': best_match.get('yt_duration') or best_match.get('ha_duration')
-                }
-
-        metrics.record_cache_miss()
-        return None
-
-    for row in cached_rows:
-        stored_duration = row.get('ha_duration') or row.get('yt_duration')
-        if duration and stored_duration and abs(stored_duration - duration) > 2:
-            continue
-
-        yt_channel = row.get('yt_channel')
-        if artist and yt_channel and yt_channel.lower() != artist:
-            continue
-
-        logger.info(
-            "Using cached video ID %s for title '%s' (channel: %s)",
-            row['yt_video_id'],
-            title,
-            yt_channel or 'unknown',
-        )
-        metrics.record_cache_hit('title_with_filters')
-        return {
-            'yt_video_id': row['yt_video_id'],
-            'title': row.get('yt_title') or row.get('ha_title') or title,
-            'channel': yt_channel,
-            'duration': row.get('yt_duration') or row.get('ha_duration')
-        }
-
-    # If we have exact title matches but none passed duration/artist filters,
-    # try fuzzy matching as a last resort
-    logger.debug("Exact title matches filtered out, trying fuzzy matching for '%s'", title)
-    fuzzy_matches = db.find_fuzzy_matches(title, threshold=85.0, limit=10)
-
-    if fuzzy_matches:
-        from fuzzy_matcher import find_best_fuzzy_match
-        best_match = find_best_fuzzy_match(
-            title,
-            fuzzy_matches,
-            duration=duration,
-            artist=artist,
-            threshold=85.0,
-            title_key='ha_title'
-        )
-
-        if best_match:
-            logger.info(
-                "Using fuzzy-matched cached video ID %s for title '%s' (matched: '%s')",
-                best_match['yt_video_id'],
-                title,
-                best_match.get('ha_title') or best_match.get('yt_title')
-            )
-            return {
-                'yt_video_id': best_match['yt_video_id'],
-                'title': best_match.get('yt_title') or best_match.get('ha_title') or title,
-                'channel': best_match.get('yt_channel'),
-                'duration': best_match.get('yt_duration') or best_match.get('ha_duration')
-            }
-
-    return None
+    """
+    Attempt to reuse an existing DB record before querying YouTube.
+    Uses the refactored implementation from cache_helpers module.
+    """
+    from cache_helpers import find_cached_video_refactored
+    return find_cached_video_refactored(db, ha_media)
 
 
 def _history_tracker_enabled() -> bool:
@@ -372,110 +160,85 @@ atexit.register(history_tracker.stop)
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:
-    """Common handler for rating videos."""
+    """
+    Refactored handler for rating videos with improved organization.
+    Delegates to helper functions for better maintainability.
+    """
+    from rating_helpers import (
+        check_rate_limit,
+        validate_current_media,
+        check_youtube_content,
+        find_or_search_video,
+        update_database_for_rating,
+        check_already_rated,
+        handle_quota_blocked_rating,
+        execute_rating
+    )
+
     logger.info(f"{rating_type} request received")
-    
-    allowed, reason = rate_limiter.check_and_add_request()
-    if not allowed:
-        logger.warning(f"Request blocked: {reason}")
-        rating_logger.info(f"{rating_type.upper()} | BLOCKED | Reason: {reason}")
-        return jsonify({"success": False, "error": reason}), 429
-    
+
+    # Step 1: Check rate limiting
+    rate_limit_response = check_rate_limit(rate_limiter, rating_type)
+    if rate_limit_response:
+        return rate_limit_response
+
     try:
-        ha_media = ha_api.get_current_media()
-        if not ha_media:
-            logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
-            rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
-            return jsonify({"success": False, "error": "No media currently playing"}), 400
+        # Step 2: Get and validate current media
+        ha_media, error_response = validate_current_media(ha_api, rating_type)
+        if error_response:
+            return error_response
 
-        # Skip non-YouTube content to save API calls
-        if not is_youtube_content(ha_media):
-            title = ha_media.get('title', 'unknown')
-            channel = ha_media.get('channel', 'unknown')
-            logger.info(f"Skipping non-YouTube content: '{title}' from channel '{channel}'")
-            rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{channel}'")
-            return jsonify({"success": False, "error": f"Not YouTube content (channel: {channel})"}), 400
+        # Step 3: Check if it's YouTube content
+        youtube_check_response = check_youtube_content(ha_media, rating_type, is_youtube_content)
+        if youtube_check_response:
+            return youtube_check_response
 
-        video = find_cached_video(ha_media)
-        if not video:
-            if quota_guard.is_blocked():
-                guard_status = quota_guard.status()
-                cooldown_msg = guard_status.get('message')
-                logger.error(
-                    "Cannot locate cached video while quota is blocked; rejecting %s request",
-                    rating_type,
-                )
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": cooldown_msg,
-                            "cooldown_until": guard_status.get('blocked_until'),
-                            "cooldown_seconds_remaining": guard_status.get('remaining_seconds', 0),
-                        }
-                    ),
-                    503,
-                )
-            video = search_and_match_video(ha_media)
-        if not video:
-            title = ha_media.get('title', 'unknown')
-            artist = ha_media.get('artist', '')
-            media_info = format_media_info(title, artist)
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
-            rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: N/A | Reason: Video not found")
-            logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
-            return jsonify({"success": False, "error": "Video not found"}), 404
-        
-        yt_video_id = video['yt_video_id']
+        # Step 4: Find or search for video
+        video, error_response = find_or_search_video(
+            ha_media,
+            find_cached_video,
+            search_and_match_video,
+            rating_type,
+            format_media_info
+        )
+        if error_response:
+            return error_response
+
+        # Step 5: Update database
+        yt_video_id = update_database_for_rating(db, video, ha_media)
         video_title = video['title']
         artist = ha_media.get('artist', '')
         media_info = format_media_info(video_title, artist)
 
-        # Use helper function to prepare video data
-        video_data = prepare_video_upsert(video, ha_media, source='ha_live')
-        db.upsert_video(video_data)
-        db.record_play(yt_video_id)
+        # Step 6: Check if already rated
+        already_rated_response = check_already_rated(db, yt_video_id, rating_type, media_info, video_title)
+        if already_rated_response:
+            return already_rated_response
 
-        cached_video_row = db.get_video(yt_video_id)
-        cached_rating = (cached_video_row or {}).get('rating')
-        if cached_rating == rating_type:
-            logger.info(f"Video {yt_video_id} already rated '{rating_type}' (cache)")
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | ALREADY_RATED_CACHE")
-            rating_logger.info(f"{rating_type.upper()} | ALREADY_RATED | {media_info} | ID: {yt_video_id} | Source: cache")
-            db.record_rating(yt_video_id, rating_type)
-            return jsonify({"success": True, "message": f"Already rated {rating_type}", "video_id": yt_video_id, "title": video_title}), 200
+        # Step 7: Handle quota blocking
+        quota_blocked_response = handle_quota_blocked_rating(
+            yt_video_id,
+            rating_type,
+            media_info,
+            _queue_rating_request
+        )
+        if quota_blocked_response:
+            return quota_blocked_response
 
-        if quota_guard.is_blocked():
-            guard_status = quota_guard.status()
-            logger.warning(
-                "Queuing %s request for %s due to quota cooldown",
-                rating_type,
-                yt_video_id,
-            )
-            return _queue_rating_request(
-                yt_video_id,
-                rating_type,
-                media_info,
-                guard_status.get('message', 'quota cooldown'),
-            )
-
+        # Step 8: Sync pending ratings and execute rating
         yt_api = get_youtube_api()
         _sync_pending_ratings(yt_api)
 
-        if yt_api.set_video_rating(yt_video_id, rating_type):
-            logger.info(f"Successfully rated video {yt_video_id} {rating_type}")
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | SUCCESS")
-            rating_logger.info(f"{rating_type.upper()} | SUCCESS | {media_info} | ID: {yt_video_id}")
-            db.record_rating(yt_video_id, rating_type)
-            db.mark_pending_rating(yt_video_id, True)
-            return jsonify({"success": True, "message": f"Successfully rated {rating_type}", "video_id": yt_video_id, "title": video_title}), 200
-
-        logger.error(
-            "YouTube API returned failure for %s request (video %s). Queuing for retry.",
-            rating_type,
+        return execute_rating(
+            yt_api,
             yt_video_id,
+            rating_type,
+            media_info,
+            video_title,
+            db,
+            _queue_rating_request
         )
-        return _queue_rating_request(yt_video_id, rating_type, media_info, "YouTube API error", record_attempt=True)
+
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
