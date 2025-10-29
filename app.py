@@ -23,6 +23,35 @@ app = Flask(__name__)
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# Add error handler to show actual errors on page
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Catch-all error handler to display errors on page for debugging."""
+    logger.error(f"Unhandled exception: {e}")
+    logger.error(traceback.format_exc())
+
+    error_details = {
+        'error': str(e),
+        'type': type(e).__name__,
+        'traceback': traceback.format_exc()
+    }
+
+    # In production, don't show traceback, but for debugging show it
+    html = f"""
+    <html>
+    <head><title>Error</title></head>
+    <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
+        <h1 style="color: #f44336;">Error: {type(e).__name__}</h1>
+        <p><strong>Message:</strong> {str(e)}</p>
+        <h2>Traceback:</h2>
+        <pre style="background: white; padding: 15px; border: 1px solid #ccc; overflow: auto;">
+{traceback.format_exc()}
+        </pre>
+    </body>
+    </html>
+    """
+    return html, 500
+
 db = get_database()
 
 

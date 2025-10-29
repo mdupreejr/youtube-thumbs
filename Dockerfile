@@ -20,6 +20,9 @@ COPY *.py ./
 # Copy the database module directory
 COPY database/ ./database/
 
+# Copy templates directory for Flask web UI
+COPY templates/ ./templates/
+
 # Copy startup script
 COPY run.sh .
 RUN chmod +x run.sh
