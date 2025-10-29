@@ -134,7 +134,10 @@ def find_or_search_video(
 
 def update_database_for_rating(db, video: Dict, ha_media: Dict) -> str:
     """
-    Update database with video information and play count.
+    Update database with video information for rating.
+
+    Note: Does NOT increment play count - that's handled by the history tracker.
+    Rating a video is separate from playing it.
 
     Args:
         db: Database instance
@@ -149,7 +152,7 @@ def update_database_for_rating(db, video: Dict, ha_media: Dict) -> str:
     # Prepare and upsert video data
     video_data = prepare_video_upsert(video, ha_media, source='ha_live')
     db.upsert_video(video_data)
-    db.record_play(yt_video_id)
+    # DO NOT call record_play() here - history tracker handles play counting
 
     return yt_video_id
 
