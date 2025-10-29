@@ -23,7 +23,7 @@ class VideoOperations:
         Insert or update metadata for a video.
 
         Args:
-            video: Dict with keys yt_video_id, ha_title, yt_title, yt_channel, ha_artist,
+            video: Dict with keys yt_video_id, ha_title, yt_title, yt_channel, ha_channel,
                    ha_duration, yt_duration, yt_url, rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
@@ -32,13 +32,13 @@ class VideoOperations:
         yt_channel = video.get('yt_channel')
 
         # Calculate content hash for duplicate detection
-        ha_artist = video.get('ha_artist')
-        ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_artist)
+        ha_channel = video.get('ha_channel')
+        ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_channel)
 
         payload = {
             'yt_video_id': video['yt_video_id'],
             'ha_title': ha_title,
-            'ha_artist': video.get('ha_artist'),
+            'ha_channel': video.get('ha_channel'),
             'yt_title': yt_title,
             'yt_channel': yt_channel,
             'yt_channel_id': video.get('yt_channel_id'),
@@ -60,14 +60,14 @@ class VideoOperations:
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            yt_video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
+            yt_video_id, ha_title, ha_channel, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
             play_count, rating_score, pending_match, source
         )
         VALUES (
-            :yt_video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
+            :yt_video_id, :ha_title, :ha_channel, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
@@ -75,7 +75,7 @@ class VideoOperations:
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
-            ha_artist=excluded.ha_artist,
+            ha_channel=excluded.ha_channel,
             yt_title=excluded.yt_title,
             yt_channel=excluded.yt_channel,
             yt_channel_id=excluded.yt_channel_id,

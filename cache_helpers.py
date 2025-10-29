@@ -27,20 +27,20 @@ def build_video_result(video_data: Dict[str, Any], fallback_title: str) -> Dict[
     }
 
 
-def check_content_hash_cache(db, title: str, duration: Optional[int], artist: Optional[str]) -> Optional[Dict[str, Any]]:
+def check_content_hash_cache(db, title: str, duration: Optional[int], channel: Optional[str]) -> Optional[Dict[str, Any]]:
     """
-    Check for a video match using content hash (title+duration+artist).
+    Check for a video match using content hash (title+duration+channel).
 
     Args:
         db: Database instance
         title: Video title
         duration: Video duration in seconds
-        artist: Artist/channel name
+        channel: Channel name (YouTube)
 
     Returns:
         Video result dict if found, None otherwise
     """
-    hash_match = db.find_by_content_hash(title, duration, artist)
+    hash_match = db.find_by_content_hash(title, duration, channel)
     if hash_match:
         logger.info(
             "Using hash-cached video ID %s for title '%s' (duration %s)",
@@ -188,10 +188,10 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
         return None
 
     duration = ha_media.get('duration')
-    artist = (ha_media.get('artist') or '').lower() if ha_media.get('artist') else None
+    channel = ha_media.get('channel')
 
     # Strategy 1: Check content hash (most specific)
-    result = check_content_hash_cache(db, title, duration, artist)
+    result = check_content_hash_cache(db, title, duration, channel)
     if result:
         return result
 

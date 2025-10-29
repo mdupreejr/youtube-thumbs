@@ -20,9 +20,9 @@ class PendingOperations:
         self._timestamp = db_connection.timestamp
 
     @staticmethod
-    def _pending_video_id(title: str, artist: Optional[str], duration: Optional[int]) -> str:
+    def _pending_video_id(title: str, channel: Optional[str], duration: Optional[int]) -> str:
         """Generate a deterministic placeholder ID for HA snapshots."""
-        parts = [title or '', artist or '', str(duration) if duration is not None else 'unknown']
+        parts = [title or '', channel or '', str(duration) if duration is not None else 'unknown']
         normalized = '|'.join(part.strip().lower() for part in parts)
         digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:16]
         return f"ha_hash:{digest}"
@@ -30,14 +30,14 @@ class PendingOperations:
     def upsert_pending_media(self, media: Dict[str, Any]) -> str:
         """Persist Home Assistant metadata when YouTube lookups are unavailable."""
         title = media.get('title') or 'Unknown Title'
-        artist = media.get('artist')
+        channel = media.get('channel', 'YouTube')
         duration = media.get('duration')
-        pending_id = self._pending_video_id(title, artist, duration)
+        pending_id = self._pending_video_id(title, channel, duration)
 
         payload = {
             'yt_video_id': pending_id,
             'ha_title': title,
-            'ha_artist': artist,
+            'ha_channel': channel,
             'yt_title': None,
             'yt_channel': None,
             'yt_channel_id': None,

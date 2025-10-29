@@ -53,38 +53,38 @@ class HomeAssistantAPI:
             
             attributes = data.get('attributes', {})
             media_title = attributes.get('media_title')
-            media_artist = attributes.get('media_artist')
             media_channel = attributes.get('media_channel') or attributes.get('app_name')
+            media_duration = attributes.get('media_duration')
 
             # Debug logging to understand what HA is actually sending
             logger.debug(
-                "Raw HA attributes: media_title='%s', media_artist='%s', "
-                "media_channel='%s', app_name='%s'",
-                attributes.get('media_title'),
-                attributes.get('media_artist'),
+                "Raw HA attributes: media_title='%s', media_channel='%s', "
+                "app_name='%s', duration=%s",
+                media_title,
                 attributes.get('media_channel'),
-                attributes.get('app_name')
+                attributes.get('app_name'),
+                media_duration
             )
-            
+
             if not media_title:
                 logger.warning("No media_title found in Home Assistant response")
                 return None
-            
-            media_duration = attributes.get('media_duration')
-            
+
+            # Only return data if it's from YouTube
+            if not media_channel or 'youtube' not in media_channel.lower():
+                logger.debug(f"Skipping non-YouTube content from channel: {media_channel}")
+                return None
+
             media_info = {
                 'title': media_title,
-                'artist': media_artist or 'Unknown',
                 'channel': media_channel,
                 'duration': media_duration
             }
 
             logger.info(
-                "Current media: \"%s\" by \"%s\" (%ss)%s",
+                "Current YouTube media: \"%s\" (%ss)",
                 media_title,
-                media_artist,
-                media_duration,
-                f" on channel '{media_channel}'" if media_channel else "",
+                media_duration
             )
             return media_info
             

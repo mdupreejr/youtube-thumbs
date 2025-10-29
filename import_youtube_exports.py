@@ -128,7 +128,7 @@ def main() -> int:
                 {
                     'yt_video_id': yt_video_id,
                     'ha_title': title,
-                    'ha_artist': None,
+                    'ha_channel': 'YouTube',
                     'yt_title': title,
                     'yt_channel': channel,
                     'yt_channel_id': None,

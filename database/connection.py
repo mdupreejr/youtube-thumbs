@@ -22,7 +22,7 @@ class DatabaseConnection:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             yt_video_id TEXT UNIQUE NOT NULL,
             ha_title TEXT NOT NULL,
-            ha_artist TEXT,
+            ha_channel TEXT,
             yt_title TEXT,
             yt_channel TEXT,
             yt_channel_id TEXT,

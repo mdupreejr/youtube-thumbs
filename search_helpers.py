@@ -16,10 +16,9 @@ def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
         ha_media: Media information from Home Assistant
 
     Returns:
-        Tuple of (title, artist, duration) if valid, None otherwise
+        Tuple of (title, duration) if valid, None otherwise
     """
     title = ha_media.get('title')
-    artist = ha_media.get('artist')
     duration = ha_media.get('duration')
 
     if not title:
@@ -30,24 +29,23 @@ def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
         logger.error("Missing duration in media info")
         return None
 
-    return title, artist, duration
+    return title, duration
 
 
-def should_skip_search(db, title: str, artist: Optional[str], duration: int) -> bool:
+def should_skip_search(db, title: str, duration: int) -> bool:
     """
     Check if search should be skipped due to recent failures or quota blocking.
 
     Args:
         db: Database instance
         title: Video title
-        artist: Artist/channel name
         duration: Video duration in seconds
 
     Returns:
         True if search should be skipped, False otherwise
     """
     # Check if this search recently failed (negative result cache)
-    if db.is_recently_not_found(title, artist, duration):
+    if db.is_recently_not_found(title, None, duration):
         metrics.record_not_found_cache_hit(title)
         logger.info("Skipping search for '%s' - recently marked as not found", title)
         return True
@@ -67,83 +65,61 @@ def should_skip_search(db, title: str, artist: Optional[str], duration: int) -> 
 def search_youtube_for_video(
     yt_api,
     title: str,
-    duration: int,
-    artist: Optional[str]
+    duration: int
 ) -> Optional[List[Dict]]:
     """
-    Search YouTube for matching videos.
+    Search YouTube for matching videos with exact duration (+1 second).
 
     Args:
         yt_api: YouTube API instance
         title: Video title
-        duration: Video duration
-        artist: Artist/channel name
+        duration: Video duration (HA duration, YouTube will be +1)
 
     Returns:
         List of candidate videos or None if not found
     """
-    logger.debug(f"Searching YouTube with: title='{title}', artist='{artist}', duration={duration}s")
-    candidates = yt_api.search_video_globally(title, duration, artist)
+    logger.debug(f"Searching YouTube: title='{title}', expected YT duration={duration + 1}s")
+    candidates = yt_api.search_video_globally(title, duration, None)
 
     if not candidates:
         logger.error(
-            "No videos found matching title and duration | Title: '%s' | Duration: %ss",
+            "No videos found with exact duration match | Title: '%s' | Expected YT duration: %ss",
             title,
-            duration,
+            duration + 1
         )
-        metrics.record_failed_search(title, artist, reason='not_found')
+        metrics.record_failed_search(title, None, reason='not_found')
         return None
 
     return candidates
 
 
-def filter_and_select_best_match(
+def select_best_match(
     candidates: List[Dict],
-    title: str,
-    artist: Optional[str],
-    matcher
+    title: str
 ) -> Optional[Dict]:
     """
-    Filter candidates by title matching and select the best match.
+    Select the best match from candidates (just take the first one).
+    Since we already filtered by exact duration and searched with the exact title,
+    the first result from YouTube is usually the best match.
 
     Args:
-        candidates: List of candidate videos from YouTube
-        title: Original title to match
-        artist: Artist/channel name
-        matcher: Matcher instance for title filtering
+        candidates: List of candidate videos from YouTube (already duration-filtered)
+        title: Original title from HA
 
     Returns:
-        Best matching video or None if no matches
+        First matching video or None if no candidates
     """
-    # Filter candidates by title text matching
-    matches = matcher.filter_candidates_by_title(title, candidates, artist)
-
-    if not matches:
-        logger.error(
-            f"Title matching failed: HA='{title}' did not match any of {len(candidates)} YouTube results"
-        )
+    if not candidates:
         return None
 
-    # Select best match (first one = highest search relevance)
-    video = matches[0]
-    match_score = video.pop('_match_score', None)
+    # Just take the first match (YouTube's top result with correct duration)
+    video = candidates[0]
 
-    # Log multiple matches if present
-    if len(matches) > 1:
-        logger.info(f"Multiple matches ({len(matches)} found):")
-        for i, match in enumerate(matches[:3]):  # Show top 3
-            status = "[SELECTED]" if i == 0 else "[REJECTED]"
-            match_duration = match.get('duration', 0)
-            duration_diff = abs(match_duration - (video.get('duration', 0))) if i > 0 else 0
-            logger.info(
-                f"  #{i+1} {status} HA='{title}' ↔ YT='{match['title']}' | "
-                f"Duration: {match_duration}s{f' ({duration_diff}s off)' if i > 0 else ''} | "
-                f"Score: {match.get('_match_score', 0):.2f}"
-            )
-    elif match_score is not None:
+    # Log if we have multiple candidates
+    if len(candidates) > 1:
         logger.info(
-            f"Single match: HA='{title}' ↔ YT='{video['title']}' | "
-            f"Channel: {video.get('channel')} | Score: {match_score:.2f}"
+            f"Multiple candidates found ({len(candidates)}), using first: "
+            f"YT='{video['title']}' by {video.get('channel')}"
         )
 
     return video
@@ -152,7 +128,6 @@ def filter_and_select_best_match(
 def record_failed_search(
     db,
     title: str,
-    artist: Optional[str],
     duration: int
 ) -> None:
     """
@@ -161,28 +136,25 @@ def record_failed_search(
     Args:
         db: Database instance
         title: Video title
-        artist: Artist/channel name
         duration: Video duration
     """
-    search_query = f"{title} {artist}" if artist else title
-    db.record_not_found(title, artist, duration, search_query)
+    db.record_not_found(title, None, duration, title)
 
 
 def search_and_match_video_refactored(
     ha_media: Dict[str, Any],
     yt_api,
     db,
-    matcher
+    matcher=None  # No longer needed, kept for compatibility
 ) -> Optional[Dict]:
     """
-    Refactored version of search_and_match_video with better organization.
-    Find matching video using global search with duration and title matching.
+    Simplified video search: find YouTube video by exact title and duration (+1s).
 
     Args:
-        ha_media: Media information from Home Assistant
+        ha_media: Media information from Home Assistant (must have channel='YouTube')
         yt_api: YouTube API instance
         db: Database instance
-        matcher: Matcher instance for title filtering
+        matcher: Deprecated, no longer used
 
     Returns:
         video_dict or None
@@ -191,22 +163,22 @@ def search_and_match_video_refactored(
     validation_result = validate_search_requirements(ha_media)
     if not validation_result:
         return None
-    title, artist, duration = validation_result
+    title, duration = validation_result
 
     # Step 2: Check if should skip search
-    if should_skip_search(db, title, artist, duration):
+    if should_skip_search(db, title, duration):
         return None
 
-    # Step 3: Search YouTube
-    candidates = search_youtube_for_video(yt_api, title, duration, artist)
+    # Step 3: Search YouTube (with exact duration matching)
+    candidates = search_youtube_for_video(yt_api, title, duration)
     if not candidates:
-        record_failed_search(db, title, artist, duration)
+        record_failed_search(db, title, duration)
         return None
 
-    # Step 4: Filter and select best match
-    video = filter_and_select_best_match(candidates, title, artist, matcher)
+    # Step 4: Select best match (just take first result)
+    video = select_best_match(candidates, title)
     if not video:
-        record_failed_search(db, title, artist, duration)
+        record_failed_search(db, title, duration)
         return None
 
     # Step 5: Log success

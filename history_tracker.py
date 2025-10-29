@@ -170,7 +170,7 @@ class HistoryTracker:
             return
 
         # Check if this search recently failed (Phase 3: Cache Negative Results)
-        if self.db.is_recently_not_found(title, media.get('artist'), duration):
+        if self.db.is_recently_not_found(title, None, duration):
             logger.debug("History tracker skipping '%s' - recently not found on YouTube", title)
             self._last_failed_key = media_key
             return
@@ -185,13 +185,13 @@ class HistoryTracker:
 
         video = self.find_cached_video({
             'title': title,
-            'artist': media.get('artist'),
+            'channel': media.get('channel'),
             'duration': duration
         })
         if not video:
             video = self.search_and_match_video({
                 'title': title,
-                'artist': media.get('artist'),
+                'channel': media.get('channel'),
                 'duration': duration
             })
 
@@ -199,7 +199,7 @@ class HistoryTracker:
             if quota_guard.is_blocked():
                 pending_id = self.db.upsert_pending_media({
                     'title': title,
-                    'artist': media.get('artist'),
+                    'channel': media.get('channel'),
                     'duration': duration,
                 })
                 self.db.record_play(pending_id)
@@ -226,7 +226,7 @@ class HistoryTracker:
         # Use helper function to prepare video data
         ha_media = {
             'title': title,
-            'artist': media.get('artist'),
+            'channel': media.get('channel'),
             'duration': duration
         }
         video_data = prepare_video_upsert(video, ha_media, source='ha_live')

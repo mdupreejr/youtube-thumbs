@@ -12,7 +12,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
 
     Args:
         video: Video info dict with yt_video_id and metadata from YouTube
-        ha_media: Media info from Home Assistant with title, artist, duration
+        ha_media: Media info from Home Assistant with title, channel, duration
         source: Source of the video data (default: 'ha_live')
 
     Returns:
@@ -24,7 +24,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     return {
         'yt_video_id': yt_video_id,
         'ha_title': ha_media.get('title', video_title),
-        'ha_artist': ha_media.get('artist'),
+        'ha_channel': ha_media.get('channel', 'YouTube'),
         'yt_title': video_title,
         'yt_channel': video.get('channel'),
         'yt_channel_id': video.get('channel_id'),
@@ -43,7 +43,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
 
 def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     """
-    Check if the media is from YouTube based on artist (platform) or channel/app_name.
+    Check if the media is from YouTube based on channel field.
 
     Args:
         ha_media: Media data from Home Assistant
@@ -51,18 +51,8 @@ def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     Returns:
         True if content is from YouTube, False otherwise
     """
-    # Check artist field first (this is usually the platform name)
-    artist = ha_media.get('artist', '').lower()
     channel = ha_media.get('channel', '').lower()
-
-    # List of known YouTube app/channel names
-    youtube_channels = ['youtube', 'youtube music', 'youtube tv', 'yt', 'ytmusic']
-
-    # Check both artist and channel fields
-    is_youtube_artist = any(yt in artist for yt in youtube_channels) if artist else False
-    is_youtube_channel = any(yt in channel for yt in youtube_channels) if channel else False
-
-    return is_youtube_artist or is_youtube_channel
+    return 'youtube' in channel if channel else False
 
 
 def get_content_hash(title: Optional[str], duration: Optional[int], artist: Optional[str] = None) -> str:
