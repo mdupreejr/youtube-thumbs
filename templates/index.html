@@ -506,7 +506,10 @@
         // Bulk Rating Functions
         async function loadUnratedSongs(page) {
             try {
-                const response = await fetch(`/api/unrated?page=${page}`);
+                const url = `${BASE_PATH}/api/unrated?page=${page}`;
+                console.log('Loading unrated songs from:', url);
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
                 const data = await response.json();
 
                 if (!data.success) {
@@ -592,9 +595,12 @@
             buttons.forEach(btn => btn.disabled = true);
 
             try {
-                const response = await fetch(`/api/rate/${videoId}/${rating}`, {
+                const url = `${BASE_PATH}/api/rate/${videoId}/${rating}`;
+                console.log('Rating song:', url);
+                const response = await fetch(url, {
                     method: 'POST'
                 });
+                console.log('Response status:', response.status);
                 const data = await response.json();
 
                 if (data.success) {
@@ -645,6 +651,21 @@
             return div.innerHTML;
         }
 
+        // Get the base path from the current location
+        function getBasePath() {
+            const path = window.location.pathname;
+            // If we're behind ingress, the path will be /api/hassio_ingress/XXX/
+            // Otherwise it's just /
+            if (path.includes('/api/hassio_ingress/')) {
+                const match = path.match(/^(\/api\/hassio_ingress\/[^\/]+)/);
+                return match ? match[1] : '';
+            }
+            return '';
+        }
+
+        const BASE_PATH = getBasePath();
+        console.log('Base path detected:', BASE_PATH);
+
         // System Tests Functions
         async function testAPI(type) {
             const btn = document.querySelector(`.btn-${type === 'youtube' ? 'youtube' : type === 'ha' ? 'ha' : 'db'}`);
@@ -657,7 +678,10 @@
             resultDiv.classList.remove('show');
 
             try {
-                const response = await fetch(`/test/${type}`);
+                const url = `${BASE_PATH}/test/${type}`;
+                console.log('Fetching:', url);
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
                 const data = await response.json();
 
                 const headerClass = data.success ? 'success' : 'error';
@@ -693,7 +717,8 @@
 
         async function updateStatus() {
             try {
-                const response = await fetch('/health');
+                const url = `${BASE_PATH}/health`;
+                const response = await fetch(url);
                 const data = await response.json();
 
                 const statusBadge = `<span class="badge ${data.status}">${data.status}</span>`;
