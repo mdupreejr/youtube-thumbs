@@ -234,8 +234,7 @@ class YouTubeAPI:
             if duration != expected_youtube_duration:
                 return None  # Skip videos that don't match duration
             logger.info(
-                f"Duration match (exact +1s): Expected {expected_duration}s → "
-                f"YT='{video_info['title']}' ({duration}s)"
+                f"Duration match: {expected_duration}s (HA) → {duration}s (YT) | '{video_info['title']}'"
             )
         elif duration is None and expected_duration is not None:
             logger.warning(

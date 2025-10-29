@@ -138,17 +138,17 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
             total_videos = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating != 'none'")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating != 'none' AND pending_match = 0")
             rated_videos = cursor.fetchone()['count']
 
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM pending_ratings")
             pending_ratings = cursor.fetchone()['count']
 
-            # Get recent videos
+            # Get recent videos (only successfully matched ones)
             cursor = db._conn.execute("""
                 SELECT ha_title, date_last_played
                 FROM video_ratings
-                WHERE date_last_played IS NOT NULL
+                WHERE date_last_played IS NOT NULL AND pending_match = 0
                 ORDER BY date_last_played DESC
                 LIMIT 3
             """)
