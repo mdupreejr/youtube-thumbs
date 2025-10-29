@@ -17,7 +17,7 @@ Access your playback history and ratings database directly through the built-in 
 ## Features
 
 - 🎵 Rate currently playing songs via REST API
-- 🔍 Automatic YouTube video matching with fuzzy search
+- 🔍 Automatic YouTube video matching with exact title and duration matching
 - 🛡️ Built-in rate limiting (configurable)
 - 📝 Comprehensive logging integrated with Home Assistant
 - 📊 Detailed user action audit trail
@@ -127,11 +127,7 @@ Comprehensive metrics for monitoring and analysis.
       "hit_rate": 68.5
     },
     "last_hour": { ... },
-    "last_24h": { ... },
-    "fuzzy_matches": {
-      "total": 89,
-      "last_hour": 12
-    }
+    "last_24h": { ... }
   },
   "api": {
     "total_calls": 3456,
@@ -165,10 +161,12 @@ Comprehensive metrics for monitoring and analysis.
 
 ## How It Works
 
-1. Service fetches current media from Home Assistant.
-2. Checks the SQLite cache for an exact `ha_title` match and reuses that video ID when found.
-3. If no cache hit occurs, searches YouTube for matching video (by title, artist, duration ±2s).
-4. Filters results using fuzzy title matching (50%+ word overlap).
+1. Service fetches current media from Home Assistant (only processes YouTube content).
+2. Checks the SQLite cache for exact matches using:
+   - Content hash (title + duration + channel)
+   - Exact title + exact duration match
+3. If no cache hit occurs, searches YouTube with cleaned title (emojis removed).
+4. Filters results to exact duration match (YouTube duration = Home Assistant duration + 1 second).
 5. Rates the best match on YouTube.
 
 ### Playback History Tracker
@@ -352,17 +350,18 @@ For issues or questions:
 ### ✅ Major Optimizations Completed
 
 #### API Optimization & Performance (v1.23.0 - v1.24.0)
-- ✅ **Phase 2: Enhanced Local Caching** - Implemented fuzzy title matching with 85% threshold using Levenshtein distance
+- ✅ **Phase 2: Enhanced Local Caching** - Simplified to exact content hash and title+duration matching (fuzzy matching removed in v1.31.0)
 - ✅ **Phase 5: Batch Pending Operations** - Batch processing for up to 50 video ratings per API call
-- ✅ **Phase 6: Smarter Search Queries** - Sanitized search queries, pre-filtering with SQL LIKE clauses
+- ✅ **Phase 6: Smarter Search Queries** - Sanitized search queries with emoji removal and exact duration matching
 - ✅ **Phase 8: Monitoring and Metrics** - Comprehensive `/metrics` endpoint with cache hit rates, API usage stats, and health scoring
 
-#### Critical Bug Fixes (v1.25.0 - v1.26.0)
-- Fixed Levenshtein algorithm memory issue (limited to 500 chars)
+#### Critical Bug Fixes & Simplifications (v1.25.0 - v1.31.0)
 - Fixed QuotaGuard file lock race condition
 - Fixed unbounded metrics deque growth
-- Added SQL pre-filtering for better performance
 - Improved error handling across all metrics categories
+- **v1.31.0**: Removed complex fuzzy matching logic (820+ lines) - simplified to exact title+duration matching
+- **v1.30.0**: Fixed exact duration matching (YouTube = HA + 1 second, always)
+- **v1.29.0**: Renamed ha_artist to ha_channel for clarity
 
 #### Code Quality Improvements (v1.27.0 - v1.28.0)
 - Refactored large functions (100+ lines) into modular helpers
@@ -376,10 +375,11 @@ For issues or questions:
 - Implemented connection reuse for YouTube API calls
 - Reduced connection overhead significantly
 
-### ✅ Phase 2: Enhanced Local Caching (v1.23.0)
-- ✅ Added fuzzy title matching with Levenshtein distance
-- ✅ Implemented 85% similarity threshold
-- ✅ Check multiple variations before calling API
+### ✅ Phase 2: Enhanced Local Caching (v1.23.0, simplified in v1.31.0)
+- ✅ Exact content hash matching (title + duration + channel)
+- ✅ Exact title + duration matching (YouTube duration = HA + 1s)
+- ✅ Check cache before calling YouTube API
+- ~~Removed in v1.31.0: Fuzzy matching with Levenshtein distance (overcomplicated)~~
 
 ### ✅ Phase 3: Cache Negative Results (v1.18.0)
 - ✅ Create `not_found_searches` table to track failed lookups
@@ -397,10 +397,11 @@ For issues or questions:
 - ✅ Use `videos.list` API with up to 50 IDs per call
 - ✅ Reduce per-video API quota cost
 
-### ✅ Phase 6: Smarter Search Queries (v1.23.0)
-- ✅ Sanitize user input removing quotes and operators
-- ✅ SQL pre-filtering to reduce dataset before fuzzy matching
-- ✅ Consider channel filter if artist is consistently the channel
+### ✅ Phase 6: Smarter Search Queries (v1.23.0, simplified in v1.31.0)
+- ✅ Remove emojis and special characters from search queries
+- ✅ Extract main title from pipe-separated titles
+- ✅ Filter YouTube results by exact duration (+1 second)
+- ✅ Use channel field to identify YouTube-only content
 
 ### ✅ Phase 8: Monitoring and Metrics (v1.24.0)
 - ✅ Track cache hit rate, API calls per hour

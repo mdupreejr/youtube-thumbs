@@ -25,7 +25,6 @@ class MetricsTracker:
         # Cache performance tracking
         self._cache_hits = deque(maxlen=10000)
         self._cache_misses = deque(maxlen=10000)
-        self._fuzzy_matches = deque(maxlen=1000)
 
         # Failed searches tracking
         self._failed_searches = deque(maxlen=1000)
@@ -75,23 +74,13 @@ class MetricsTracker:
                 'timestamp': time.time()
             })
 
-    def record_fuzzy_match(self, query: str, matched_title: str, similarity: float):
-        """Record a fuzzy match."""
-        with self._lock:
-            self._fuzzy_matches.append({
-                'timestamp': time.time(),
-                'query': query,
-                'matched': matched_title,
-                'similarity': similarity
-            })
-
-    def record_failed_search(self, title: str, artist: Optional[str] = None, reason: str = 'not_found'):
+    def record_failed_search(self, title: str, channel: Optional[str] = None, reason: str = 'not_found'):
         """Record a failed search."""
         with self._lock:
             self._failed_searches.append({
                 'timestamp': time.time(),
                 'title': title,
-                'artist': artist,
+                'channel': channel,
                 'reason': reason
             })
 
@@ -199,10 +188,6 @@ class MetricsTracker:
                     'misses': misses_24h,
                     'requests': total_24h,
                     'hit_rate': (hits_24h / total_24h * 100) if total_24h > 0 else 0
-                },
-                'fuzzy_matches': {
-                    'total': len(self._fuzzy_matches),
-                    'last_hour': self._count_recent(self._fuzzy_matches, 3600)
                 },
                 'not_found_cache_hits': {
                     'total': len(self._not_found_cache_hits),
