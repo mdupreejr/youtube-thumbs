@@ -181,7 +181,7 @@ class YouTubeAPI:
             return None
         return duration
 
-    def _build_smart_search_query(self, title: str, artist: Optional[str] = None) -> str:
+    def _build_smart_search_query(self, title: str) -> str:
         """
         Build a simple, effective search query for YouTube.
 
@@ -189,10 +189,10 @@ class YouTubeAPI:
         - Remove problematic characters (emojis, special chars)
         - Keep it simple - let YouTube's search algorithm do the work
         - Don't use restrictive operators like intitle:
+        - Don't use ha_artist since it's just "YouTube" (the platform)
 
         Args:
             title: The song/video title to search for
-            artist: Optional artist/channel name
 
         Returns:
             Cleaned search query string
@@ -235,27 +235,8 @@ class YouTubeAPI:
                 clean_title = clean_title[:-len(suffix)].strip()
                 break
 
-        # Build simple query - just title and artist
-        # Let YouTube's search algorithm handle the matching
-        query_parts = [clean_title]
-
-        # Add artist if provided
-        if artist:
-            clean_artist = artist.strip()
-            # Remove emojis from artist too
-            clean_artist = ''.join(
-                char for char in clean_artist
-                if unicodedata.category(char)[0] in ['L', 'N', 'Z', 'P', 'S']
-                and ord(char) < 0x1F600
-            )
-            if clean_artist:
-                query_parts.append(clean_artist)
-
-        # Join query parts with space
-        search_query = ' '.join(query_parts)
-
         # Clean up excessive whitespace
-        search_query = ' '.join(search_query.split())
+        search_query = ' '.join(clean_title.split())
 
         # Validate and limit query length (YouTube limit is ~500 chars)
         MAX_QUERY_LENGTH = 500
@@ -268,7 +249,9 @@ class YouTubeAPI:
     def search_video_globally(self, title: str, expected_duration: Optional[int] = None, artist: Optional[str] = None) -> Optional[List[Dict]]:
         """
         Search for a video globally. Filters by duration (±2s) if provided.
-        Uses smart query building with exact phrase matching and intitle parameter.
+
+        Note: artist parameter is kept for compatibility but not used in search
+        since ha_artist is typically just "YouTube" (the platform), not the actual artist.
         """
         if quota_guard.is_blocked():
             logger.info(
@@ -278,8 +261,8 @@ class YouTubeAPI:
             )
             return None
         try:
-            # Build search query (cleaned and simplified)
-            search_query = self._build_smart_search_query(title, artist)
+            # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
+            search_query = self._build_smart_search_query(title)
             logger.info(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
 
             response = self.youtube.search().list(

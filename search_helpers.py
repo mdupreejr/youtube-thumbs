@@ -86,9 +86,8 @@ def search_youtube_for_video(
 
     if not candidates:
         logger.error(
-            "No videos found matching title and duration | Title: '%s' | Artist: '%s' | Duration: %ss",
+            "No videos found matching title and duration | Title: '%s' | Duration: %ss",
             title,
-            artist or 'N/A',
             duration,
         )
         metrics.record_failed_search(title, artist, reason='not_found')
@@ -120,8 +119,7 @@ def filter_and_select_best_match(
 
     if not matches:
         logger.error(
-            f"Title matching failed: HA='{title}' did not match any of {len(candidates)} YouTube results | "
-            f"Artist hint: {artist or 'None'}"
+            f"Title matching failed: HA='{title}' did not match any of {len(candidates)} YouTube results"
         )
         return None
 
