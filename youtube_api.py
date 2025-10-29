@@ -325,11 +325,12 @@ class YouTubeAPI:
                 }
 
                 if expected_duration is not None and duration is not None:
-                    diff = abs(duration - expected_duration)
-                    if diff <= 2:
+                    # YouTube always reports exactly 1 second more than HA
+                    expected_youtube_duration = expected_duration + 1
+                    if duration == expected_youtube_duration:
                         logger.info(
-                            f"Duration match: HA='{title}' ({expected_duration}s) ↔ "
-                            f"YT='{video_info['title']}' ({duration}s) | {diff}s off"
+                            f"Duration match (exact +1s): HA='{title}' ({expected_duration}s) → "
+                            f"YT='{video_info['title']}' ({duration}s)"
                         )
                         candidates.append(video_info)
                 else:
@@ -344,8 +345,9 @@ class YouTubeAPI:
 
             if not candidates and expected_duration:
                 logger.error(
-                    f"No duration matches found: HA='{title}' ({expected_duration}s) | "
-                    f"Searched {len(details.get('items', []))} videos, none within ±2s"
+                    f"No exact duration matches found: HA='{title}' ({expected_duration}s) | "
+                    f"Expected YouTube duration: {expected_duration + 1}s | "
+                    f"Searched {len(details.get('items', []))} videos"
                 )
                 return None
 
