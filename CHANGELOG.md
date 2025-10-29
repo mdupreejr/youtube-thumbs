@@ -1,3 +1,25 @@
+## 1.18.0 - 2025-10-29
+
+### Added
+- **Phase 3: Cache Negative Results** - Prevent repeated YouTube API calls for content not found
+- New `not_found_searches` table to cache failed search attempts for 24 hours
+- Added `database/not_found_operations.py` module for managing the not-found cache
+- Both `rate_video()` and history tracker now check the cache before searching YouTube
+- Automatic recording of failed searches to prevent repeat API calls
+
+### Performance
+- Significant reduction in YouTube API usage for content that doesn't exist on YouTube
+- Failed searches are now cached for 24 hours, preventing unnecessary repeat API calls
+- History tracker now skips cached not-found content immediately
+
+### Technical
+- New `NotFoundOperations` class handles all not-found cache operations
+- Uses content hash (SHA-256 of title+duration) for consistent cache keys
+- Added `is_recently_not_found()` to check cache before searching
+- Added `record_not_found()` to cache failed searches with search query
+- Added `cleanup_old_entries()` for cache maintenance (2-day default)
+- Added `get_stats()` for cache statistics
+
 ## 1.17.1 - 2025-10-28
 
 ### Fixed

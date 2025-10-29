@@ -285,10 +285,10 @@ For issues or questions:
 
 ## TODO - Next API Optimization Phases
 
-### Phase 3: Cache Negative Results
-- Create `not_found_searches` table to track failed lookups
-- Don't re-search same content for 24-48 hours
-- Prevent repeated API calls for content that doesn't exist on YouTube
+### ✅ Phase 3: Cache Negative Results (v1.18.0)
+- ✅ Create `not_found_searches` table to track failed lookups
+- ✅ Don't re-search same content for 24-48 hours
+- ✅ Prevent repeated API calls for content that doesn't exist on YouTube
 
 ### Phase 4: Exponential Backoff for Quota Recovery
 - Track attempt number in quota guard state

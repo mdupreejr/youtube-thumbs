@@ -9,6 +9,7 @@ from .connection import DatabaseConnection, DEFAULT_DB_PATH
 from .video_operations import VideoOperations
 from .pending_operations import PendingOperations
 from .import_operations import ImportOperations
+from .not_found_operations import NotFoundOperations
 
 
 class Database:
@@ -25,6 +26,7 @@ class Database:
         self._video_ops = VideoOperations(self._connection)
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
         self._import_ops = ImportOperations(self._connection)
+        self._not_found_ops = NotFoundOperations(self._connection)
 
         # Expose connection properties for backward compatibility
         self.db_path = db_path
@@ -93,6 +95,16 @@ class Database:
 
     def log_import_entry(self, entry_id, source, yt_video_id):
         return self._import_ops.log_import_entry(entry_id, source, yt_video_id)
+
+    # Not found cache operations
+    def is_recently_not_found(self, title, artist=None, duration=None):
+        return self._not_found_ops.is_recently_not_found(title, artist, duration)
+
+    def record_not_found(self, title, artist=None, duration=None, search_query=None):
+        return self._not_found_ops.record_not_found(title, artist, duration, search_query)
+
+    def cleanup_old_not_found(self, days=2):
+        return self._not_found_ops.cleanup_old_entries(days)
 
 
 # Singleton instance management

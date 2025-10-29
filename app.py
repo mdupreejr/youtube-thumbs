@@ -103,6 +103,10 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     else:
         search_query = title
     
+    # Check if this search recently failed (Phase 3: Cache Negative Results)
+    if db.is_recently_not_found(title, artist, duration):
+        return None  # Skip search, already logged by is_recently_not_found
+
     if quota_guard.is_blocked():
         logger.info(
             "Skipping YouTube search for '%s' due to quota cooldown: %s",
@@ -121,12 +125,16 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
             duration,
             provider or 'none',
         )
+        # Record this failed search to prevent repeated API calls
+        db.record_not_found(title, artist, duration, search_query)
         return None
     
     # Step 2: Filter candidates by title text matching
     matches = matcher.filter_candidates_by_title(title, candidates, artist)
     if not matches:
         logger.error(f"No videos matched title text: '{title}' | Candidates checked: {len(candidates)}")
+        # Record this failed search to prevent repeated API calls
+        db.record_not_found(title, artist, duration, search_query)
         return None
     
     # Step 3: Select best match (first one = highest search relevance)

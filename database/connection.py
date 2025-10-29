@@ -70,6 +70,19 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_import_history_yt_video_id ON import_history(yt_video_id);
     """
 
+    NOT_FOUND_SEARCHES_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS not_found_searches (
+            search_hash TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            artist TEXT,
+            duration INTEGER,
+            search_query TEXT,
+            last_attempted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            attempt_count INTEGER DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS idx_not_found_searches_last_attempted ON not_found_searches(last_attempted);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,6 +115,7 @@ class DatabaseConnection:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
+                    self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
 
                     # Add ha_content_hash column if missing (for existing databases)
                     self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')

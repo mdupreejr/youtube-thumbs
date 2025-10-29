@@ -123,6 +123,12 @@ class HistoryTracker:
             self._active_media_key = media_key
             return
 
+        # Check if this search recently failed (Phase 3: Cache Negative Results)
+        if self.db.is_recently_not_found(title, media.get('artist'), duration):
+            logger.debug("History tracker skipping '%s' - recently not found on YouTube", title)
+            self._last_failed_key = media_key
+            return
+
         existing = self.db.find_by_title_and_duration(title, duration)
         if existing:
             self.db.record_play(existing['yt_video_id'])
