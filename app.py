@@ -13,8 +13,10 @@ from history_tracker import HistoryTracker
 from quota_guard import quota_guard
 from startup_checks import run_startup_checks
 from constants import FALSE_VALUES
-from video_helpers import prepare_video_upsert, is_youtube_content
+from video_helpers import is_youtube_content
 from metrics_tracker import metrics
+from search_helpers import search_and_match_video_refactored
+from cache_helpers import find_cached_video_refactored
 
 app = Flask(__name__)
 db = get_database()
@@ -115,7 +117,6 @@ def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     Find matching video using global search with duration and title matching.
     Uses the refactored implementation from search_helpers module.
     """
-    from search_helpers import search_and_match_video_refactored
     yt_api = get_youtube_api()
     return search_and_match_video_refactored(ha_media, yt_api, db, matcher)
 
@@ -125,7 +126,6 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     Attempt to reuse an existing DB record before querying YouTube.
     Uses the refactored implementation from cache_helpers module.
     """
-    from cache_helpers import find_cached_video_refactored
     return find_cached_video_refactored(db, ha_media)
 
 

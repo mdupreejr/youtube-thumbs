@@ -6,8 +6,8 @@ from typing import Tuple, Optional, Dict, Any
 from flask import jsonify, Response
 from logger import logger, user_action_logger, rating_logger
 from quota_guard import quota_guard
-from video_helpers import prepare_video_upsert
 from metrics_tracker import metrics
+from video_helpers import prepare_video_upsert
 
 
 def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:
