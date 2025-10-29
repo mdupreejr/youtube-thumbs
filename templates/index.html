@@ -976,6 +976,28 @@
             }
         }
 
+        function formatTimeRemaining(blockedUntil) {
+            const resetTime = new Date(blockedUntil);
+            const now = new Date();
+            const msRemaining = resetTime - now;
+
+            if (msRemaining <= 0) {
+                return 'Resetting...';
+            }
+
+            const hours = Math.floor(msRemaining / (1000 * 60 * 60));
+            const minutes = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((msRemaining % (1000 * 60)) / 1000);
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        }
+
         async function updateStatus() {
             try {
                 const url = `${BASE_PATH}/health`;
@@ -984,9 +1006,23 @@
 
                 const statusBadge = `<span class="badge ${data.status}">${data.status}</span>`;
                 const healthScore = data.health_score;
-                const quotaStatus = data.quota_guard.blocked ?
-                    `<span style="color: #f44336; font-weight: 700;">Blocked</span>` :
-                    `<span style="color: #4CAF50; font-weight: 700;">Active</span>`;
+
+                // Enhanced quota status with countdown timer
+                let quotaStatus;
+                if (data.quota_guard.blocked) {
+                    const timeRemaining = formatTimeRemaining(data.quota_guard.blocked_until);
+                    const resetDate = new Date(data.quota_guard.blocked_until);
+                    const resetTimeStr = resetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    quotaStatus = `
+                        <span style="color: #f44336; font-weight: 700;">Blocked</span>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;">
+                            Resets in ${timeRemaining}<br>
+                            (at ${resetTimeStr})
+                        </div>
+                    `;
+                } else {
+                    quotaStatus = `<span style="color: #4CAF50; font-weight: 700;">Active</span>`;
+                }
 
                 document.getElementById('status-grid').innerHTML = `
                     <div class="status-item">
@@ -1012,9 +1048,10 @@
         document.getElementById('metrics-link').href = `${BASE_PATH}/metrics`;
         document.getElementById('database-link').href = `${BASE_PATH}/database`;
 
-        // Initialize
+        // Initialize status updates
+        // Update more frequently (every 5 seconds) to show live countdown
         updateStatus();
-        setInterval(updateStatus, 30000);
+        setInterval(updateStatus, 5000);
     </script>
 </body>
 </html>
