@@ -27,8 +27,17 @@ class PendingOperations:
         digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:16]
         return f"ha_hash:{digest}"
 
-    def upsert_pending_media(self, media: Dict[str, Any]) -> str:
-        """Persist Home Assistant metadata when YouTube lookups are unavailable."""
+    def upsert_pending_media(self, media: Dict[str, Any], reason: str = 'quota_exceeded') -> str:
+        """
+        Persist Home Assistant metadata when YouTube lookups are unavailable.
+
+        Args:
+            media: Media information from Home Assistant
+            reason: Why this video is pending (default: 'quota_exceeded')
+                   - 'quota_exceeded': YouTube API quota blocked
+                   - 'not_found': Video not found on YouTube
+                   - 'search_failed': YouTube search failed
+        """
         title = media.get('title') or 'Unknown Title'
         artist = media.get('artist', 'Unknown')
         app_name = media.get('app_name', 'YouTube')
@@ -54,6 +63,7 @@ class PendingOperations:
             'yt_url': None,
             'rating': 'none',
             'pending_match': 1,
+            'pending_reason': reason,
             'source': 'ha_live',
         }
         self.video_ops.upsert_video(payload)

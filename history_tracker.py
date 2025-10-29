@@ -200,7 +200,7 @@ class HistoryTracker:
                     'artist': media.get('artist'),
                     'app_name': media.get('app_name'),
                     'duration': duration,
-                })
+                }, reason='quota_exceeded')
                 self.db.record_play(pending_id)
                 logger.info(
                     "History tracker stored pending HA snapshot for '%s' (%s) due to YouTube cooldown: %s",

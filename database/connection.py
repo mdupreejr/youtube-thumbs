@@ -43,6 +43,7 @@ class DatabaseConnection:
             play_count INTEGER DEFAULT 1,
             rating_score INTEGER DEFAULT 0,
             pending_match INTEGER DEFAULT 0,
+            pending_reason TEXT,
             source TEXT DEFAULT 'ha_live'
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
@@ -125,6 +126,9 @@ class DatabaseConnection:
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
                     )
+
+                    # Add pending_reason column if missing (for existing databases)
+                    self._add_column_if_missing('video_ratings', 'pending_reason', 'TEXT')
 
                     # Migrate ha_channel to ha_artist (for existing databases)
                     columns = self._table_columns('video_ratings')

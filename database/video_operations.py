@@ -55,6 +55,7 @@ class VideoOperations:
             'rating': video.get('rating', 'none') or 'none',
             'ha_content_hash': ha_content_hash,
             'pending_match': 1 if video.get('pending_match') else 0,
+            'pending_reason': video.get('pending_reason'),
             'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
         }
@@ -65,14 +66,14 @@ class VideoOperations:
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
-            play_count, rating_score, pending_match, source
+            play_count, rating_score, pending_match, pending_reason, source
         )
         VALUES (
             :yt_video_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
-            0, 0, :pending_match, :source
+            0, 0, :pending_match, :pending_reason, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
@@ -92,6 +93,7 @@ class VideoOperations:
             yt_url=excluded.yt_url,
             ha_content_hash=excluded.ha_content_hash,
             pending_match=excluded.pending_match,
+            pending_reason=excluded.pending_reason,
             source=excluded.source;
         """
         with self._lock:

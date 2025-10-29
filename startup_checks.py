@@ -147,6 +147,15 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 1")
             pending_videos = cursor.fetchone()['count']
 
+            # Get pending reason breakdown
+            cursor = db._conn.execute("""
+                SELECT pending_reason, COUNT(*) as count
+                FROM video_ratings
+                WHERE pending_match = 1
+                GROUP BY pending_reason
+            """)
+            pending_reasons = {row['pending_reason']: row['count'] for row in cursor.fetchall()}
+
             # Count rated videos breakdown
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like' AND pending_match = 0")
             liked_videos = cursor.fetchone()['count']
@@ -181,6 +190,15 @@ def check_database(db) -> Tuple[bool, str]:
 
         logger.info("✓ Database connected and working")
         logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} pending)")
+
+        # Show pending reason breakdown if there are pending videos
+        if pending_videos > 0 and pending_reasons:
+            reason_strs = []
+            for reason, count in pending_reasons.items():
+                reason_label = reason or 'unknown'
+                reason_strs.append(f"{count} {reason_label}")
+            logger.info(f"    Pending reasons: {', '.join(reason_strs)}")
+
         logger.info(f"  Ratings: {liked_videos} liked, {disliked_videos} disliked, {unrated_videos} unrated")
         logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
@@ -197,8 +215,18 @@ def check_database(db) -> Tuple[bool, str]:
             logger.info("  No recent plays recorded")
 
         # Build comprehensive status message
+        pending_str = f"{pending_videos} pending"
+        if pending_videos > 0 and pending_reasons:
+            # Add most common pending reason
+            top_reason = max(pending_reasons.items(), key=lambda x: x[1])
+            reason_label = top_reason[0] or 'unknown'
+            if len(pending_reasons) == 1:
+                pending_str = f"{pending_videos} pending ({reason_label})"
+            else:
+                pending_str = f"{pending_videos} pending ({top_reason[1]} {reason_label}, {len(pending_reasons)-1} other)"
+
         status_parts = [
-            f"{total_videos} total ({matched_videos} matched, {pending_videos} pending)",
+            f"{total_videos} total ({matched_videos} matched, {pending_str})",
             f"Ratings: {liked_videos}👍 {disliked_videos}👎 {unrated_videos}⭐",
             f"{total_plays:,} plays",
             f"{unique_channels} channels"
