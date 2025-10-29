@@ -82,6 +82,7 @@ def search_youtube_for_video(
     Returns:
         List of candidate videos or None if not found
     """
+    logger.debug(f"Searching YouTube with: title='{title}', artist='{artist}', duration={duration}s")
     candidates = yt_api.search_video_globally(title, duration, artist)
 
     if not candidates:

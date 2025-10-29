@@ -55,6 +55,16 @@ class HomeAssistantAPI:
             media_title = attributes.get('media_title')
             media_artist = attributes.get('media_artist')
             media_channel = attributes.get('media_channel') or attributes.get('app_name')
+
+            # Debug logging to understand what HA is actually sending
+            logger.debug(
+                "Raw HA attributes: media_title='%s', media_artist='%s', "
+                "media_channel='%s', app_name='%s'",
+                attributes.get('media_title'),
+                attributes.get('media_artist'),
+                attributes.get('media_channel'),
+                attributes.get('app_name')
+            )
             
             if not media_title:
                 logger.warning("No media_title found in Home Assistant response")
