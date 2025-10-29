@@ -21,7 +21,13 @@ else
 fi
 
 PORT_CONFIG=$(bashio::config 'port')
-if bashio::var.has_value "${PORT_CONFIG}"; then
+INGRESS_PORT_VALUE="${INGRESS_PORT:-}"
+
+# If ingress is enabled, use the ingress port for Flask
+if bashio::var.has_value "${INGRESS_PORT_VALUE}"; then
+    export PORT="${INGRESS_PORT_VALUE}"
+    bashio::log.info "Using ingress port: ${PORT}"
+elif bashio::var.has_value "${PORT_CONFIG}"; then
     export PORT="${PORT_CONFIG}"
 else
     export PORT=21812
@@ -41,11 +47,6 @@ else
     export SQLITE_WEB_HOST="127.0.0.1"
 fi
 bashio::log.info "sqlite_web binding: ${SQLITE_WEB_HOST}"
-
-INGRESS_PORT_VALUE="${INGRESS_PORT:-}"
-if bashio::var.has_value "${INGRESS_PORT_VALUE}"; then
-    bashio::log.info "Ingress port assigned: ${INGRESS_PORT_VALUE}"
-fi
 
 export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
@@ -137,10 +138,9 @@ fi
 SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
 SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 
-if [ "${SQLITE_WEB_HOST}" = "127.0.0.1" ] && bashio::var.has_value "${INGRESS_PORT_VALUE}"; then
-    SQLITE_WEB_PORT="${INGRESS_PORT_VALUE}"
-    bashio::log.info "sqlite_web will run behind ingress on port ${SQLITE_WEB_PORT}"
-elif bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
+# sqlite_web always uses port 8080 or configured port, NOT the ingress port
+# (ingress port is now used by Flask app for bulk rating interface)
+if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
     SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
     bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
 elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}"; then
@@ -149,9 +149,8 @@ else
     SQLITE_WEB_PORT=8080
 fi
 
-if [ "${SQLITE_WEB_HOST}" != "127.0.0.1" ] && bashio::var.has_value "${INGRESS_PORT_VALUE}"; then
-    bashio::log.warning "sqlite_web_host=${SQLITE_WEB_HOST}; Home Assistant ingress will not expose sqlite_web. Access it directly via http://<HA-host>:${SQLITE_WEB_PORT}."
-fi
+bashio::log.info "sqlite_web will run on port ${SQLITE_WEB_PORT}"
+bashio::log.info "Note: Ingress 'Open Web UI' button opens Flask app on port ${PORT}, not sqlite_web"
 
 SQLITE_WEB_LOG="/config/youtube_thumbs/sqlite_web.log"
 SQLITE_WEB_PID=""
