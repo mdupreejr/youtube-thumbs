@@ -144,8 +144,7 @@ def record_failed_search(
 def search_and_match_video_refactored(
     ha_media: Dict[str, Any],
     yt_api,
-    db,
-    matcher=None  # No longer needed, kept for compatibility
+    db
 ) -> Optional[Dict]:
     """
     Simplified video search: find YouTube video by exact title and duration (+1s).
@@ -154,7 +153,6 @@ def search_and_match_video_refactored(
         ha_media: Media information from Home Assistant (must have channel='YouTube')
         yt_api: YouTube API instance
         db: Database instance
-        matcher: Deprecated, no longer used
 
     Returns:
         video_dict or None

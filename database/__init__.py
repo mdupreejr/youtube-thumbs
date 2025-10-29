@@ -45,8 +45,8 @@ class Database:
         return DatabaseConnection.timestamp(ts)
 
     @staticmethod
-    def _pending_video_id(title: str, artist: Optional[str], duration: Optional[int]) -> str:
-        return PendingOperations._pending_video_id(title, artist, duration)
+    def _pending_video_id(title: str, channel: Optional[str], duration: Optional[int]) -> str:
+        return PendingOperations._pending_video_id(title, channel, duration)
 
     # Video operations
     def upsert_video(self, video, date_added=None):

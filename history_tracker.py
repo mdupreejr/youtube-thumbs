@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, Optional
 from logger import logger
 from quota_guard import quota_guard
 from video_helpers import prepare_video_upsert, is_youtube_content
-from error_handler import validate_environment_variable
 
 
 MediaDict = Dict[str, Any]
@@ -35,9 +34,6 @@ class HistoryTracker:
         self._thread = threading.Thread(target=self._run, name="history-tracker", daemon=True)
         self._last_failed_key: Optional[str] = None
         self._active_media_key: Optional[str] = None
-        self._play_window_seconds = self._resolve_play_window()
-        self._last_play_timestamps: Dict[str, float] = {}
-        self._timestamps_lock = threading.Lock()  # Thread-safe access to timestamps
         self._poll_count = 0
         self._last_status_log = 0
         self._consecutive_failures = 0
@@ -244,31 +240,3 @@ class HistoryTracker:
             return int(round(float(value)))
         except (TypeError, ValueError):
             return None
-
-    def _resolve_play_window(self) -> int:
-        return validate_environment_variable(
-            'HISTORY_PLAY_WINDOW_SECONDS',
-            default=3600,
-            converter=int,
-            validator=lambda x: x >= 60
-        )
-
-    def _can_record_play(self, media_key: str, now: float) -> bool:
-        with self._timestamps_lock:
-            last = self._last_play_timestamps.get(media_key)
-            if not last:
-                return True
-            return (now - last) >= self._play_window_seconds
-
-    def _mark_play_recorded(self, media_key: str, now: float) -> None:
-        with self._timestamps_lock:
-            self._last_play_timestamps[media_key] = now
-
-    def _try_record_play_atomic(self, media_key: str, now: float) -> bool:
-        """Atomically check and record play if allowed. Returns True if recorded."""
-        with self._timestamps_lock:
-            last = self._last_play_timestamps.get(media_key)
-            if not last or (now - last) >= self._play_window_seconds:
-                self._last_play_timestamps[media_key] = now
-                return True
-            return False
