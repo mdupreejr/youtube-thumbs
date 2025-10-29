@@ -209,9 +209,11 @@ def run_startup_checks(ha_api, yt_api, db) -> bool:
             deleted = db.cleanup_old_not_found(days=2)
             if deleted > 0:
                 logger.info(f"  Cleaned up {deleted} old not-found cache entries")
+        except AttributeError:
+            logger.warning("Database cleanup method not available - old entries may accumulate")
         except Exception as e:
-            # Don't fail startup for cleanup errors
-            logger.debug(f"Failed to cleanup not-found cache: {e}")
+            # Don't fail startup for cleanup errors but make them visible
+            logger.warning(f"Failed to cleanup not-found cache: {e}")
 
     # Summary
     logger.info("")

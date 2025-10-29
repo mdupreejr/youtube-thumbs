@@ -39,6 +39,8 @@ class HistoryTracker:
         self._last_play_timestamps: Dict[str, float] = {}
         self._poll_count = 0
         self._last_status_log = 0
+        self._consecutive_failures = 0
+        self.max_consecutive_failures = 10
 
     def start(self) -> None:
         if not self.enabled:
@@ -62,11 +64,33 @@ class HistoryTracker:
         while not self._stop_event.is_set():
             try:
                 self._poll_once()
+                # Reset failure count on successful poll
+                self._consecutive_failures = 0
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error("History tracker encountered an error: %s", exc)
+                self._consecutive_failures += 1
+                logger.error(
+                    "History tracker encountered an error (failure %d/%d): %s",
+                    self._consecutive_failures, self.max_consecutive_failures, exc
+                )
+
+                # Exit thread after too many consecutive failures
+                if self._consecutive_failures >= self.max_consecutive_failures:
+                    logger.critical(
+                        "History tracker failed %d times consecutively, shutting down. "
+                        "Check logs for persistent errors.",
+                        self._consecutive_failures
+                    )
+                    break  # Exit thread
+
                 logger.debug("History tracker traceback", exc_info=True)
             finally:
-                self._stop_event.wait(self.poll_interval)
+                # Exponential backoff on failures (cap at 5 minutes)
+                if self._consecutive_failures > 0:
+                    wait_time = self.poll_interval * (2 ** min(self._consecutive_failures - 1, 5))
+                    wait_time = min(wait_time, 300)  # Cap at 5 minutes
+                else:
+                    wait_time = self.poll_interval
+                self._stop_event.wait(wait_time)
 
     def _poll_once(self) -> None:
         self._poll_count += 1

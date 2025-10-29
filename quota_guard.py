@@ -21,7 +21,20 @@ class QuotaGuard:
 
     # Exponential backoff periods in seconds: 2h → 4h → 8h → 16h → 24h
     BACKOFF_PERIODS = [7200, 14400, 28800, 57600, 86400]  # 2h, 4h, 8h, 16h, 24h
-    SUCCESS_THRESHOLD = 10  # Number of successes before resetting attempts
+    BASE_SUCCESS_THRESHOLD = 10  # Base number of successes before resetting attempts
+
+    def _get_adaptive_threshold(self, attempt_number: int) -> int:
+        """Calculate adaptive success threshold based on attempt number."""
+        # Lower threshold for higher attempts to help recovery
+        # Attempts 1-2: 10 successes
+        # Attempts 3-4: 5 successes
+        # Attempts 5+: 3 successes
+        if attempt_number <= 2:
+            return self.BASE_SUCCESS_THRESHOLD
+        elif attempt_number <= 4:
+            return 5
+        else:
+            return 3
 
     def __init__(self) -> None:
         self.base_cooldown_seconds = self._resolve_cooldown()
@@ -58,6 +71,56 @@ class QuotaGuard:
             return self.base_cooldown_seconds
 
         return backoff_seconds
+
+    def _should_decay_attempts(self, state: Dict[str, Any]) -> bool:
+        """Check if attempts should decay due to prolonged quiescence."""
+        set_at = state.get('set_at')
+        if not set_at:
+            return False
+
+        try:
+            set_time = datetime.strptime(set_at, '%Y-%m-%dT%H:%M:%SZ')
+            hours_since_set = (datetime.utcnow() - set_time).total_seconds() / 3600
+
+            # Decay attempts if blocked for over 6 hours without new failures
+            if hours_since_set > 6:
+                return True
+
+            # Auto-reset if blocked for over 48 hours
+            if hours_since_set > 48:
+                logger.info("Auto-resetting quota guard after 48 hours of lockout")
+                return True
+
+        except (ValueError, TypeError) as exc:
+            logger.debug("Failed to parse set_at timestamp: %s", exc)
+
+        return False
+
+    def _apply_attempt_decay(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply attempt decay to reduce lockout duration over time."""
+        if self._should_decay_attempts(state):
+            current_attempts = state.get('attempt_number', 0)
+            if current_attempts > 0:
+                # Reduce by 1 attempt every 6 hours of inactivity
+                set_time = datetime.strptime(state['set_at'], '%Y-%m-%dT%H:%M:%SZ')
+                hours_elapsed = (datetime.utcnow() - set_time).total_seconds() / 3600
+                decay_amount = int(hours_elapsed / 6)  # 1 attempt per 6 hours
+
+                new_attempts = max(0, current_attempts - decay_amount)
+                if new_attempts != current_attempts:
+                    logger.info(
+                        "Decaying attempt counter from %d to %d after %.1f hours of inactivity",
+                        current_attempts, new_attempts, hours_elapsed
+                    )
+                    state['attempt_number'] = new_attempts
+
+                # Full reset after 48 hours
+                if hours_elapsed > 48:
+                    state['attempt_number'] = 0
+                    state['success_count'] = 0
+                    logger.info("Auto-reset quota guard after 48 hours")
+
+        return state
 
     def _load_state(self) -> Optional[Dict[str, Any]]:
         if not self.state_file.exists():
@@ -149,6 +212,11 @@ class QuotaGuard:
 
     def status(self) -> Dict[str, Any]:
         state, remaining = self._state_with_remaining()
+
+        # Apply attempt decay when checking status
+        if state:
+            state = self._apply_attempt_decay(state)
+
         blocked = bool(state and remaining > 0)
         if not blocked:
             return {
@@ -202,8 +270,10 @@ class QuotaGuard:
                 success_count = state.get('success_count', 0) + 1
                 state['success_count'] = success_count
 
-                # Check if we should reset attempts
-                if success_count >= self.SUCCESS_THRESHOLD:
+                # Check if we should reset attempts using adaptive threshold
+                attempt_number = state.get('attempt_number', 0)
+                threshold = self._get_adaptive_threshold(attempt_number)
+                if success_count >= threshold:
                     logger.info(
                         "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
                         success_count,
@@ -226,8 +296,22 @@ class QuotaGuard:
         now = datetime.utcnow()
         existing = self._load_state() or {}
 
-        # Increment attempt number for exponential backoff
-        attempt_number = existing.get('attempt_number', 0) + 1
+        # Apply attempt decay before processing new trip
+        existing = self._apply_attempt_decay(existing)
+
+        # Only increment attempt if previous cooldown has expired
+        existing_epoch = existing.get('blocked_until_epoch', 0)
+        if existing_epoch > now.timestamp():
+            # Still in cooldown - don't increment attempt, just extend if needed
+            attempt_number = existing.get('attempt_number', 1)
+            logger.info(
+                "Quota error during existing cooldown (attempt %d), maintaining backoff period",
+                attempt_number
+            )
+        else:
+            # Cooldown expired - this is a new failure
+            attempt_number = existing.get('attempt_number', 0) + 1
+
         cooldown_seconds = self._calculate_backoff_seconds(attempt_number)
 
         block_until = now + timedelta(seconds=cooldown_seconds)

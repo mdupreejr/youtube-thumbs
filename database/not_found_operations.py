@@ -58,7 +58,7 @@ class NotFoundOperations:
                 SELECT last_attempted, attempt_count
                 FROM not_found_searches
                 WHERE search_hash = ?
-                  AND datetime(last_attempted, '+' || ? || ' hours') > datetime('now')
+                  AND last_attempted > datetime('now', '-' || ? || ' hours')
                 """,
                 (search_hash, self.cache_hours)
             )
@@ -176,7 +176,7 @@ class NotFoundOperations:
             recent = self._conn.execute(
                 """
                 SELECT COUNT(*) FROM not_found_searches
-                WHERE datetime(last_attempted, '+' || ? || ' hours') > datetime('now')
+                WHERE last_attempted > datetime('now', '-' || ? || ' hours')
                 """,
                 (self.cache_hours,)
             ).fetchone()[0]

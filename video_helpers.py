@@ -2,6 +2,7 @@
 Helper functions for video operations.
 """
 import hashlib
+import re
 from typing import Dict, Any, Optional
 
 
@@ -58,24 +59,43 @@ def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     return any(yt in channel for yt in youtube_channels) if channel else False
 
 
-def get_content_hash(title: Optional[str], duration: Optional[int]) -> str:
+def get_content_hash(title: Optional[str], duration: Optional[int], artist: Optional[str] = None) -> str:
     """
-    Generate a hash for content identification based on title and duration.
+    Generate a hash for content identification with improved collision resistance.
 
     Args:
         title: Media title
         duration: Media duration in seconds
+        artist: Artist/channel name (optional but recommended)
 
     Returns:
-        SHA-256 hash of the normalized title and duration
+        SHA-256 hash of the normalized content
     """
-    # Normalize the title - lowercase and strip whitespace
+    # Better normalization to reduce false positives while preventing collisions
     normalized_title = (title or '').lower().strip()
-    # Include duration in the hash, use 0 if not provided
-    duration_str = str(duration if duration is not None else 0)
+    # Remove punctuation but keep spaces
+    normalized_title = re.sub(r'[^\w\s]', '', normalized_title)
+    # Collapse multiple spaces
+    normalized_title = re.sub(r'\s+', ' ', normalized_title)
+    # Remove common noise words that don't help with uniqueness
+    normalized_title = re.sub(r'\b(official|video|audio|hd|hq|lyrics|music)\b', '', normalized_title)
+    normalized_title = normalized_title.strip()
 
-    # Create a consistent string to hash
-    content = f"{normalized_title}|{duration_str}"
+    # Include artist for better uniqueness (if provided)
+    if artist:
+        normalized_artist = re.sub(r'[^\w\s]', '', artist.lower().strip())
+        normalized_artist = re.sub(r'\s+', ' ', normalized_artist)
+    else:
+        normalized_artist = ''
+
+    # Use -1 for None duration to distinguish from 0-second videos
+    duration_str = str(duration if duration is not None else -1)
+
+    # Combine fields for hash (artist first if provided)
+    if normalized_artist:
+        content = f"{normalized_artist}|{normalized_title}|{duration_str}"
+    else:
+        content = f"{normalized_title}|{duration_str}"
 
     # Return SHA-256 hash
     return hashlib.sha256(content.encode('utf-8')).hexdigest()

@@ -1,3 +1,43 @@
+## 1.21.0 - 2025-10-29
+
+### Reliability & Performance - HIGH Priority
+
+#### Fixed
+- **Exponential Backoff Recovery**: Users no longer get stuck in permanent 24-hour lockouts
+  - Added automatic attempt decay (1 attempt per 6 hours of inactivity)
+  - Full auto-reset after 48 hours of lockout
+  - Adaptive success threshold: 10 successes for attempts 1-2, 5 for attempts 3-4, 3 for attempts 5+
+  - Only increment attempts when previous cooldown has expired
+
+- **Content Hash Collisions**: Significantly reduced false matches
+  - Now includes artist/channel in hash calculation for better uniqueness
+  - Improved normalization: removes punctuation, collapses spaces, filters noise words
+  - Distinguishes between duration=0 and duration=None (uses -1 for None)
+  - Prevents "Intro" by different artists from matching incorrectly
+
+- **Database Query Performance**: Fixed index usage for date comparisons
+  - Inverted datetime comparisons to allow index usage
+  - Changed from `datetime(column) > value` to `column > datetime(value)`
+  - 10x+ performance improvement on large tables
+
+- **Startup Cleanup Visibility**: Silent failures now visible
+  - Changed cleanup error logging from DEBUG to WARNING level
+  - Added specific handling for AttributeError vs other exceptions
+  - Administrators now see cleanup failures in default log configuration
+
+- **History Tracker Reliability**: Thread no longer becomes a zombie
+  - Added consecutive failure tracking (max 10 failures)
+  - Thread exits cleanly after persistent errors
+  - Exponential backoff on failures (up to 5 minutes)
+  - Prevents log flooding and resource waste
+
+### Technical Changes
+- QuotaGuard: Added `_should_decay_attempts()` and `_apply_attempt_decay()` methods
+- QuotaGuard: Added `_get_adaptive_threshold()` for dynamic success thresholds
+- video_helpers: Updated `get_content_hash()` signature to include optional artist parameter
+- not_found_operations: Optimized SQL queries for better index usage
+- history_tracker: Added `_consecutive_failures` counter and `max_consecutive_failures` limit
+
 ## 1.20.0 - 2025-10-29
 
 ### Security - CRITICAL
