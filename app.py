@@ -377,7 +377,7 @@ def get_unrated_songs() -> Response:
         limit = 50
         offset = (page - 1) * limit
 
-        with db.lock:
+        with db._lock:
             # Get total count of unrated songs
             cursor = db._conn.execute(
                 "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0"
