@@ -83,7 +83,7 @@ class HomeAssistantAPI:
                 'duration': media_duration
             }
 
-            logger.info(
+            logger.debug(
                 "Current YouTube media: \"%s\" (%ss)",
                 media_title,
                 media_duration
