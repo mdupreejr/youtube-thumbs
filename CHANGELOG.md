@@ -1,3 +1,11 @@
+## 1.30.0 - 2025-10-29
+
+### Fixed
+- **Play count now increments only once per play session** - Fixed issue where play count would increment multiple times during continuous playback
+  - Previously: Play count incremented every hour during continuous playback
+  - Now: Play count increments only when a new song starts playing
+  - Continuous playback of the same song counts as a single play, regardless of duration
+
 ## 1.29.1 - 2025-10-29
 
 ### Documentation

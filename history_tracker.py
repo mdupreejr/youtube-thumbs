@@ -152,21 +152,21 @@ class HistoryTracker:
         media_key = f"{title}|{duration}"
         now = time.time()
 
-        # Log when new media starts playing
-        if self._active_media_key != media_key:
+        # Only record play when a new song starts (not during continuous playback)
+        is_new_song = self._active_media_key != media_key
+
+        if is_new_song:
             logger.info(
                 "History tracker detected new media: '%s' (%ss)",
                 title,
                 duration
             )
-
-        if not self._can_record_play(media_key, now):
+        else:
+            # Same song still playing - don't increment play count
             logger.debug(
-                "History tracker throttled '%s' (play recorded %.0fs ago)",
-                title,
-                now - self._last_play_timestamps.get(media_key, 0),
+                "History tracker: '%s' still playing, skipping increment",
+                title
             )
-            self._active_media_key = media_key
             return
 
         # Check if this search recently failed (Phase 3: Cache Negative Results)
@@ -178,10 +178,9 @@ class HistoryTracker:
         existing = self.db.find_by_title_and_duration(title, duration)
         if existing:
             self.db.record_play(existing['yt_video_id'])
-            logger.debug("History tracker recorded repeat play for '%s'", title)
+            logger.debug("History tracker recorded play for '%s'", title)
             self._active_media_key = media_key
             self._last_failed_key = None
-            self._mark_play_recorded(media_key, now)
             return
 
         video = self.find_cached_video({
@@ -212,7 +211,6 @@ class HistoryTracker:
                 )
                 self._active_media_key = media_key
                 self._last_failed_key = None
-                self._mark_play_recorded(media_key, now)
                 return
             if self._last_failed_key != media_key:
                 logger.warning(
@@ -237,7 +235,6 @@ class HistoryTracker:
         logger.info("History tracker stored '%s' (video %s)", title, yt_video_id)
         self._active_media_key = media_key
         self._last_failed_key = None
-        self._mark_play_recorded(media_key, now)
 
     @staticmethod
     def _normalize_duration(value: Any) -> Optional[int]:
