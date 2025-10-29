@@ -6,6 +6,14 @@ A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs 
 
 This add-on provides a Flask service that integrates with Home Assistant to automatically rate YouTube videos based on what's currently playing on your AppleTV. Perfect for Lutron remote integration or any automation that needs to rate music.
 
+## 🗄️ Database Interface
+
+Access your playback history and ratings database directly through the built-in sqlite_web interface:
+
+- **From Home Assistant:** Click the **OPEN WEB UI** button in the add-on page
+- **Direct Access:** The interface runs on port 8080 (accessible via Home Assistant Ingress)
+- **Features:** Browse, query, and export your music history and ratings data
+
 ## Features
 
 - 🎵 Rate currently playing songs via REST API
@@ -16,7 +24,7 @@ This add-on provides a Flask service that integrates with Home Assistant to auto
 - 🕒 Background history tracker that logs every song even without ratings
 - ⚡ Optimized performance with caching and connection pooling
 - 💡 Reuses cached matches to avoid redundant YouTube searches
-- 💾 Local SQLite history + sqlite_web UI on port 8080
+- 💾 Local SQLite history with built-in web interface (click **OPEN WEB UI** button)
 - 🔒 OAuth authentication preservation
 
 ## Installation
@@ -212,7 +220,8 @@ quota resets if you need to re-enable access early.
 
 - All history lives in `ratings.db` at `/config/youtube_thumbs/ratings.db` (perfect for easy backups with ZFS or snapshots).
 - The add-on automatically starts [`sqlite_web`](https://github.com/coleifer/sqlite-web) and opens it via HA ingress.
-  - Use the add-on's **OPEN WEB UI** button; Home Assistant proxies the sqlite_web instance into your browser even when it is bound to `127.0.0.1`.
+  - **📊 Access the Database:** Click the **OPEN WEB UI** button in the add-on page to launch the sqlite_web interface
+  - Home Assistant proxies the sqlite_web instance into your browser even when it is bound to `127.0.0.1`
   - Logs for the UI are written to `/config/youtube_thumbs/sqlite_web.log`.
 - Each row includes a `source` column (default `ha_live`) so you can tag imports such as manual YouTube exports; set it when calling `db.upsert_video` to keep provenance straight.
 - Failed thumbs requests are persisted in the `pending_ratings` table and automatically retried once the YouTube API/quota comes back, so every request is documented even when YouTube is offline.
