@@ -23,20 +23,24 @@ app = Flask(__name__)
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# Add error handler to show actual errors on page
+# Add error handler to show actual errors
 @app.errorhandler(Exception)
 def handle_exception(e):
-    """Catch-all error handler to display errors on page for debugging."""
-    logger.error(f"Unhandled exception: {e}")
+    """Catch-all error handler - returns JSON for API routes, HTML for pages."""
+    from flask import request
+
+    logger.error(f"Unhandled exception on {request.path}: {e}")
     logger.error(traceback.format_exc())
 
-    error_details = {
-        'error': str(e),
-        'type': type(e).__name__,
-        'traceback': traceback.format_exc()
-    }
+    # Check if this is an API route - return JSON
+    if request.path.startswith('/api/') or request.path.startswith('/test/') or request.path.startswith('/health') or request.path.startswith('/metrics'):
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'type': type(e).__name__
+        }), 500
 
-    # In production, don't show traceback, but for debugging show it
+    # For regular pages, return HTML with error details
     html = f"""
     <html>
     <head><title>Error</title></head>
