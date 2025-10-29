@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from logger import logger
 from quota_guard import quota_guard
 from video_helpers import prepare_video_upsert, is_youtube_content
+from error_handler import validate_environment_variable
 
 
 MediaDict = Dict[str, Any]
@@ -37,6 +38,7 @@ class HistoryTracker:
         self._active_media_key: Optional[str] = None
         self._play_window_seconds = self._resolve_play_window()
         self._last_play_timestamps: Dict[str, float] = {}
+        self._timestamps_lock = threading.Lock()  # Thread-safe access to timestamps
         self._poll_count = 0
         self._last_status_log = 0
         self._consecutive_failures = 0
@@ -51,6 +53,13 @@ class HistoryTracker:
             logger.debug("History tracker thread already running")
             return
 
+        # If thread died, create a new one
+        if self._thread.ident is not None:  # Thread was started before but died
+            logger.warning("History tracker thread died, creating new thread")
+            self._stop_event.clear()  # Reset stop event
+            self._consecutive_failures = 0  # Reset failure counter
+            self._thread = threading.Thread(target=self._run, name="history-tracker", daemon=True)
+
         logger.info("Starting history tracker thread (interval: %ss)", self.poll_interval)
         self._thread.start()
 
@@ -59,6 +68,20 @@ class HistoryTracker:
         if self._thread.is_alive():
             self._thread.join(timeout=2)
         logger.info("History tracker stopped")
+
+    def is_healthy(self) -> bool:
+        """Check if the history tracker thread is healthy."""
+        if not self.enabled:
+            return True  # Disabled tracker is considered healthy
+        return self._thread.is_alive()
+
+    def ensure_running(self) -> None:
+        """Ensure the history tracker is running, restart if needed."""
+        if not self.enabled:
+            return
+        if not self.is_healthy():
+            logger.warning("History tracker thread not healthy, attempting restart")
+            self.start()
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -227,22 +250,29 @@ class HistoryTracker:
             return None
 
     def _resolve_play_window(self) -> int:
-        raw = os.getenv('HISTORY_PLAY_WINDOW_SECONDS', '3600')
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning("Invalid HISTORY_PLAY_WINDOW_SECONDS '%s'; defaulting to 3600", raw)
-            return 3600
-        if value < 60:
-            logger.warning("HISTORY_PLAY_WINDOW_SECONDS too low (%s); enforcing minimum 60", value)
-            return 60
-        return value
+        return validate_environment_variable(
+            'HISTORY_PLAY_WINDOW_SECONDS',
+            default=3600,
+            converter=int,
+            validator=lambda x: x >= 60
+        )
 
     def _can_record_play(self, media_key: str, now: float) -> bool:
-        last = self._last_play_timestamps.get(media_key)
-        if not last:
-            return True
-        return (now - last) >= self._play_window_seconds
+        with self._timestamps_lock:
+            last = self._last_play_timestamps.get(media_key)
+            if not last:
+                return True
+            return (now - last) >= self._play_window_seconds
 
     def _mark_play_recorded(self, media_key: str, now: float) -> None:
-        self._last_play_timestamps[media_key] = now
+        with self._timestamps_lock:
+            self._last_play_timestamps[media_key] = now
+
+    def _try_record_play_atomic(self, media_key: str, now: float) -> bool:
+        """Atomically check and record play if allowed. Returns True if recorded."""
+        with self._timestamps_lock:
+            last = self._last_play_timestamps.get(media_key)
+            if not last or (now - last) >= self._play_window_seconds:
+                self._last_play_timestamps[media_key] = now
+                return True
+            return False

@@ -10,6 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import logger
 from quota_guard import quota_guard
+from error_handler import handle_api_error, log_and_suppress, validate_environment_variable
 
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
@@ -17,8 +18,18 @@ class YouTubeAPI:
     SCOPES = ['https://www.googleapis.com/auth/youtube']
     DURATION_PATTERN = re.compile(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?')
     NO_RATING = 'none'  # YouTube API rating value for unrated videos
-    MAX_SEARCH_RESULTS = max(min(int(os.getenv('YTT_SEARCH_MAX_RESULTS', '25')), 50), 1)
-    MAX_CANDIDATES = max(min(int(os.getenv('YTT_SEARCH_MAX_CANDIDATES', '10')), 50), 1)
+    MAX_SEARCH_RESULTS = validate_environment_variable(
+        'YTT_SEARCH_MAX_RESULTS',
+        default=25,
+        converter=int,
+        validator=lambda x: 1 <= x <= 50
+    )
+    MAX_CANDIDATES = validate_environment_variable(
+        'YTT_SEARCH_MAX_CANDIDATES',
+        default=10,
+        converter=int,
+        validator=lambda x: 1 <= x <= 50
+    )
     SEARCH_FIELDS = 'items(id/videoId)'
     VIDEO_FIELDS = 'items(id,snippet(title,channelTitle,channelId,description,publishedAt,categoryId,liveBroadcastContent),contentDetails(duration),recordingDetails(location,recordingDate))'
     QUOTA_REASON_CODES = {
@@ -278,12 +289,19 @@ class YouTubeAPI:
             detail = self._quota_error_detail(e)
             if detail is not None:
                 quota_guard.trip('quotaExceeded', context='search', detail=detail)
-            logger.error(f"YouTube API error in search_video_globally | Query: '{title}' | Error: {str(e)}")
-            return None
+            return log_and_suppress(
+                e,
+                f"YouTube API error in search_video_globally | Query: '{title}'",
+                level="error",
+                return_value=None
+            )
         except Exception as e:
-            logger.error(f"Unexpected error searching video | Query: '{title}' | Error: {str(e)}")
-            logger.debug(f"Traceback for search error: {traceback.format_exc()}")
-            return None
+            return log_and_suppress(
+                e,
+                f"Unexpected error searching video | Query: '{title}'",
+                level="error",
+                return_value=None
+            )
 
     def get_video_rating(self, yt_video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
@@ -315,12 +333,19 @@ class YouTubeAPI:
             detail = self._quota_error_detail(e)
             if detail is not None:
                 quota_guard.trip('quotaExceeded', context='get_rating', detail=detail)
-            logger.error(f"YouTube API error getting rating | Video ID: {yt_video_id} | Error: {str(e)}")
-            return self.NO_RATING
+            return log_and_suppress(
+                e,
+                f"YouTube API error getting rating | Video ID: {yt_video_id}",
+                level="error",
+                return_value=self.NO_RATING
+            )
         except Exception as e:
-            logger.error(f"Unexpected error getting video rating | Video ID: {yt_video_id} | Error: {str(e)}")
-            logger.debug(f"Traceback for get_video_rating error: {traceback.format_exc()}")
-            return self.NO_RATING
+            return log_and_suppress(
+                e,
+                f"Unexpected error getting video rating | Video ID: {yt_video_id}",
+                level="error",
+                return_value=self.NO_RATING
+            )
 
     def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
@@ -350,12 +375,19 @@ class YouTubeAPI:
             detail = self._quota_error_detail(e)
             if detail is not None:
                 quota_guard.trip('quotaExceeded', context='set_rating', detail=detail)
-            logger.error(f"YouTube API error setting rating | Video ID: {yt_video_id} | Rating: {rating} | Error: {str(e)}")
-            return False
+            return log_and_suppress(
+                e,
+                f"YouTube API error setting rating | Video ID: {yt_video_id} | Rating: {rating}",
+                level="error",
+                return_value=False
+            )
         except Exception as e:
-            logger.error(f"Unexpected error setting video rating | Video ID: {yt_video_id} | Rating: {rating} | Error: {str(e)}")
-            logger.debug(f"Traceback for set_video_rating error: {traceback.format_exc()}")
-            return False
+            return log_and_suppress(
+                e,
+                f"Unexpected error setting video rating | Video ID: {yt_video_id} | Rating: {rating}",
+                level="error",
+                return_value=False
+            )
 
 # Create global instance (will be initialized when module is imported)
 yt_api = None

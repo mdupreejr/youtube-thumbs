@@ -6,6 +6,7 @@ import sqlite3
 from typing import Dict, Any, Optional, List
 
 from logger import logger
+from error_handler import log_and_suppress
 
 
 class PendingOperations:
@@ -75,7 +76,12 @@ class PendingOperations:
                         payload,
                     )
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to enqueue rating for %s: %s", yt_video_id, exc)
+                log_and_suppress(
+                    exc,
+                    "Failed to enqueue rating for %s",
+                    yt_video_id,
+                    level="error"
+                )
 
     def list_pending_ratings(self, limit: int = 10) -> List[Dict[str, Any]]:
         with self._lock:
@@ -109,4 +115,9 @@ class PendingOperations:
                             (error, self._timestamp(''), yt_video_id),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to update pending rating for %s: %s", yt_video_id, exc)
+                log_and_suppress(
+                    exc,
+                    "Failed to update pending rating for %s",
+                    yt_video_id,
+                    level="error"
+                )

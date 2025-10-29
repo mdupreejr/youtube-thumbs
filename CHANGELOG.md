@@ -1,3 +1,48 @@
+## 1.22.0 - 2025-10-29
+
+### Code Quality & Stability - MEDIUM Priority
+
+#### Improved
+- **Standardized Error Handling**: Centralized error management with new error_handler module
+  - Consistent logging patterns across all modules
+  - Proper error propagation and suppression based on criticality
+  - Database errors now handled uniformly with context
+  - API errors include quota detection and authentication checks
+
+- **Content Hash Algorithm**: Artist parameter now properly used
+  - Fixed all callers to pass artist parameter to get_content_hash()
+  - Updated find_by_content_hash() to accept and use artist
+  - Better duplicate detection with artist-aware hashing
+
+- **Environment Variable Validation**: Safer configuration handling
+  - HISTORY_PLAY_WINDOW_SECONDS validated with min/max bounds
+  - NOT_FOUND_CACHE_HOURS validated (1-168 hours range)
+  - YTT_SEARCH_MAX_RESULTS and YTT_SEARCH_MAX_CANDIDATES validated
+  - Proper type conversion and error messages for invalid values
+
+#### Fixed
+- **History Tracker Race Condition**: Thread-safe timestamp tracking
+  - Added _timestamps_lock for concurrent access protection
+  - New atomic _try_record_play_atomic() method
+  - Prevents duplicate play recordings in rapid succession
+
+- **Thread Lifecycle Management**: Proper thread restart capability
+  - Detects and recreates dead threads automatically
+  - Added is_healthy() and ensure_running() methods
+  - Resets failure counters on thread restart
+
+- **QuotaGuard Thread Safety**: Singleton pattern now thread-safe
+  - Implemented double-check locking pattern
+  - Thread-safe get_quota_guard() function
+  - Prevents multiple instance creation in concurrent access
+
+### Technical Changes
+- Created error_handler.py with decorators and validation utilities
+- All database operations use log_and_suppress() for consistent error handling
+- YouTube API uses standardized error handling with quota detection
+- Thread synchronization improvements in history_tracker.py
+- Thread-safe singleton pattern in quota_guard.py
+
 ## 1.21.0 - 2025-10-29
 
 ### Reliability & Performance - HIGH Priority

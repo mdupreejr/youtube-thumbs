@@ -1,6 +1,7 @@
 import fcntl
 import json
 import os
+import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -348,4 +349,19 @@ class QuotaGuard:
         )
 
 
-quota_guard = QuotaGuard()
+# Thread-safe singleton implementation
+_quota_guard_instance = None
+_quota_guard_lock = threading.Lock()
+
+def get_quota_guard() -> QuotaGuard:
+    """Get the thread-safe singleton instance of QuotaGuard."""
+    global _quota_guard_instance
+    if _quota_guard_instance is None:
+        with _quota_guard_lock:
+            # Double-check locking pattern
+            if _quota_guard_instance is None:
+                _quota_guard_instance = QuotaGuard()
+    return _quota_guard_instance
+
+# For backwards compatibility, create the instance
+quota_guard = get_quota_guard()

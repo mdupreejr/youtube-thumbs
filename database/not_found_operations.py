@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from logger import logger
 from video_helpers import get_content_hash
+from error_handler import log_and_suppress, validate_environment_variable
 
 
 class NotFoundOperations:
@@ -19,7 +20,12 @@ class NotFoundOperations:
         self._lock = db_connection.lock
         self._timestamp = db_connection.timestamp
         # Make cache duration configurable via environment variable
-        self.cache_hours = int(os.getenv('NOT_FOUND_CACHE_HOURS', '24'))
+        self.cache_hours = validate_environment_variable(
+            'NOT_FOUND_CACHE_HOURS',
+            default=24,
+            converter=int,
+            validator=lambda x: 1 <= x <= 168  # 1 hour to 1 week
+        )
 
     def is_recently_not_found(
         self,
@@ -127,11 +133,16 @@ class NotFoundOperations:
                     return True
 
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to record not found search for '%s': %s", title, exc)
                 # Re-raise for critical failures
                 if "no such table" in str(exc).lower():
                     raise
-                return False
+                return log_and_suppress(
+                    exc,
+                    "Failed to record not found search for '%s'",
+                    title,
+                    level="error",
+                    return_value=False
+                )
 
     def cleanup_old_entries(self, days: int = 2) -> int:
         """
@@ -161,8 +172,12 @@ class NotFoundOperations:
                         )
                     return deleted
             except sqlite3.DatabaseError as exc:
-                logger.error("Failed to cleanup not found cache: %s", exc)
-                return 0
+                return log_and_suppress(
+                    exc,
+                    "Failed to cleanup not found cache",
+                    level="error",
+                    return_value=0
+                )
 
     def get_stats(self) -> Dict[str, Any]:
         """

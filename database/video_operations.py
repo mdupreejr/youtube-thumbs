@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 
 from logger import logger
 from video_helpers import get_content_hash
+from error_handler import handle_database_error, log_and_suppress
 
 
 class VideoOperations:
@@ -31,7 +32,8 @@ class VideoOperations:
         yt_channel = video.get('yt_channel')
 
         # Calculate content hash for duplicate detection
-        ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'))
+        ha_artist = video.get('ha_artist')
+        ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_artist)
 
         payload = {
             'yt_video_id': video['yt_video_id'],
@@ -95,7 +97,12 @@ class VideoOperations:
                 with self._conn:
                     self._conn.execute(upsert_sql, payload)
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to upsert video {video['yt_video_id']}: {exc}")
+                # Critical operation - should not fail silently
+                log_and_suppress(
+                    exc,
+                    f"Failed to upsert video {video.get('yt_video_id', 'unknown')}",
+                    level="error"
+                )
 
     def record_play(self, yt_video_id: str, timestamp: Optional[str] = None) -> None:
         """Increment play counter and update last played timestamp."""
@@ -124,7 +131,11 @@ class VideoOperations:
                             (yt_video_id, ts, ts),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to record play for {yt_video_id}: {exc}")
+                log_and_suppress(
+                    exc,
+                    f"Failed to record play for {yt_video_id}",
+                    level="error"
+                )
 
     def record_rating(self, yt_video_id: str, rating: str, timestamp: Optional[str] = None) -> None:
         """Update rating metadata and increment rating counter."""
@@ -197,7 +208,11 @@ class VideoOperations:
                             (yt_video_id, rating, ts, initial_score),
                         )
             except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to record rating for {yt_video_id}: {exc}")
+                log_and_suppress(
+                    exc,
+                    f"Failed to record rating for {yt_video_id}",
+                    level="error"
+                )
 
     def get_video(self, yt_video_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -271,15 +286,15 @@ class VideoOperations:
             row = cur.fetchone()
         return dict(row) if row else None
 
-    def find_by_content_hash(self, title: str, duration: Optional[int]) -> Optional[Dict[str, Any]]:
+    def find_by_content_hash(self, title: str, duration: Optional[int], artist: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Find a video by its content hash (title + duration).
+        Find a video by its content hash (title + duration + artist).
         This allows finding duplicates even if title/artist formatting differs slightly.
         """
         if not title:
             return None
 
-        content_hash = get_content_hash(title, duration)
+        content_hash = get_content_hash(title, duration, artist)
 
         with self._lock:
             cur = self._conn.execute(

@@ -178,8 +178,8 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not title:
         return None
 
-    # First check by content hash (title+duration) for exact duplicate detection
-    hash_match = db.find_by_content_hash(title, duration)
+    # First check by content hash (title+duration+artist) for exact duplicate detection
+    hash_match = db.find_by_content_hash(title, duration, artist)
     if hash_match:
         logger.info(
             "Using hash-cached video ID %s for title '%s' (duration %s)",
