@@ -181,6 +181,70 @@ class YouTubeAPI:
             return None
         return duration
 
+    def _process_search_result(self, video: Dict[str, Any], expected_duration: Optional[int]) -> Optional[Dict[str, Any]]:
+        """
+        Process a single video from YouTube API response.
+
+        Args:
+            video: Video data from YouTube API
+            expected_duration: Expected HA duration (YouTube will be +1s)
+
+        Returns:
+            Processed video_info dict or None if video should be skipped
+        """
+        video_id = video['id']
+        if not self._validate_video_id(video_id):
+            logger.error("Skipping video with invalid ID: %s", video_id)
+            return None
+
+        snippet = video.get('snippet') or {}
+        content_details = video.get('contentDetails') or {}
+        recording_details = video.get('recordingDetails') or {}
+
+        duration_str = content_details.get('duration')
+        duration = self._parse_duration(duration_str) if duration_str else None
+
+        # Extract location if available
+        location = None
+        if recording_details.get('location'):
+            loc = recording_details['location']
+            if loc.get('latitude') and loc.get('longitude'):
+                location = f"{loc['latitude']},{loc['longitude']}"
+                if loc.get('altitude'):
+                    location += f",{loc['altitude']}"
+
+        video_info = {
+            'yt_video_id': video_id,
+            'title': snippet.get('title'),
+            'channel': snippet.get('channelTitle'),
+            'channel_id': snippet.get('channelId'),
+            'description': self._validate_and_truncate_description(snippet.get('description')),
+            'published_at': snippet.get('publishedAt'),
+            'category_id': snippet.get('categoryId'),
+            'live_broadcast': snippet.get('liveBroadcastContent'),
+            'location': location,
+            'recording_date': recording_details.get('recordingDate'),
+            'duration': self._validate_duration(duration)
+        }
+
+        # Check duration matching if expected_duration is provided
+        if expected_duration is not None and duration is not None:
+            # YouTube always reports exactly 1 second more than HA
+            expected_youtube_duration = expected_duration + 1
+            if duration != expected_youtube_duration:
+                return None  # Skip videos that don't match duration
+            logger.info(
+                f"Duration match (exact +1s): Expected {expected_duration}s → "
+                f"YT='{video_info['title']}' ({duration}s)"
+            )
+        elif duration is None and expected_duration is not None:
+            logger.warning(
+                f"Duration missing for '{video_info['title']}' "
+                f"(ID: {video_info['yt_video_id']}); falling back to title match only"
+            )
+
+        return video_info
+
     def _build_smart_search_query(self, title: str) -> str:
         """
         Build a simple, effective search query for YouTube.
@@ -287,61 +351,14 @@ class YouTubeAPI:
                 fields=self.VIDEO_FIELDS,
             ).execute()
 
+            # Process search results and filter by duration
             candidates = []
             for video in details.get('items', []):
-                video_id = video['id']
-                if not self._validate_video_id(video_id):
-                    logger.error("Skipping video with invalid ID: %s", video_id)
-                    continue
-
-                snippet = video.get('snippet') or {}
-                content_details = video.get('contentDetails') or {}
-                recording_details = video.get('recordingDetails') or {}
-
-                duration_str = content_details.get('duration')
-                duration = self._parse_duration(duration_str) if duration_str else None
-
-                # Extract location if available
-                location = None
-                if recording_details.get('location'):
-                    loc = recording_details['location']
-                    if loc.get('latitude') and loc.get('longitude'):
-                        location = f"{loc['latitude']},{loc['longitude']}"
-                        if loc.get('altitude'):
-                            location += f",{loc['altitude']}"
-
-                video_info = {
-                    'yt_video_id': video_id,
-                    'title': snippet.get('title'),
-                    'channel': snippet.get('channelTitle'),
-                    'channel_id': snippet.get('channelId'),
-                    'description': self._validate_and_truncate_description(snippet.get('description')),
-                    'published_at': snippet.get('publishedAt'),
-                    'category_id': snippet.get('categoryId'),
-                    'live_broadcast': snippet.get('liveBroadcastContent'),
-                    'location': location,
-                    'recording_date': recording_details.get('recordingDate'),
-                    'duration': self._validate_duration(duration)
-                }
-
-                if expected_duration is not None and duration is not None:
-                    # YouTube always reports exactly 1 second more than HA
-                    expected_youtube_duration = expected_duration + 1
-                    if duration == expected_youtube_duration:
-                        logger.info(
-                            f"Duration match (exact +1s): HA='{title}' ({expected_duration}s) → "
-                            f"YT='{video_info['title']}' ({duration}s)"
-                        )
-                        candidates.append(video_info)
-                else:
-                    if duration is None and expected_duration is not None:
-                        logger.warning(
-                            f"Duration missing for '{video_info['title']}' "
-                            f"(ID: {video_info['yt_video_id']}); falling back to title match only"
-                        )
+                video_info = self._process_search_result(video, expected_duration)
+                if video_info:
                     candidates.append(video_info)
-                if len(candidates) >= self.MAX_CANDIDATES:
-                    break
+                    if len(candidates) >= self.MAX_CANDIDATES:
+                        break
 
             if not candidates and expected_duration:
                 logger.error(
