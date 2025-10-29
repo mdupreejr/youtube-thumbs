@@ -233,8 +233,8 @@ class YouTubeAPI:
             expected_youtube_duration = expected_duration + 1
             if duration != expected_youtube_duration:
                 return None  # Skip videos that don't match duration
-            logger.info(
-                f"Duration match: {expected_duration}s (HA) → {duration}s (YT) | '{video_info['title']}'"
+            logger.debug(
+                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | '{video_info['title']}'"
             )
         elif duration is None and expected_duration is not None:
             logger.warning(
@@ -326,7 +326,7 @@ class YouTubeAPI:
         try:
             # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
             search_query = self._build_smart_search_query(title)
-            logger.info(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
+            logger.debug(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
 
             response = self.youtube.search().list(
                 part='snippet',
@@ -341,7 +341,7 @@ class YouTubeAPI:
                 logger.error(f"No videos found globally for: '{title}'")
                 return None
 
-            logger.info(f"Found {len(items)} videos globally")
+            logger.debug(f"Found {len(items)} videos globally")
 
             video_ids = [item['id']['videoId'] for item in items]
             details = self.youtube.videos().list(
@@ -374,7 +374,7 @@ class YouTubeAPI:
                     self.MAX_CANDIDATES,
                 )
 
-            logger.info(f"Found {len(candidates)} duration-matched candidates")
+            logger.debug(f"Found {len(candidates)} duration-matched candidates")
             # Record successful API call for quota recovery tracking
             quota_guard.record_success()
             return candidates
