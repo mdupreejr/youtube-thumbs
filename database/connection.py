@@ -203,7 +203,7 @@ class DatabaseConnection:
         """
         Return timestamps in a format compatible with sqlite's built-in converters.
         sqlite3 expects 'YYYY-MM-DD HH:MM:SS' (space separator) for TIMESTAMP columns.
-        Uses local system time (Eastern Time).
+        All timestamps are stored in UTC for consistency and compatibility.
         Returns None if ts is None (for optional timestamp fields).
         """
         if ts is None:
@@ -214,9 +214,9 @@ class DatabaseConnection:
                 # Validate format matches YYYY-MM-DD HH:MM:SS
                 if not re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', cleaned[:19]):
                     logger.warning("Invalid timestamp format: %s", cleaned[:19])
-                    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
                 return cleaned[:19]
-        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
     @property
     def connection(self):
