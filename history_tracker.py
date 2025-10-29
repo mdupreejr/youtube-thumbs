@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, Optional
 
 from logger import logger
 from quota_guard import quota_guard
-from video_helpers import prepare_video_upsert
+from video_helpers import prepare_video_upsert, is_youtube_content
 
 
 MediaDict = Dict[str, Any]
@@ -85,6 +85,15 @@ class HistoryTracker:
             if self._active_media_key:
                 logger.debug("History tracker: Media stopped playing")
             self._active_media_key = None
+            return
+
+        # Skip non-YouTube content to save API calls
+        if not is_youtube_content(media):
+            title = media.get('title', 'unknown')
+            channel = media.get('channel', 'unknown')
+            if self._active_media_key and not self._active_media_key.startswith(f"non-yt|{channel}"):
+                logger.info(f"History tracker skipping non-YouTube content: '{title}' from channel '{channel}'")
+            self._active_media_key = f"non-yt|{channel}|{title}"
             return
 
         title = media.get('title')

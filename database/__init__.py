@@ -71,6 +71,9 @@ class Database:
     def find_by_title_and_duration(self, title, duration):
         return self._video_ops.find_by_title_and_duration(title, duration)
 
+    def find_by_content_hash(self, title, duration):
+        return self._video_ops.find_by_content_hash(title, duration)
+
     # Pending operations
     def upsert_pending_media(self, media):
         return self._pending_ops.upsert_pending_media(media)

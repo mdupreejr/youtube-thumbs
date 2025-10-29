@@ -1,3 +1,26 @@
+## 1.17.0 - 2025-10-28
+
+### Added
+- **Skip Non-YouTube Content**: Addon now detects and skips non-YouTube content based on channel/app name, saving API calls
+- **Content Hash Detection**: Added hash-based duplicate detection using SHA-256 hash of title+duration
+- New `ha_content_hash` field in database for tracking seen content combinations
+- New helper functions: `is_youtube_content()` and `get_content_hash()`
+
+### Changed
+- Enhanced caching: Now checks content hash first before searching YouTube API
+- Both `rate_video` and history tracker now skip non-YouTube content immediately
+- Better logging when non-YouTube content is detected and skipped
+
+### Performance
+- Significant reduction in YouTube API usage by skipping non-YouTube content
+- Faster duplicate detection using content hash lookups
+- Improved cache hit rate through hash-based matching
+
+### Technical
+- Added `ha_content_hash` field to video_ratings table with index for fast lookups
+- New `find_by_content_hash()` method for hash-based duplicate detection
+- Updated `upsert_video()` to calculate and store content hash
+
 ## 1.16.4 - 2025-10-28
 
 ### Fixed

@@ -5,6 +5,7 @@ import sqlite3
 from typing import Dict, Any, Optional, List
 
 from logger import logger
+from video_helpers import get_content_hash
 
 
 class VideoOperations:
@@ -29,6 +30,9 @@ class VideoOperations:
         yt_title = video.get('yt_title')
         yt_channel = video.get('yt_channel')
 
+        # Calculate content hash for duplicate detection
+        ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'))
+
         payload = {
             'yt_video_id': video['yt_video_id'],
             'ha_title': ha_title,
@@ -46,6 +50,7 @@ class VideoOperations:
             'yt_duration': video.get('yt_duration'),
             'yt_url': video.get('yt_url'),
             'rating': video.get('rating', 'none') or 'none',
+            'ha_content_hash': ha_content_hash,
             'pending_match': 1 if video.get('pending_match') else 0,
             'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
@@ -56,14 +61,14 @@ class VideoOperations:
             yt_video_id, ha_title, ha_artist, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
-            ha_duration, yt_duration, yt_url, rating, date_added, date_last_played,
+            ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
             play_count, rating_score, pending_match, source
         )
         VALUES (
             :yt_video_id, :ha_title, :ha_artist, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
-            :ha_duration, :yt_duration, :yt_url, :rating, :date_added, :date_added,
+            :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
             1, 0, :pending_match, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
@@ -81,6 +86,7 @@ class VideoOperations:
             ha_duration=excluded.ha_duration,
             yt_duration=excluded.yt_duration,
             yt_url=excluded.yt_url,
+            ha_content_hash=excluded.ha_content_hash,
             pending_match=excluded.pending_match,
             source=excluded.source;
         """
@@ -262,5 +268,28 @@ class VideoOperations:
         """
         with self._lock:
             cur = self._conn.execute(query, (title, duration, duration))
+            row = cur.fetchone()
+        return dict(row) if row else None
+
+    def find_by_content_hash(self, title: str, duration: Optional[int]) -> Optional[Dict[str, Any]]:
+        """
+        Find a video by its content hash (title + duration).
+        This allows finding duplicates even if title/artist formatting differs slightly.
+        """
+        if not title:
+            return None
+
+        content_hash = get_content_hash(title, duration)
+
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT * FROM video_ratings
+                WHERE ha_content_hash = ? AND pending_match = 0
+                ORDER BY date_last_played DESC, date_added DESC
+                LIMIT 1
+                """,
+                (content_hash,),
+            )
             row = cur.fetchone()
         return dict(row) if row else None

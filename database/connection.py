@@ -35,6 +35,7 @@ class DatabaseConnection:
             yt_duration INTEGER,
             yt_url TEXT,
             rating TEXT DEFAULT 'none',
+            ha_content_hash TEXT,
             date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             date_last_played TIMESTAMP,
             play_count INTEGER DEFAULT 1,
@@ -46,6 +47,7 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash);
     """
 
     PENDING_RATINGS_SCHEMA = """

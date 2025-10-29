@@ -13,7 +13,7 @@ from history_tracker import HistoryTracker
 from quota_guard import quota_guard
 from startup_checks import run_startup_checks
 from constants import FALSE_VALUES
-from video_helpers import prepare_video_upsert
+from video_helpers import prepare_video_upsert, is_youtube_content
 
 app = Flask(__name__)
 db = get_database()
@@ -170,6 +170,22 @@ def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not title:
         return None
 
+    # First check by content hash (title+duration) for exact duplicate detection
+    hash_match = db.find_by_content_hash(title, duration)
+    if hash_match:
+        logger.info(
+            "Using hash-cached video ID %s for title '%s' (duration %s)",
+            hash_match['yt_video_id'],
+            title,
+            duration,
+        )
+        return {
+            'yt_video_id': hash_match['yt_video_id'],
+            'title': hash_match.get('yt_title') or hash_match.get('ha_title') or title,
+            'channel': hash_match.get('yt_channel'),
+            'duration': hash_match.get('yt_duration') or hash_match.get('ha_duration')
+        }
+
     exact_match = db.find_by_exact_ha_title(title)
     if exact_match:
         logger.info(
@@ -260,6 +276,14 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
             rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
             return jsonify({"success": False, "error": "No media currently playing"}), 400
+
+        # Skip non-YouTube content to save API calls
+        if not is_youtube_content(ha_media):
+            title = ha_media.get('title', 'unknown')
+            channel = ha_media.get('channel', 'unknown')
+            logger.info(f"Skipping non-YouTube content: '{title}' from channel '{channel}'")
+            rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{channel}'")
+            return jsonify({"success": False, "error": f"Not YouTube content (channel: {channel})"}), 400
 
         video = find_cached_video(ha_media)
         if not video:
