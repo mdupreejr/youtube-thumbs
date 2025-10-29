@@ -721,9 +721,9 @@
 
             <div class="card">
                 <div class="footer-links">
-                    <a href="/health" target="_blank" class="footer-link">💚 Health Check</a>
-                    <a href="/metrics" target="_blank" class="footer-link">📈 Metrics</a>
-                    <a href="/database" target="_blank" class="footer-link">🗄️ Database Viewer</a>
+                    <a href="#" id="health-link" target="_blank" class="footer-link">💚 Health Check</a>
+                    <a href="#" id="metrics-link" target="_blank" class="footer-link">📈 Metrics</a>
+                    <a href="#" id="database-link" target="_blank" class="footer-link">🗄️ Database Viewer</a>
                 </div>
             </div>
         </div>
@@ -1006,6 +1006,11 @@
                 console.error('Failed to update status:', error);
             }
         }
+
+        // Initialize footer links with BASE_PATH
+        document.getElementById('health-link').href = `${BASE_PATH}/health`;
+        document.getElementById('metrics-link').href = `${BASE_PATH}/metrics`;
+        document.getElementById('database-link').href = `${BASE_PATH}/database`;
 
         // Initialize
         updateStatus();

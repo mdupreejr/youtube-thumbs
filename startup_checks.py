@@ -133,29 +133,40 @@ def check_database(db) -> Tuple[bool, str]:
             logger.warning("⚠ Database file doesn't exist yet - will be created on first use")
             return True, "Database will be created"
 
-        # Test connection and get statistics (only count successfully matched videos)
+        # Test connection and get statistics
         with db._lock:
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 0")
+            # Count all videos
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
             total_videos = cursor.fetchone()['count']
 
+            # Count matched videos (successfully found on YouTube)
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 0")
+            matched_videos = cursor.fetchone()['count']
+
+            # Count pending videos (not yet matched to YouTube)
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 1")
+            pending_videos = cursor.fetchone()['count']
+
+            # Count rated videos (only matched ones can be rated)
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating != 'none' AND pending_match = 0")
             rated_videos = cursor.fetchone()['count']
 
+            # Count pending ratings queue
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM pending_ratings")
             pending_ratings = cursor.fetchone()['count']
 
-            # Get recent videos (only successfully matched ones)
+            # Get recent videos (all videos, not just matched)
             cursor = db._conn.execute("""
-                SELECT ha_title, date_last_played
+                SELECT ha_title, date_last_played, pending_match
                 FROM video_ratings
-                WHERE date_last_played IS NOT NULL AND pending_match = 0
+                WHERE date_last_played IS NOT NULL
                 ORDER BY date_last_played DESC
                 LIMIT 3
             """)
             recent_videos = cursor.fetchall()
 
         logger.info("✓ Database connected and working")
-        logger.info(f"  Total videos in database: {total_videos}")
+        logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} pending)")
         logger.info(f"  Rated videos: {rated_videos}")
 
         if pending_ratings > 0:
@@ -170,7 +181,7 @@ def check_database(db) -> Tuple[bool, str]:
         else:
             logger.info("  No recent plays recorded")
 
-        return True, f"Database OK, {total_videos} videos"
+        return True, f"Database OK: {total_videos} total ({matched_videos} matched, {pending_videos} pending)"
 
     except Exception as e:
         logger.error(f"✗ Database check failed: {str(e)}")
