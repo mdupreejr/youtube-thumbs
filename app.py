@@ -574,6 +574,151 @@ def get_metrics() -> Response:
         return jsonify({'error': 'Failed to generate metrics', 'message': str(e)}), 500
 
 
+@app.route('/api/stats/most-played', methods=['GET'])
+def get_most_played_stats() -> Response:
+    """Get most played songs for statistics dashboard."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        with db._lock:
+            cursor = db._conn.execute(
+                """
+                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel,
+                       play_count, rating, yt_url
+                FROM video_ratings
+                WHERE pending_match = 0
+                ORDER BY play_count DESC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            songs = cursor.fetchall()
+
+        result = []
+        for song in songs:
+            result.append({
+                'id': song['yt_video_id'],
+                'title': song['yt_title'] or song['ha_title'],
+                'artist': song['ha_artist'] or song['yt_channel'],
+                'play_count': song['play_count'],
+                'rating': song['rating'],
+                'url': song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
+            })
+
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        logger.error(f"Error getting most played stats: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/top-channels', methods=['GET'])
+def get_top_channels_stats() -> Response:
+    """Get top channels/artists for statistics dashboard."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        with db._lock:
+            cursor = db._conn.execute(
+                """
+                SELECT yt_channel, yt_channel_id,
+                       COUNT(*) as video_count,
+                       SUM(play_count) as total_plays,
+                       AVG(CASE WHEN rating = 'like' THEN 1
+                                WHEN rating = 'dislike' THEN -1
+                                ELSE 0 END) as avg_rating
+                FROM video_ratings
+                WHERE pending_match = 0 AND yt_channel IS NOT NULL
+                GROUP BY yt_channel_id
+                ORDER BY total_plays DESC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            channels = cursor.fetchall()
+
+        result = []
+        for channel in channels:
+            result.append({
+                'channel': channel['yt_channel'],
+                'video_count': channel['video_count'],
+                'total_plays': channel['total_plays'],
+                'avg_rating': round(channel['avg_rating'], 2) if channel['avg_rating'] else 0
+            })
+
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        logger.error(f"Error getting top channels stats: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/rating-distribution', methods=['GET'])
+def get_rating_distribution() -> Response:
+    """Get rating distribution for pie chart."""
+    try:
+        with db._lock:
+            cursor = db._conn.execute(
+                """
+                SELECT rating, COUNT(*) as count
+                FROM video_ratings
+                WHERE pending_match = 0
+                GROUP BY rating
+                """
+            )
+            ratings = cursor.fetchall()
+
+        result = {row['rating']: row['count'] for row in ratings}
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        logger.error(f"Error getting rating distribution: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/summary', methods=['GET'])
+def get_stats_summary() -> Response:
+    """Get summary statistics for dashboard."""
+    try:
+        with db._lock:
+            # Total videos
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 0")
+            total_videos = cursor.fetchone()['count']
+
+            # Total plays
+            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings WHERE pending_match = 0")
+            total_plays = cursor.fetchone()['total'] or 0
+
+            # Ratings breakdown
+            cursor = db._conn.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN rating = 'like' THEN 1 ELSE 0 END) as liked,
+                    SUM(CASE WHEN rating = 'dislike' THEN 1 ELSE 0 END) as disliked,
+                    SUM(CASE WHEN rating = 'none' THEN 1 ELSE 0 END) as unrated
+                FROM video_ratings
+                WHERE pending_match = 0
+                """
+            )
+            ratings = cursor.fetchone()
+
+            # Unique channels
+            cursor = db._conn.execute(
+                "SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE pending_match = 0 AND yt_channel_id IS NOT NULL"
+            )
+            unique_channels = cursor.fetchone()['count']
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_videos': total_videos,
+                'total_plays': total_plays,
+                'liked': ratings['liked'],
+                'disliked': ratings['disliked'],
+                'unrated': ratings['unrated'],
+                'unique_channels': unique_channels
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error getting stats summary: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/database', defaults={'path': ''})
 @app.route('/database/<path:path>')
 def database_proxy(path):
