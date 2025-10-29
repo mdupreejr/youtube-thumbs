@@ -1,3 +1,14 @@
+## 1.17.1 - 2025-10-28
+
+### Fixed
+- Fixed database migration error for existing databases
+- Added proper migration logic to add ha_content_hash column to existing databases
+- Fixed "no such column: ha_content_hash" error on startup
+
+### Technical
+- Added _add_column_if_missing() method for safe schema migrations
+- Moved ha_content_hash index creation to occur after column is added
+
 ## 1.17.0 - 2025-10-28
 
 ### Added

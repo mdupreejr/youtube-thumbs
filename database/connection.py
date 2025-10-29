@@ -47,7 +47,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
-        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash);
     """
 
     PENDING_RATINGS_SCHEMA = """
@@ -103,6 +102,13 @@ class DatabaseConnection:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
+
+                    # Add ha_content_hash column if missing (for existing databases)
+                    self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')
+                    # Create index for ha_content_hash after column is added
+                    self._conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
+                    )
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -113,6 +119,14 @@ class DatabaseConnection:
 
     def _table_columns(self, table: str) -> List[str]:
         return [row['name'] for row in self._table_info(table)]
+
+    def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
+        """Add a column to a table if it doesn't exist."""
+        columns = self._table_columns(table)
+        if column not in columns:
+            logger.info(f"Adding missing column {column} to {table} table")
+            with self._conn:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
