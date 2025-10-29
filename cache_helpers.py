@@ -15,12 +15,19 @@ def build_video_result(video_data: Dict[str, Any], fallback_title: str) -> Dict[
         fallback_title: Title to use if no title found in video_data
 
     Returns:
-        Standardized video result dictionary
+        Standardized video result dictionary with all YouTube metadata
     """
     return {
         'yt_video_id': video_data['yt_video_id'],
         'title': video_data.get('yt_title') or video_data.get('ha_title') or fallback_title,
         'channel': video_data.get('yt_channel'),
+        'channel_id': video_data.get('yt_channel_id'),
+        'description': video_data.get('yt_description'),
+        'published_at': video_data.get('yt_published_at'),
+        'category_id': video_data.get('yt_category_id'),
+        'live_broadcast': video_data.get('yt_live_broadcast'),
+        'location': video_data.get('yt_location'),
+        'recording_date': video_data.get('yt_recording_date'),
         'duration': video_data.get('yt_duration') or video_data.get('ha_duration')
     }
 
