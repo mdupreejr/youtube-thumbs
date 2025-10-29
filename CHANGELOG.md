@@ -1,3 +1,29 @@
+## 1.19.0 - 2025-10-29
+
+### Added
+- **Phase 4: Exponential Backoff for Quota Recovery** - Better recovery from API quota exhaustion
+- Progressive cooldown periods: 2h → 4h → 8h → 16h → 24h (max)
+- Success tracking to reset attempt counter after 10 successful API calls
+- Automatic attempt counter reset after recovery period
+
+### Changed
+- Default cooldown reduced from 12h to 2h (first attempt)
+- Quota guard now tracks attempt numbers and success counts
+- Added detailed backoff information in error messages
+- YouTube API now records successful calls for recovery tracking
+
+### Performance
+- Smarter quota recovery with exponential backoff prevents premature retries
+- Successful API usage automatically reduces future cooldown periods
+- Better resilience against repeated quota exhaustion
+
+### Technical
+- `QuotaGuard` class now implements exponential backoff algorithm
+- New `BACKOFF_PERIODS` constant defines escalating cooldown periods
+- `record_success()` method tracks successful API calls
+- Success threshold (10 calls) triggers attempt counter reset
+- State file now includes `attempt_number` and `success_count` fields
+
 ## 1.18.1 - 2025-10-29
 
 ### Security

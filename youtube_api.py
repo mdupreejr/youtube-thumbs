@@ -232,6 +232,8 @@ class YouTubeAPI:
                 )
 
             logger.info(f"Found {len(candidates)} duration-matched candidates")
+            # Record successful API call for quota recovery tracking
+            quota_guard.record_success()
             return candidates
 
         except HttpError as e:
@@ -263,8 +265,12 @@ class YouTubeAPI:
             if response.get('items'):
                 rating = response['items'][0].get('rating', self.NO_RATING)
                 logger.info(f"Current rating for {yt_video_id}: {rating}")
+                # Record successful API call for quota recovery tracking
+                quota_guard.record_success()
                 return rating
 
+            # Record successful API call even when no items returned
+            quota_guard.record_success()
             return self.NO_RATING
 
         except HttpError as e:
@@ -298,6 +304,8 @@ class YouTubeAPI:
             request.execute()
 
             logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
+            # Record successful API call for quota recovery tracking
+            quota_guard.record_success()
             return True
 
         except HttpError as e:

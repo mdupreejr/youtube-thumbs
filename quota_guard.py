@@ -16,10 +16,14 @@ def _is_truthy(value: Optional[str]) -> bool:
 
 
 class QuotaGuard:
-    """Persisted circuit breaker when YouTube reports quotaExceeded."""
+    """Persisted circuit breaker when YouTube reports quotaExceeded with exponential backoff."""
+
+    # Exponential backoff periods in seconds: 2h → 4h → 8h → 16h → 24h
+    BACKOFF_PERIODS = [7200, 14400, 28800, 57600, 86400]  # 2h, 4h, 8h, 16h, 24h
+    SUCCESS_THRESHOLD = 10  # Number of successes before resetting attempts
 
     def __init__(self) -> None:
-        self.cooldown_seconds = self._resolve_cooldown()
+        self.base_cooldown_seconds = self._resolve_cooldown()
         quota_path = os.getenv('YTT_QUOTA_GUARD_FILE', '/config/youtube_thumbs/quota_guard.json')
         self.state_file = Path(quota_path)
         try:
@@ -30,13 +34,29 @@ class QuotaGuard:
 
     @staticmethod
     def _resolve_cooldown() -> int:
-        raw = os.getenv('YTT_QUOTA_COOLDOWN_SECONDS', '43200')
+        """Resolve base cooldown period from environment variable."""
+        raw = os.getenv('YTT_QUOTA_COOLDOWN_SECONDS', '7200')  # Default to 2 hours
         try:
             value = int(raw)
         except ValueError:
-            logger.warning("Invalid YTT_QUOTA_COOLDOWN_SECONDS '%s'; defaulting to 43200", raw)
-            return 43200
+            logger.warning("Invalid YTT_QUOTA_COOLDOWN_SECONDS '%s'; defaulting to 7200", raw)
+            return 7200
         return max(value, 60)
+
+    def _calculate_backoff_seconds(self, attempt_number: int) -> int:
+        """Calculate exponential backoff based on attempt number."""
+        if attempt_number <= 0:
+            return self.base_cooldown_seconds
+
+        # Use predefined backoff periods
+        index = min(attempt_number - 1, len(self.BACKOFF_PERIODS) - 1)
+        backoff_seconds = self.BACKOFF_PERIODS[index]
+
+        # Allow override from environment
+        if self.base_cooldown_seconds > backoff_seconds:
+            return self.base_cooldown_seconds
+
+        return backoff_seconds
 
     def _load_state(self) -> Optional[Dict[str, Any]]:
         if not self.state_file.exists():
@@ -136,11 +156,15 @@ class QuotaGuard:
                 "remaining_seconds": 0,
                 "reason": None,
                 "detail": None,
+                "attempt_number": 0,
+                "success_count": 0,
                 "message": "YouTube quota available",
             }
 
         reason = state.get('reason', 'quotaExceeded')
         blocked_until = state.get('blocked_until_iso', 'unknown time')
+        attempt_number = state.get('attempt_number', 1)
+        success_count = state.get('success_count', 0)
         hours = remaining // 3600
         minutes = (remaining % 3600) // 60
         return {
@@ -149,21 +173,55 @@ class QuotaGuard:
             "remaining_seconds": remaining,
             "reason": reason,
             "detail": state.get('detail'),
+            "attempt_number": attempt_number,
+            "success_count": success_count,
             "message": (
                 f"YouTube quota exhausted ({reason}). "
-                f"Cooldown active for {hours}h{minutes:02d}m; access resumes at {blocked_until} UTC."
+                f"Attempt {attempt_number}, cooldown active for {hours}h{minutes:02d}m; "
+                f"access resumes at {blocked_until} UTC."
             ),
         }
 
+    def record_success(self) -> None:
+        """Record a successful API call and potentially reset attempts."""
+        state = self._load_state()
+        if not state:
+            # No state means we're not in a blocked state
+            return
+
+        # Increment success count
+        success_count = state.get('success_count', 0) + 1
+        state['success_count'] = success_count
+
+        # Check if we should reset attempts
+        if success_count >= self.SUCCESS_THRESHOLD:
+            logger.info(
+                "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
+                success_count,
+                state.get('attempt_number', 0)
+            )
+            # Reset attempts but keep state for monitoring
+            state['attempt_number'] = 0
+            state['success_count'] = 0
+
+        self._save_state(state)
+
     def trip(self, reason: str, context: Optional[str] = None, detail: Optional[str] = None) -> None:
+        """Trip the circuit breaker with exponential backoff."""
         now = datetime.utcnow()
-        block_until = now + timedelta(seconds=self.cooldown_seconds)
         existing = self._load_state() or {}
+
+        # Increment attempt number for exponential backoff
+        attempt_number = existing.get('attempt_number', 0) + 1
+        cooldown_seconds = self._calculate_backoff_seconds(attempt_number)
+
+        block_until = now + timedelta(seconds=cooldown_seconds)
         existing_epoch = existing.get('blocked_until_epoch', 0)
+
+        # If already blocked and the existing block is longer, keep it
         if existing_epoch and existing_epoch > block_until.timestamp():
             block_until = datetime.utcfromtimestamp(existing_epoch)
-
-        block_duration = max(int(block_until.timestamp() - now.timestamp()), 0)
+            cooldown_seconds = int(existing_epoch - now.timestamp())
 
         state = {
             "reason": reason or "quotaExceeded",
@@ -171,13 +229,19 @@ class QuotaGuard:
             "detail": detail,
             "blocked_until_epoch": block_until.timestamp(),
             "blocked_until_iso": block_until.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            "cooldown_seconds": block_duration or self.cooldown_seconds,
+            "cooldown_seconds": cooldown_seconds,
+            "attempt_number": attempt_number,
+            "success_count": 0,  # Reset success count on failure
             "set_at": now.strftime('%Y-%m-%dT%H:%M:%SZ'),
         }
         self._save_state(state)
+
+        # Log with backoff information
+        backoff_info = f" (attempt {attempt_number}, exponential backoff)" if attempt_number > 1 else ""
         logger.error(
-            "YouTube quota exceeded (%s). Blocking API usage for %s seconds (until %s UTC). Context: %s | Detail: %s",
+            "YouTube quota exceeded (%s)%s. Blocking API usage for %s seconds (until %s UTC). Context: %s | Detail: %s",
             state["reason"],
+            backoff_info,
             state["cooldown_seconds"],
             state["blocked_until_iso"],
             context or "n/a",
