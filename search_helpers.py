@@ -119,7 +119,10 @@ def filter_and_select_best_match(
     matches = matcher.filter_candidates_by_title(title, candidates, artist)
 
     if not matches:
-        logger.error(f"No videos matched title text: '{title}' | Candidates checked: {len(candidates)}")
+        logger.error(
+            f"Title matching failed: HA='{title}' did not match any of {len(candidates)} YouTube results | "
+            f"Artist hint: {artist or 'None'}"
+        )
         return None
 
     # Select best match (first one = highest search relevance)
@@ -128,21 +131,20 @@ def filter_and_select_best_match(
 
     # Log multiple matches if present
     if len(matches) > 1:
-        runner_up = matches[1]
-        logger.warning(
-            "Multiple matches found (%s). Using '%s' (score %.2f) over '%s' (score %.2f)",
-            len(matches),
-            video['title'],
-            match_score or 0,
-            runner_up.get('title'),
-            runner_up.get('_match_score', 0),
-        )
+        logger.info(f"Multiple matches ({len(matches)} found):")
+        for i, match in enumerate(matches[:3]):  # Show top 3
+            status = "[SELECTED]" if i == 0 else "[REJECTED]"
+            match_duration = match.get('duration', 0)
+            duration_diff = abs(match_duration - (video.get('duration', 0))) if i > 0 else 0
+            logger.info(
+                f"  #{i+1} {status} HA='{title}' ↔ YT='{match['title']}' | "
+                f"Duration: {match_duration}s{f' ({duration_diff}s off)' if i > 0 else ''} | "
+                f"Score: {match.get('_match_score', 0):.2f}"
+            )
     elif match_score is not None:
         logger.info(
-            "Matched '%s' on '%s' (score %.2f)",
-            video['title'],
-            video.get('channel'),
-            match_score,
+            f"Single match: HA='{title}' ↔ YT='{video['title']}' | "
+            f"Channel: {video.get('channel')} | Score: {match_score:.2f}"
         )
 
     return video
@@ -210,10 +212,8 @@ def search_and_match_video_refactored(
 
     # Step 5: Log success
     logger.info(
-        "Successfully found video via YouTube: '%s' on '%s' (ID: %s)",
-        video['title'],
-        video.get('channel'),
-        video['yt_video_id'],
+        f"MATCHED: HA='{title}' ({duration}s) → YT='{video['title']}' ({video.get('duration', 0)}s) | "
+        f"Channel: {video.get('channel')} | ID: {video['yt_video_id']}"
     )
 
     return video

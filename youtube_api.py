@@ -183,31 +183,41 @@ class YouTubeAPI:
 
     def _build_smart_search_query(self, title: str, artist: Optional[str] = None) -> str:
         """
-        Build a smart search query using YouTube search operators.
+        Build a simple, effective search query for YouTube.
 
-        Strategies:
-        1. Use intitle: for better title matching
-        2. Use quotes for exact phrase matching when appropriate
-        3. Include artist/channel information when available
-        4. Handle special characters and formatting
+        Going back to the proven approach that worked successfully:
+        - Remove problematic characters (emojis, special chars)
+        - Keep it simple - let YouTube's search algorithm do the work
+        - Don't use restrictive operators like intitle:
 
         Args:
             title: The song/video title to search for
             artist: Optional artist/channel name
 
         Returns:
-            Optimized search query string
+            Cleaned search query string
         """
+        import unicodedata
+
         # Clean the title first
         clean_title = title.strip()
 
-        # Remove ALL quotes to prevent injection and query malformation
-        clean_title = clean_title.replace('"', '').replace("'", '')
+        # Remove emojis and special Unicode characters that can break search
+        # This removes emoji, symbols, and other special chars while keeping regular text
+        clean_title = ''.join(
+            char for char in clean_title
+            if unicodedata.category(char)[0] in ['L', 'N', 'Z', 'P', 'S']
+            and ord(char) < 0x1F600  # Exclude emoji range
+        )
 
-        # Remove YouTube search operators to prevent injection
-        youtube_operators = ['intitle:', 'inurl:', 'site:', 'filetype:', 'inauthor:', 'allintitle:']
-        for operator in youtube_operators:
-            clean_title = clean_title.replace(operator, '')
+        # Split on pipe character and take the first part (main title)
+        # This handles cases like "Song Title | Additional Info"
+        if '|' in clean_title:
+            parts = clean_title.split('|')
+            clean_title = parts[0].strip()
+            # If the first part is too short, use the whole thing
+            if len(clean_title) < 10 and len(parts) > 1:
+                clean_title = ' '.join(p.strip() for p in parts[:2])
 
         # Remove common suffixes that might interfere with search
         suffixes_to_remove = [
@@ -225,54 +235,33 @@ class YouTubeAPI:
                 clean_title = clean_title[:-len(suffix)].strip()
                 break
 
-        # Build query components
-        query_parts = []
+        # Build simple query - just title and artist
+        # Let YouTube's search algorithm handle the matching
+        query_parts = [clean_title]
 
-        # Strategy 1: Use intitle for exact title matching
-        # Since we removed all quotes, check for complexity differently
-        if ' ' in clean_title or any(c in clean_title for c in ['(', ')', '[', ']', '-']):
-            # For complex titles, use intitle with quotes for exact phrase
-            query_parts.append(f'intitle:"{clean_title}"')
-        else:
-            # For simple titles
-            query_parts.append(f'intitle:{clean_title}')
-
-        # Strategy 2: Add artist/channel if provided
+        # Add artist if provided
         if artist:
-            # Clean artist name - remove quotes and operators
-            clean_artist = artist.strip().replace('"', '').replace("'", '')
-            for operator in youtube_operators:
-                clean_artist = clean_artist.replace(operator, '')
-
-            # Remove common prefixes/suffixes from artist
-            if clean_artist.lower().startswith('the '):
-                alt_artist = clean_artist[4:]
-            else:
-                alt_artist = clean_artist
-
-            # Add artist as additional search term (not in intitle)
-            # This helps find videos on the artist's channel
-            if ' ' in clean_artist:
-                query_parts.append(f'"{clean_artist}"')
-            else:
+            clean_artist = artist.strip()
+            # Remove emojis from artist too
+            clean_artist = ''.join(
+                char for char in clean_artist
+                if unicodedata.category(char)[0] in ['L', 'N', 'Z', 'P', 'S']
+                and ord(char) < 0x1F600
+            )
+            if clean_artist:
                 query_parts.append(clean_artist)
 
-        # Join query parts
+        # Join query parts with space
         search_query = ' '.join(query_parts)
+
+        # Clean up excessive whitespace
+        search_query = ' '.join(search_query.split())
 
         # Validate and limit query length (YouTube limit is ~500 chars)
         MAX_QUERY_LENGTH = 500
         if len(search_query) > MAX_QUERY_LENGTH:
             logger.warning("Search query too long (%d chars), truncating", len(search_query))
-            # Fallback to simpler query with intitle preserved
-            if artist and len(clean_artist) < 50:
-                search_query = f'intitle:"{clean_title[:200]}" {clean_artist}'
-            else:
-                search_query = f'intitle:"{clean_title[:250]}"'
-
-            # Final truncation if still too long
-            if len(search_query) > MAX_QUERY_LENGTH:
-                search_query = search_query[:MAX_QUERY_LENGTH]
+            search_query = search_query[:MAX_QUERY_LENGTH]
 
         return search_query
 
@@ -289,9 +278,9 @@ class YouTubeAPI:
             )
             return None
         try:
-            # Build smart search query
+            # Build search query (cleaned and simplified)
             search_query = self._build_smart_search_query(title, artist)
-            logger.info(f"Searching globally with smart query: {search_query}")
+            logger.info(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
 
             response = self.youtube.search().list(
                 part='snippet',
@@ -355,9 +344,9 @@ class YouTubeAPI:
                 if expected_duration is not None and duration is not None:
                     diff = abs(duration - expected_duration)
                     if diff <= 2:
-                        logger.debug(
-                            f"Duration match: '{video_info['title']}' on '{video_info['channel']}' - "
-                            f"{duration}s (diff: {diff}s)"
+                        logger.info(
+                            f"Duration match: HA='{title}' ({expected_duration}s) ↔ "
+                            f"YT='{video_info['title']}' ({duration}s) | {diff}s off"
                         )
                         candidates.append(video_info)
                 else:
@@ -371,7 +360,10 @@ class YouTubeAPI:
                     break
 
             if not candidates and expected_duration:
-                logger.error(f"No videos match duration {expected_duration}s (±2s) | Query: '{title}'")
+                logger.error(
+                    f"No duration matches found: HA='{title}' ({expected_duration}s) | "
+                    f"Searched {len(details.get('items', []))} videos, none within ±2s"
+                )
                 return None
 
             if len(candidates) > self.MAX_CANDIDATES:
