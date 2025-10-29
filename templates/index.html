@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs Rating - System Tests</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .test-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .test-btn {
+            padding: 15px 25px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .test-btn:active {
+            transform: translateY(0);
+        }
+        .test-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-youtube {
+            background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);
+        }
+        .btn-ha {
+            background: linear-gradient(135deg, #41BDF5 0%, #03A9F4 100%);
+        }
+        .btn-db {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+        }
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .result-card {
+            margin-bottom: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            display: none;
+        }
+        .result-card.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .result-header {
+            padding: 15px 20px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .result-header.success {
+            background: #4CAF50;
+            color: white;
+        }
+        .result-header.error {
+            background: #f44336;
+            color: white;
+        }
+        .result-body {
+            padding: 20px;
+            background: #fafafa;
+        }
+        .result-message {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .result-details {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-bar {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px 20px;
+            margin-top: 30px;
+        }
+        .status-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .status-item {
+            font-size: 14px;
+        }
+        .status-label {
+            color: #666;
+            font-weight: 500;
+        }
+        .status-value {
+            color: #333;
+            margin-left: 8px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge.healthy {
+            background: #4CAF50;
+            color: white;
+        }
+        .badge.degraded {
+            background: #FF9800;
+            color: white;
+        }
+        .badge.unhealthy {
+            background: #f44336;
+            color: white;
+        }
+        .badge.cooldown {
+            background: #9C27B0;
+            color: white;
+        }
+        .footer-links {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+        }
+        .footer-links a {
+            color: #03A9F4;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Thumbs Rating</h1>
+        <p class="subtitle">System Component Tests</p>
+
+        <div class="test-buttons">
+            <button class="test-btn btn-youtube" onclick="testAPI('youtube')">
+                🎥 Test YouTube API
+            </button>
+            <button class="test-btn btn-ha" onclick="testAPI('ha')">
+                🏠 Test Home Assistant API
+            </button>
+            <button class="test-btn btn-db" onclick="testAPI('db')">
+                🗄️ Test Database
+            </button>
+        </div>
+
+        <div id="youtube-result" class="result-card"></div>
+        <div id="ha-result" class="result-card"></div>
+        <div id="db-result" class="result-card"></div>
+
+        <div class="status-bar">
+            <div class="status-title">System Status</div>
+            <div class="status-grid" id="status-grid">
+                <div class="status-item">Loading...</div>
+            </div>
+        </div>
+
+        <div class="footer-links">
+            <a href="/health" target="_blank">Health Check</a>
+            <a href="/metrics" target="_blank">Metrics</a>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI(type) {
+            const btn = document.querySelector(`.btn-${type === 'youtube' ? 'youtube' : type === 'ha' ? 'ha' : 'db'}`);
+            const resultDiv = document.getElementById(`${type}-result`);
+
+            // Disable button and show loading
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = originalText + '<span class="loading"></span>';
+
+            // Hide previous result
+            resultDiv.classList.remove('show');
+
+            try {
+                const response = await fetch(`/test/${type}`);
+                const data = await response.json();
+
+                // Show result
+                const headerClass = data.success ? 'success' : 'error';
+                const icon = data.success ? '✓' : '✗';
+
+                resultDiv.innerHTML = `
+                    <div class="result-header ${headerClass}">
+                        <span>${icon} ${type.toUpperCase()} Test</span>
+                        <span>${data.success ? 'PASSED' : 'FAILED'}</span>
+                    </div>
+                    <div class="result-body">
+                        <div class="result-message">${data.message}</div>
+                        ${data.details ? `<div class="result-details">${JSON.stringify(data.details, null, 2)}</div>` : ''}
+                    </div>
+                `;
+                resultDiv.classList.add('show');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result-header error">
+                        <span>✗ ${type.toUpperCase()} Test</span>
+                        <span>ERROR</span>
+                    </div>
+                    <div class="result-body">
+                        <div class="result-message">Failed to execute test: ${error.message}</div>
+                    </div>
+                `;
+                resultDiv.classList.add('show');
+            } finally {
+                // Re-enable button
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+
+                const statusBadge = `<span class="badge ${data.status}">${data.status}</span>`;
+                const healthScore = `Health Score: ${data.health_score}/100`;
+                const quotaStatus = data.quota_guard.blocked ?
+                    `<span style="color: #f44336;">Quota Blocked</span>` :
+                    `<span style="color: #4CAF50;">Quota OK</span>`;
+
+                document.getElementById('status-grid').innerHTML = `
+                    <div class="status-item">
+                        <span class="status-label">Status:</span>
+                        ${statusBadge}
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Health:</span>
+                        <span class="status-value">${healthScore}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Quota:</span>
+                        ${quotaStatus}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to update status:', error);
+            }
+        }
+
+        // Update status on load and every 30 seconds
+        updateStatus();
+        setInterval(updateStatus, 30000);
+    </script>
+</body>
+</html>

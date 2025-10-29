@@ -1,5 +1,5 @@
 import atexit
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, render_template
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
@@ -10,7 +10,7 @@ from youtube_api import get_youtube_api
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
-from startup_checks import run_startup_checks
+from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES
 from video_helpers import is_youtube_content
 from metrics_tracker import metrics
@@ -243,6 +243,33 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/')
+def index() -> str:
+    """Render the test interface page."""
+    return render_template('index.html')
+
+@app.route('/test/youtube')
+def test_youtube() -> Response:
+    """Test YouTube API connectivity and quota status."""
+    try:
+        yt_api = get_youtube_api()
+        success, message = check_youtube_api(yt_api)
+        return jsonify({"success": success, "message": message})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error testing YouTube API: {str(e)}"})
+
+@app.route('/test/ha')
+def test_ha() -> Response:
+    """Test Home Assistant API connectivity."""
+    success, message = check_home_assistant_api(ha_api)
+    return jsonify({"success": success, "message": message})
+
+@app.route('/test/db')
+def test_db() -> Response:
+    """Test database connectivity and integrity."""
+    success, message = check_database(db)
+    return jsonify({"success": success, "message": message})
 
 @app.route('/thumbs_up', methods=['POST'])
 def thumbs_up() -> Tuple[Response, int]:
