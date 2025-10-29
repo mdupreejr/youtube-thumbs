@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Thumbs Rating - System Tests</title>
+    <title>YouTube Thumbs Rating</title>
     <style>
         * {
             margin: 0;
@@ -17,23 +17,65 @@
             line-height: 1.6;
         }
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             padding: 30px;
         }
         h1 {
-            color: #333;
-            margin-bottom: 10px;
             font-size: 28px;
+            margin-bottom: 5px;
         }
         .subtitle {
-            color: #666;
-            margin-bottom: 30px;
             font-size: 14px;
+            opacity: 0.9;
         }
+
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            background: #f9f9f9;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .tab-btn.active {
+            color: #667eea;
+            background: white;
+            border-bottom-color: #667eea;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* System Tests Tab */
         .test-buttons {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -49,8 +91,6 @@
             cursor: pointer;
             transition: all 0.3s ease;
             color: white;
-            position: relative;
-            overflow: hidden;
         }
         .test-btn:hover {
             transform: translateY(-2px);
@@ -196,6 +236,173 @@
             background: #9C27B0;
             color: white;
         }
+
+        /* Bulk Rating Tab */
+        .rating-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .rating-stats {
+            font-size: 14px;
+            color: #666;
+        }
+        .rating-stats strong {
+            color: #333;
+            font-size: 18px;
+        }
+        .pagination {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .page-btn {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .page-btn:hover:not(:disabled) {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .page-info {
+            font-size: 14px;
+            color: #666;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .song-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .song-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        .song-item:hover {
+            background: #f0f0f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .song-item.removing {
+            animation: fadeOut 0.3s ease forwards;
+        }
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+        }
+        .song-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .song-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .song-meta {
+            font-size: 13px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .play-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .rate-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .rate-btn {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rate-btn:hover:not(:disabled) {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .rate-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .rate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .rate-btn.like {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: white;
+        }
+        .rate-btn.dislike {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        .empty-state-text {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .empty-state-subtext {
+            font-size: 14px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            border: 1px solid #ef5350;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
         .footer-links {
             margin-top: 30px;
             padding-top: 20px;
@@ -203,7 +410,7 @@
             text-align: center;
         }
         .footer-links a {
-            color: #03A9F4;
+            color: #667eea;
             text-decoration: none;
             margin: 0 15px;
             font-size: 14px;
@@ -215,56 +422,243 @@
 </head>
 <body>
     <div class="container">
-        <h1>YouTube Thumbs Rating</h1>
-        <p class="subtitle">System Component Tests</p>
-
-        <div class="test-buttons">
-            <button class="test-btn btn-youtube" onclick="testAPI('youtube')">
-                🎥 Test YouTube API
-            </button>
-            <button class="test-btn btn-ha" onclick="testAPI('ha')">
-                🏠 Test Home Assistant API
-            </button>
-            <button class="test-btn btn-db" onclick="testAPI('db')">
-                🗄️ Test Database
-            </button>
+        <div class="header">
+            <h1>YouTube Thumbs Rating</h1>
+            <p class="subtitle">System Management & Bulk Rating</p>
         </div>
 
-        <div id="youtube-result" class="result-card"></div>
-        <div id="ha-result" class="result-card"></div>
-        <div id="db-result" class="result-card"></div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tests')">🔍 System Tests</button>
+            <button class="tab-btn" onclick="switchTab('rating')">⚡ Bulk Rating</button>
+        </div>
 
-        <div class="status-bar">
-            <div class="status-title">System Status</div>
-            <div class="status-grid" id="status-grid">
-                <div class="status-item">Loading...</div>
+        <!-- System Tests Tab -->
+        <div id="tests-tab" class="tab-content active">
+            <div class="test-buttons">
+                <button class="test-btn btn-youtube" onclick="testAPI('youtube')">
+                    🎥 Test YouTube API
+                </button>
+                <button class="test-btn btn-ha" onclick="testAPI('ha')">
+                    🏠 Test Home Assistant API
+                </button>
+                <button class="test-btn btn-db" onclick="testAPI('db')">
+                    🗄️ Test Database
+                </button>
+            </div>
+
+            <div id="youtube-result" class="result-card"></div>
+            <div id="ha-result" class="result-card"></div>
+            <div id="db-result" class="result-card"></div>
+
+            <div class="status-bar">
+                <div class="status-title">System Status</div>
+                <div class="status-grid" id="status-grid">
+                    <div class="status-item">Loading...</div>
+                </div>
+            </div>
+
+            <div class="footer-links">
+                <a href="/health" target="_blank">Health Check</a>
+                <a href="/metrics" target="_blank">Metrics</a>
             </div>
         </div>
 
-        <div class="footer-links">
-            <a href="/health" target="_blank">Health Check</a>
-            <a href="/metrics" target="_blank">Metrics</a>
+        <!-- Bulk Rating Tab -->
+        <div id="rating-tab" class="tab-content">
+            <div class="rating-header">
+                <div class="rating-stats">
+                    <div><strong id="unrated-count">--</strong> unrated songs</div>
+                </div>
+                <div class="pagination">
+                    <button class="page-btn" id="prev-page" onclick="prevPage()" disabled>← Prev</button>
+                    <span class="page-info" id="page-info">Page 1</span>
+                    <button class="page-btn" id="next-page" onclick="nextPage()" disabled>Next →</button>
+                </div>
+            </div>
+
+            <div id="error-container"></div>
+            <div id="song-list-container"></div>
         </div>
     </div>
 
     <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        let songs = [];
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            // Load data if switching to rating tab
+            if (tabName === 'rating') {
+                loadUnratedSongs(1);
+            }
+        }
+
+        // Bulk Rating Functions
+        async function loadUnratedSongs(page) {
+            try {
+                const response = await fetch(`/api/unrated?page=${page}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(data.error || 'Failed to load songs');
+                    return;
+                }
+
+                songs = data.songs;
+                currentPage = data.page;
+                totalPages = data.total_pages;
+
+                updateStats(data.total_count);
+                updatePagination();
+                renderSongList();
+
+            } catch (error) {
+                showError('Failed to load unrated songs: ' + error.message);
+            }
+        }
+
+        function updateStats(count) {
+            document.getElementById('unrated-count').textContent = count;
+        }
+
+        function updatePagination() {
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prev-page').disabled = currentPage === 1;
+            document.getElementById('next-page').disabled = currentPage >= totalPages;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                loadUnratedSongs(currentPage - 1);
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                loadUnratedSongs(currentPage + 1);
+            }
+        }
+
+        function renderSongList() {
+            const container = document.getElementById('song-list-container');
+
+            if (songs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🎉</div>
+                        <div class="empty-state-text">All songs rated!</div>
+                        <div class="empty-state-subtext">You've rated all your songs. Great job!</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <div class="song-list">
+                    ${songs.map(song => `
+                        <div class="song-item" id="song-${song.id}">
+                            <div class="song-info">
+                                <div class="song-title">${escapeHtml(song.title)}</div>
+                                <div class="song-meta">${escapeHtml(song.artist)}</div>
+                            </div>
+                            <div class="play-count">▶ ${song.play_count}</div>
+                            <div class="rate-buttons">
+                                <button class="rate-btn like" onclick="rateSong('${song.id}', 'like')" title="Like">👍</button>
+                                <button class="rate-btn dislike" onclick="rateSong('${song.id}', 'dislike')" title="Dislike">👎</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function rateSong(videoId, rating) {
+            const songElement = document.getElementById(`song-${videoId}`);
+            const buttons = songElement.querySelectorAll('.rate-btn');
+
+            // Disable buttons
+            buttons.forEach(btn => btn.disabled = true);
+
+            try {
+                const response = await fetch(`/api/rate/${videoId}/${rating}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Animate removal
+                    songElement.classList.add('removing');
+
+                    // Remove from array and re-render after animation
+                    setTimeout(() => {
+                        songs = songs.filter(s => s.id !== videoId);
+
+                        // Update count
+                        const currentCount = parseInt(document.getElementById('unrated-count').textContent);
+                        updateStats(currentCount - 1);
+
+                        // If page is empty, load previous page or reload current
+                        if (songs.length === 0) {
+                            if (currentPage > 1) {
+                                loadUnratedSongs(currentPage - 1);
+                            } else {
+                                loadUnratedSongs(1);
+                            }
+                        } else {
+                            renderSongList();
+                        }
+                    }, 300);
+                } else {
+                    // Re-enable buttons on error
+                    buttons.forEach(btn => btn.disabled = false);
+                    showError(data.error || 'Failed to rate song');
+                }
+            } catch (error) {
+                buttons.forEach(btn => btn.disabled = false);
+                showError('Error rating song: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error-message">❌ ${escapeHtml(message)}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // System Tests Functions
         async function testAPI(type) {
             const btn = document.querySelector(`.btn-${type === 'youtube' ? 'youtube' : type === 'ha' ? 'ha' : 'db'}`);
             const resultDiv = document.getElementById(`${type}-result`);
 
-            // Disable button and show loading
             btn.disabled = true;
             const originalText = btn.innerHTML;
             btn.innerHTML = originalText + '<span class="loading"></span>';
 
-            // Hide previous result
             resultDiv.classList.remove('show');
 
             try {
                 const response = await fetch(`/test/${type}`);
                 const data = await response.json();
 
-                // Show result
                 const headerClass = data.success ? 'success' : 'error';
                 const icon = data.success ? '✓' : '✗';
 
@@ -291,7 +685,6 @@
                 `;
                 resultDiv.classList.add('show');
             } finally {
-                // Re-enable button
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
@@ -327,7 +720,7 @@
             }
         }
 
-        // Update status on load and every 30 seconds
+        // Initialize
         updateStatus();
         setInterval(updateStatus, 30000);
     </script>

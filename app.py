@@ -271,6 +271,131 @@ def test_db() -> Response:
     success, message = check_database(db)
     return jsonify({"success": success, "message": message})
 
+@app.route('/api/unrated')
+def get_unrated_songs() -> Response:
+    """Get unrated songs for bulk rating interface."""
+    try:
+        from flask import request
+        page = int(request.args.get('page', 1))
+        limit = 50
+        offset = (page - 1) * limit
+
+        with db.lock:
+            # Get total count of unrated songs
+            cursor = db._conn.execute(
+                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0"
+            )
+            total_count = cursor.fetchone()['count']
+
+            # Get unrated songs, sorted by play count (most played first)
+            cursor = db._conn.execute(
+                """
+                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count
+                FROM video_ratings
+                WHERE rating = 'none' AND pending_match = 0
+                ORDER BY play_count DESC, date_last_played DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset)
+            )
+            songs = cursor.fetchall()
+
+        # Format results
+        songs_list = []
+        for song in songs:
+            songs_list.append({
+                'id': song['yt_video_id'],
+                'title': song['yt_title'] or song['ha_title'] or 'Unknown',
+                'artist': song['ha_artist'] or song['yt_channel'] or 'Unknown',
+                'play_count': song['play_count'] or 0
+            })
+
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+
+        return jsonify({
+            'success': True,
+            'songs': songs_list,
+            'page': page,
+            'total_pages': total_pages,
+            'total_count': total_count
+        })
+    except Exception as e:
+        logger.error(f"Error fetching unrated songs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rate/<video_id>/like', methods=['POST'])
+def rate_song_like(video_id: str) -> Response:
+    """Rate a specific video as like (for bulk rating)."""
+    return rate_song_direct(video_id, 'like')
+
+@app.route('/api/rate/<video_id>/dislike', methods=['POST'])
+def rate_song_dislike(video_id: str) -> Response:
+    """Rate a specific video as dislike (for bulk rating)."""
+    return rate_song_direct(video_id, 'dislike')
+
+def rate_song_direct(video_id: str, rating_type: str) -> Response:
+    """
+    Directly rate a video by ID without checking current media.
+    Used for bulk rating interface.
+    """
+    try:
+        # Get video info from database
+        video_data = db.get_video(video_id)
+        if not video_data:
+            return jsonify({'success': False, 'error': 'Video not found in database'}), 404
+
+        title = video_data.get('yt_title') or video_data.get('ha_title') or 'Unknown'
+
+        # Check if already rated
+        current_rating = video_data.get('rating', 'none')
+        if current_rating == rating_type:
+            return jsonify({
+                'success': True,
+                'message': f'Already rated as {rating_type}',
+                'already_rated': True
+            })
+
+        # Update local database first
+        db.record_rating_local(video_id, rating_type)
+
+        # Try to rate on YouTube (if not in quota block)
+        if quota_guard.is_blocked():
+            # Queue for later sync
+            db.enqueue_rating(video_id, rating_type)
+            metrics.record_rating(success=False, queued=True)
+            rating_logger.info(f"{rating_type.upper()} | QUEUED | {title} | ID: {video_id} | Quota blocked")
+            return jsonify({
+                'success': True,
+                'message': f'Queued {rating_type} (quota blocked)',
+                'queued': True
+            })
+
+        # Rate on YouTube API
+        yt_api = get_youtube_api()
+        if yt_api.set_video_rating(video_id, rating_type):
+            db.record_rating(video_id, rating_type)
+            metrics.record_rating(success=True, queued=False)
+            rating_logger.info(f"{rating_type.upper()} | SUCCESS | {title} | ID: {video_id}")
+            return jsonify({
+                'success': True,
+                'message': f'Rated as {rating_type}',
+                'queued': False
+            })
+        else:
+            # Failed but queued
+            db.enqueue_rating(video_id, rating_type)
+            metrics.record_rating(success=False, queued=True)
+            rating_logger.info(f"{rating_type.upper()} | QUEUED | {title} | ID: {video_id} | API returned false")
+            return jsonify({
+                'success': True,
+                'message': f'Queued {rating_type} (API failed)',
+                'queued': True
+            })
+
+    except Exception as e:
+        logger.error(f"Error rating video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/thumbs_up', methods=['POST'])
 def thumbs_up() -> Tuple[Response, int]:
     return rate_video('like')
