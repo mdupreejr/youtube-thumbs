@@ -53,16 +53,17 @@ class HomeAssistantAPI:
             
             attributes = data.get('attributes', {})
             media_title = attributes.get('media_title')
-            media_channel = attributes.get('media_channel') or attributes.get('app_name')
+            media_artist = attributes.get('media_artist')
+            app_name = attributes.get('app_name')
             media_duration = attributes.get('media_duration')
 
             # Debug logging to understand what HA is actually sending
             logger.debug(
-                "Raw HA attributes: media_title='%s', media_channel='%s', "
+                "Raw HA attributes: media_title='%s', media_artist='%s', "
                 "app_name='%s', duration=%s",
                 media_title,
-                attributes.get('media_channel'),
-                attributes.get('app_name'),
+                media_artist,
+                app_name,
                 media_duration
             )
 
@@ -71,13 +72,14 @@ class HomeAssistantAPI:
                 return None
 
             # Only return data if it's from YouTube
-            if not media_channel or 'youtube' not in media_channel.lower():
-                logger.debug(f"Skipping non-YouTube content from channel: {media_channel}")
+            if not app_name or 'youtube' not in app_name.lower():
+                logger.debug(f"Skipping non-YouTube content from app: {app_name}")
                 return None
 
             media_info = {
                 'title': media_title,
-                'channel': media_channel,
+                'artist': media_artist or 'Unknown',
+                'app_name': app_name,
                 'duration': media_duration
             }
 

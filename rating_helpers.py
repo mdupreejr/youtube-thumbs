@@ -65,10 +65,10 @@ def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_f
     """
     if not is_youtube_content_func(ha_media):
         title = ha_media.get('title', 'unknown')
-        channel = ha_media.get('channel', 'unknown')
-        logger.info(f"Skipping non-YouTube content: '{title}' from channel '{channel}'")
-        rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{channel}'")
-        return jsonify({"success": False, "error": f"Not YouTube content (channel: {channel})"}), 400
+        app_name = ha_media.get('app_name', 'unknown')
+        logger.info(f"Skipping non-YouTube content: '{title}' from app '{app_name}'")
+        rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{app_name}'")
+        return jsonify({"success": False, "error": f"Not YouTube content (app: {app_name})"}), 400
     return None
 
 

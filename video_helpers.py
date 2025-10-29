@@ -24,7 +24,8 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     return {
         'yt_video_id': yt_video_id,
         'ha_title': ha_media.get('title', video_title),
-        'ha_channel': ha_media.get('channel', 'YouTube'),
+        'ha_artist': ha_media.get('artist', 'Unknown'),
+        'ha_app_name': ha_media.get('app_name', 'YouTube'),
         'yt_title': video_title,
         'yt_channel': video.get('channel'),
         'yt_channel_id': video.get('channel_id'),
@@ -43,7 +44,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
 
 def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     """
-    Check if the media is from YouTube based on channel field.
+    Check if the media is from YouTube based on app_name field.
 
     Args:
         ha_media: Media data from Home Assistant
@@ -51,8 +52,8 @@ def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     Returns:
         True if content is from YouTube, False otherwise
     """
-    channel = ha_media.get('channel', '').lower()
-    return 'youtube' in channel if channel else False
+    app_name = ha_media.get('app_name', '').lower()
+    return 'youtube' in app_name if app_name else False
 
 
 def get_content_hash(title: Optional[str], duration: Optional[int], artist: Optional[str] = None) -> str:

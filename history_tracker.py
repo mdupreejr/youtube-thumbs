@@ -132,10 +132,10 @@ class HistoryTracker:
         # Skip non-YouTube content to save API calls
         if not is_youtube_content(media):
             title = media.get('title', 'unknown')
-            channel = media.get('channel', 'unknown')
-            if self._active_media_key and not self._active_media_key.startswith(f"non-yt|{channel}"):
-                logger.info(f"History tracker skipping non-YouTube content: '{title}' from channel '{channel}'")
-            self._active_media_key = f"non-yt|{channel}|{title}"
+            app_name = media.get('app_name', 'unknown')
+            if self._active_media_key and not self._active_media_key.startswith(f"non-yt|{app_name}"):
+                logger.info(f"History tracker skipping non-YouTube content: '{title}' from app '{app_name}'")
+            self._active_media_key = f"non-yt|{app_name}|{title}"
             return
 
         title = media.get('title')
@@ -181,13 +181,15 @@ class HistoryTracker:
 
         video = self.find_cached_video({
             'title': title,
-            'channel': media.get('channel'),
+            'artist': media.get('artist'),
+            'app_name': media.get('app_name'),
             'duration': duration
         })
         if not video:
             video = self.search_and_match_video({
                 'title': title,
-                'channel': media.get('channel'),
+                'artist': media.get('artist'),
+                'app_name': media.get('app_name'),
                 'duration': duration
             })
 
@@ -195,7 +197,8 @@ class HistoryTracker:
             if quota_guard.is_blocked():
                 pending_id = self.db.upsert_pending_media({
                     'title': title,
-                    'channel': media.get('channel'),
+                    'artist': media.get('artist'),
+                    'app_name': media.get('app_name'),
                     'duration': duration,
                 })
                 self.db.record_play(pending_id)
@@ -222,7 +225,8 @@ class HistoryTracker:
         # Use helper function to prepare video data
         ha_media = {
             'title': title,
-            'channel': media.get('channel'),
+            'artist': media.get('artist'),
+            'app_name': media.get('app_name'),
             'duration': duration
         }
         video_data = prepare_video_upsert(video, ha_media, source='ha_live')

@@ -22,7 +22,8 @@ class DatabaseConnection:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             yt_video_id TEXT UNIQUE NOT NULL,
             ha_title TEXT NOT NULL,
-            ha_channel TEXT,
+            ha_artist TEXT,
+            ha_app_name TEXT,
             yt_title TEXT,
             yt_channel TEXT,
             yt_channel_id TEXT,
@@ -124,6 +125,20 @@ class DatabaseConnection:
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
                     )
+
+                    # Migrate ha_channel to ha_artist (for existing databases)
+                    columns = self._table_columns('video_ratings')
+                    if 'ha_channel' in columns and 'ha_artist' not in columns:
+                        logger.info("Migrating ha_channel column to ha_artist")
+                        # SQLite doesn't support RENAME COLUMN directly in all versions
+                        # Add new column, copy data, drop old column
+                        self._conn.execute("ALTER TABLE video_ratings ADD COLUMN ha_artist TEXT")
+                        self._conn.execute("UPDATE video_ratings SET ha_artist = ha_channel")
+                        # Note: Cannot drop column in SQLite easily, so we leave ha_channel empty
+                        # New inserts will only use ha_artist
+
+                    # Add ha_app_name column if missing (for existing databases)
+                    self._add_column_if_missing('video_ratings', 'ha_app_name', 'TEXT')
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
