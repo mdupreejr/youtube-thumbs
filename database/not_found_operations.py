@@ -1,6 +1,7 @@
 """
 Not found search cache database operations.
 """
+import os
 import sqlite3
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
@@ -17,7 +18,8 @@ class NotFoundOperations:
         self._conn = db_connection.connection
         self._lock = db_connection.lock
         self._timestamp = db_connection.timestamp
-        self.cache_hours = 24  # Default cache duration
+        # Make cache duration configurable via environment variable
+        self.cache_hours = int(os.getenv('NOT_FOUND_CACHE_HOURS', '24'))
 
     def is_recently_not_found(
         self,
@@ -30,11 +32,19 @@ class NotFoundOperations:
 
         Args:
             title: Media title
-            artist: Media artist (optional)
+            artist: Media artist (optional) - stored for debugging but not used in hash
             duration: Media duration in seconds (optional)
 
         Returns:
             True if search failed within cache period, False otherwise
+
+        Note:
+            The artist parameter is intentionally not used in the content hash.
+            This is because:
+            1. YouTube search already considers all text in the query
+            2. Different artists might have the same song title/duration
+            3. We want to avoid repeated searches even if artist metadata varies
+            The artist is still stored in the database for debugging purposes.
         """
         if not title:
             return False
@@ -71,18 +81,25 @@ class NotFoundOperations:
         artist: Optional[str] = None,
         duration: Optional[int] = None,
         search_query: Optional[str] = None
-    ) -> None:
+    ) -> bool:
         """
         Record a failed search attempt.
 
         Args:
             title: Media title that wasn't found
-            artist: Media artist (optional)
+            artist: Media artist (optional) - stored for debugging but not used in hash
             duration: Media duration in seconds (optional)
             search_query: The actual query sent to YouTube (optional)
+
+        Returns:
+            True if successfully recorded, False otherwise
+
+        Note:
+            Artist is stored in the database for debugging but not included
+            in the content hash to maximize cache hits across artist variations.
         """
         if not title:
-            return
+            return False
 
         search_hash = get_content_hash(title, duration)
         timestamp = self._timestamp('')
@@ -90,40 +107,31 @@ class NotFoundOperations:
         with self._lock:
             try:
                 with self._conn:
-                    # Try to update existing entry first
-                    cur = self._conn.execute(
+                    # Use UPSERT syntax to handle race conditions atomically
+                    self._conn.execute(
                         """
-                        UPDATE not_found_searches
-                        SET last_attempted = ?,
+                        INSERT INTO not_found_searches
+                        (search_hash, title, artist, duration, search_query, last_attempted, attempt_count)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                        ON CONFLICT(search_hash) DO UPDATE SET
+                            last_attempted = excluded.last_attempted,
                             attempt_count = attempt_count + 1,
-                            search_query = COALESCE(?, search_query)
-                        WHERE search_hash = ?
+                            search_query = COALESCE(excluded.search_query, search_query)
                         """,
-                        (timestamp, search_query, search_hash)
+                        (search_hash, title, artist, duration, search_query, timestamp)
                     )
-
-                    # If no rows updated, insert new entry
-                    if cur.rowcount == 0:
-                        self._conn.execute(
-                            """
-                            INSERT INTO not_found_searches
-                            (search_hash, title, artist, duration, search_query, last_attempted, attempt_count)
-                            VALUES (?, ?, ?, ?, ?, ?, 1)
-                            """,
-                            (search_hash, title, artist, duration, search_query, timestamp)
-                        )
-                        logger.info(
-                            "Cached not found result for '%s' (duration: %s)",
-                            title, duration
-                        )
-                    else:
-                        logger.debug(
-                            "Updated not found cache for '%s' (incremented attempt count)",
-                            title
-                        )
+                    logger.info(
+                        "Cached not found result for '%s' (duration: %s)",
+                        title, duration
+                    )
+                    return True
 
             except sqlite3.DatabaseError as exc:
                 logger.error("Failed to record not found search for '%s': %s", title, exc)
+                # Re-raise for critical failures
+                if "no such table" in str(exc).lower():
+                    raise
+                return False
 
     def cleanup_old_entries(self, days: int = 2) -> int:
         """

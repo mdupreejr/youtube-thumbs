@@ -128,6 +128,11 @@ class DatabaseConnection:
                 raise
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
+        # Validate table name to prevent SQL injection
+        VALID_TABLES = {'video_ratings', 'pending_ratings', 'import_history', 'not_found_searches'}
+        if table not in VALID_TABLES:
+            raise ValueError(f"Invalid table name: {table}")
+
         cursor = self._conn.execute(f"PRAGMA table_info({table});")
         return [dict(row) for row in cursor.fetchall()]
 
@@ -136,6 +141,17 @@ class DatabaseConnection:
 
     def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
         """Add a column to a table if it doesn't exist."""
+        # Validate inputs to prevent SQL injection
+        VALID_TABLES = {'video_ratings', 'pending_ratings', 'import_history', 'not_found_searches'}
+        VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
+
+        if table not in VALID_TABLES:
+            raise ValueError(f"Invalid table name: {table}")
+        if column_type.upper() not in VALID_COLUMN_TYPES:
+            raise ValueError(f"Invalid column type: {column_type}")
+        if not column.replace('_', '').isalnum():
+            raise ValueError(f"Invalid column name: {column}")
+
         columns = self._table_columns(table)
         if column not in columns:
             logger.info(f"Adding missing column {column} to {table} table")

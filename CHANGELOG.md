@@ -1,3 +1,28 @@
+## 1.18.1 - 2025-10-29
+
+### Security
+- **CRITICAL FIX**: Fixed SQL injection vulnerability in database table operations
+- Added input validation for table names, column names, and column types
+- Whitelist validation prevents arbitrary SQL execution
+
+### Fixed
+- Fixed race condition in `record_not_found()` using SQLite UPSERT syntax
+- Fixed silent exception swallowing - now returns boolean for success/failure
+- Added automatic cleanup of old cache entries on startup (2+ days old)
+- Improved error handling with critical error re-raising
+
+### Improved
+- Added type hints to all database methods for better IDE support
+- Made cache duration configurable via `NOT_FOUND_CACHE_HOURS` environment variable
+- Better thread safety with atomic UPSERT operations
+- Added documentation explaining artist parameter design choice
+
+### Technical
+- Validates table/column names against whitelist to prevent SQL injection
+- Uses `INSERT ... ON CONFLICT` for race-condition-free cache updates
+- Cleanup runs silently on startup to prevent unbounded table growth
+- Returns success indicators from cache operations for better error handling
+
 ## 1.18.0 - 2025-10-29
 
 ### Added

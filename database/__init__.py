@@ -3,7 +3,7 @@ Database module for YouTube Thumbs addon.
 Provides a unified interface for all database operations.
 """
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 from .connection import DatabaseConnection, DEFAULT_DB_PATH
 from .video_operations import VideoOperations
@@ -97,13 +97,13 @@ class Database:
         return self._import_ops.log_import_entry(entry_id, source, yt_video_id)
 
     # Not found cache operations
-    def is_recently_not_found(self, title, artist=None, duration=None):
+    def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
         return self._not_found_ops.is_recently_not_found(title, artist, duration)
 
-    def record_not_found(self, title, artist=None, duration=None, search_query=None):
+    def record_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None, search_query: Optional[str] = None) -> bool:
         return self._not_found_ops.record_not_found(title, artist, duration, search_query)
 
-    def cleanup_old_not_found(self, days=2):
+    def cleanup_old_not_found(self, days: int = 2) -> int:
         return self._not_found_ops.cleanup_old_entries(days)
 
 

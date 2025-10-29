@@ -203,6 +203,16 @@ def run_startup_checks(ha_api, yt_api, db) -> bool:
     results.append(("Database", db_ok, db_msg))
     all_ok = all_ok and db_ok
 
+    # Cleanup old not-found cache entries (silently)
+    if db_ok:
+        try:
+            deleted = db.cleanup_old_not_found(days=2)
+            if deleted > 0:
+                logger.info(f"  Cleaned up {deleted} old not-found cache entries")
+        except Exception as e:
+            # Don't fail startup for cleanup errors
+            logger.debug(f"Failed to cleanup not-found cache: {e}")
+
     # Summary
     logger.info("")
     logger.info("=" * 60)
