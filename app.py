@@ -1,8 +1,9 @@
 import atexit
-from flask import Flask, jsonify, Response, render_template
+from flask import Flask, jsonify, Response, render_template, request as flask_request
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
+import requests
 from werkzeug.middleware.proxy_fix import ProxyFix
 from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
@@ -498,6 +499,52 @@ def get_metrics() -> Response:
     except Exception as e:
         logger.error(f"Error generating metrics: {e}")
         return jsonify({'error': 'Failed to generate metrics', 'message': str(e)}), 500
+
+
+@app.route('/database', defaults={'path': ''})
+@app.route('/database/<path:path>')
+def database_proxy(path):
+    """Proxy requests to sqlite_web running on port 8080."""
+    sqlite_web_host = os.getenv('SQLITE_WEB_HOST', '127.0.0.1')
+    sqlite_web_port = os.getenv('SQLITE_WEB_PORT', '8080')
+    sqlite_web_url = f"http://{sqlite_web_host}:{sqlite_web_port}"
+
+    # Build the target URL
+    if path:
+        target_url = f"{sqlite_web_url}/{path}"
+    else:
+        target_url = sqlite_web_url
+
+    # Forward query parameters
+    if flask_request.query_string:
+        target_url += f"?{flask_request.query_string.decode('utf-8')}"
+
+    try:
+        # Forward the request to sqlite_web
+        resp = requests.request(
+            method=flask_request.method,
+            url=target_url,
+            headers={key: value for (key, value) in flask_request.headers if key != 'Host'},
+            data=flask_request.get_data(),
+            cookies=flask_request.cookies,
+            allow_redirects=False,
+            timeout=30
+        )
+
+        # Build response
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [(name, value) for (name, value) in resp.raw.headers.items()
+                   if name.lower() not in excluded_headers]
+
+        response = Response(resp.content, resp.status_code, headers)
+        return response
+
+    except requests.exceptions.ConnectionError:
+        logger.error("Failed to connect to sqlite_web - is it running?")
+        return Response("Database viewer not available. sqlite_web may not be running.", status=503)
+    except Exception as e:
+        logger.error(f"Error proxying to sqlite_web: {e}")
+        return Response(f"Error accessing database viewer: {str(e)}", status=500)
 
 
 if __name__ == '__main__':
