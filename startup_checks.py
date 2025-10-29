@@ -133,9 +133,9 @@ def check_database(db) -> Tuple[bool, str]:
             logger.warning("⚠ Database file doesn't exist yet - will be created on first use")
             return True, "Database will be created"
 
-        # Test connection and get statistics
+        # Test connection and get statistics (only count successfully matched videos)
         with db._lock:
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 0")
             total_videos = cursor.fetchone()['count']
 
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating != 'none' AND pending_match = 0")
