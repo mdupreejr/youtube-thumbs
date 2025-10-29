@@ -147,9 +147,23 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 1")
             pending_videos = cursor.fetchone()['count']
 
-            # Count rated videos (only matched ones can be rated)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating != 'none' AND pending_match = 0")
-            rated_videos = cursor.fetchone()['count']
+            # Count rated videos breakdown
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like' AND pending_match = 0")
+            liked_videos = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike' AND pending_match = 0")
+            disliked_videos = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0")
+            unrated_videos = cursor.fetchone()['count']
+
+            # Total plays
+            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings WHERE pending_match = 0")
+            total_plays = cursor.fetchone()['total'] or 0
+
+            # Unique channels
+            cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE pending_match = 0 AND yt_channel_id IS NOT NULL")
+            unique_channels = cursor.fetchone()['count']
 
             # Count pending ratings queue
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM pending_ratings")
@@ -167,7 +181,8 @@ def check_database(db) -> Tuple[bool, str]:
 
         logger.info("✓ Database connected and working")
         logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} pending)")
-        logger.info(f"  Rated videos: {rated_videos}")
+        logger.info(f"  Ratings: {liked_videos} liked, {disliked_videos} disliked, {unrated_videos} unrated")
+        logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
         if pending_ratings > 0:
             logger.info(f"  Pending ratings to sync: {pending_ratings}")
@@ -181,7 +196,17 @@ def check_database(db) -> Tuple[bool, str]:
         else:
             logger.info("  No recent plays recorded")
 
-        return True, f"Database OK: {total_videos} total ({matched_videos} matched, {pending_videos} pending)"
+        # Build comprehensive status message
+        status_parts = [
+            f"{total_videos} total ({matched_videos} matched, {pending_videos} pending)",
+            f"Ratings: {liked_videos}👍 {disliked_videos}👎 {unrated_videos}⭐",
+            f"{total_plays:,} plays",
+            f"{unique_channels} channels"
+        ]
+        if pending_ratings > 0:
+            status_parts.append(f"{pending_ratings} pending sync")
+
+        return True, "DB OK: " + " • ".join(status_parts)
 
     except Exception as e:
         logger.error(f"✗ Database check failed: {str(e)}")
