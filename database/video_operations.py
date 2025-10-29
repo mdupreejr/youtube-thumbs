@@ -72,7 +72,7 @@ class VideoOperations:
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
-            1, 0, :pending_match, :source
+            0, 0, :pending_match, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_title=excluded.ha_title,
