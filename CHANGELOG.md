@@ -1,3 +1,10 @@
+## 1.29.1 - 2025-10-29
+
+### Documentation
+- Added prominent links to sqlite_web interface in README
+- Added dedicated "Database Interface" section for easier discovery
+- Enhanced sqlite_web documentation with clearer OPEN WEB UI button instructions
+
 ## 1.22.0 - 2025-10-29
 
 ### Code Quality & Stability - MEDIUM Priority
