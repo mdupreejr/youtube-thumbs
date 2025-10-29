@@ -83,6 +83,8 @@ Health check with rate limiter and quota guard stats.
 ```json
 {
   "status": "healthy",
+  "health_score": 85,
+  "warnings": [],
   "rate_limiter": {
     "last_minute": 2,
     "last_hour": 15,
@@ -96,6 +98,59 @@ Health check with rate limiter and quota guard stats.
     "reason": null,
     "detail": null,
     "message": "YouTube quota available"
+  }
+}
+```
+
+### `GET /metrics`
+Comprehensive metrics for monitoring and analysis.
+
+```json
+{
+  "health": {
+    "score": 85,
+    "status": "healthy",
+    "warnings": []
+  },
+  "cache": {
+    "total": {
+      "hits": 1234,
+      "misses": 567,
+      "hit_rate": 68.5
+    },
+    "last_hour": { ... },
+    "last_24h": { ... },
+    "fuzzy_matches": {
+      "total": 89,
+      "last_hour": 12
+    }
+  },
+  "api": {
+    "total_calls": 3456,
+    "success_rate": 95.2,
+    "by_type": {
+      "search": { ... },
+      "rate": { ... }
+    },
+    "quota": {
+      "trips": 2,
+      "recoveries": 1
+    }
+  },
+  "ratings": {
+    "success": {
+      "total": 234,
+      "last_hour": 15
+    },
+    "failed": { ... },
+    "queued": { ... }
+  },
+  "search": {
+    "total_searches": 456,
+    "failed_searches": {
+      "total": 23,
+      "by_reason": { ... }
+    }
   }
 }
 ```
@@ -283,7 +338,39 @@ For issues or questions:
 - Check add-on logs first (Settings → Add-ons → YouTube Thumbs Rating → Log)
 - Review [INSTALL.md](INSTALL.md) for complete documentation and troubleshooting
 
-## TODO - Next API Optimization Phases
+## Recent Updates (v1.28.0)
+
+### ✅ Major Optimizations Completed
+
+#### API Optimization & Performance (v1.23.0 - v1.24.0)
+- ✅ **Phase 2: Enhanced Local Caching** - Implemented fuzzy title matching with 85% threshold using Levenshtein distance
+- ✅ **Phase 5: Batch Pending Operations** - Batch processing for up to 50 video ratings per API call
+- ✅ **Phase 6: Smarter Search Queries** - Sanitized search queries, pre-filtering with SQL LIKE clauses
+- ✅ **Phase 8: Monitoring and Metrics** - Comprehensive `/metrics` endpoint with cache hit rates, API usage stats, and health scoring
+
+#### Critical Bug Fixes (v1.25.0 - v1.26.0)
+- Fixed Levenshtein algorithm memory issue (limited to 500 chars)
+- Fixed QuotaGuard file lock race condition
+- Fixed unbounded metrics deque growth
+- Added SQL pre-filtering for better performance
+- Improved error handling across all metrics categories
+
+#### Code Quality Improvements (v1.27.0 - v1.28.0)
+- Refactored large functions (100+ lines) into modular helpers
+- Created dedicated helper modules: `rating_helpers.py`, `search_helpers.py`, `cache_helpers.py`
+- Removed redundant code and optimized imports
+- Improved code organization following Single Responsibility Principle
+
+## API Optimization History
+
+### ✅ Phase 1: Connection Pooling (Completed in earlier versions)
+- Implemented connection reuse for YouTube API calls
+- Reduced connection overhead significantly
+
+### ✅ Phase 2: Enhanced Local Caching (v1.23.0)
+- ✅ Added fuzzy title matching with Levenshtein distance
+- ✅ Implemented 85% similarity threshold
+- ✅ Check multiple variations before calling API
 
 ### ✅ Phase 3: Cache Negative Results (v1.18.0)
 - ✅ Create `not_found_searches` table to track failed lookups
@@ -296,26 +383,21 @@ For issues or questions:
 - ✅ Reset attempt counter after successful API period
 - ✅ Better recovery from quota exhaustion
 
-### Phase 2: Enhanced Local Caching
-- Add fuzzy title matching with Levenshtein distance
-- Implement similarity threshold (e.g., 85% match)
-- Check multiple variations before calling API
+### ✅ Phase 5: Batch Pending Operations (v1.24.0)
+- ✅ Collect multiple video IDs for batch processing
+- ✅ Use `videos.list` API with up to 50 IDs per call
+- ✅ Reduce per-video API quota cost
 
-### Phase 5: Batch Pending Operations
-- Collect multiple video IDs for batch processing
-- Use `videos.list` API with up to 50 IDs per call
-- Reduce per-video API quota cost
+### ✅ Phase 6: Smarter Search Queries (v1.23.0)
+- ✅ Sanitize user input removing quotes and operators
+- ✅ SQL pre-filtering to reduce dataset before fuzzy matching
+- ✅ Consider channel filter if artist is consistently the channel
 
-### Phase 6: Smarter Search Queries
-- Use exact phrase matching with quotes in search
-- Add `intitle:` parameter for better YouTube search results
-- Consider channel filter if artist is consistently the channel
-
-### Phase 8: Monitoring and Metrics
-- Track cache hit rate, API calls per hour
-- Add `/metrics` endpoint for API usage stats
-- Alert when cache performance drops
-- Identify patterns in failed searches
+### ✅ Phase 8: Monitoring and Metrics (v1.24.0)
+- ✅ Track cache hit rate, API calls per hour
+- ✅ Add `/metrics` endpoint for API usage stats
+- ✅ Health scoring system to detect performance issues
+- ✅ Identify patterns in failed searches
 
 ## License
 
