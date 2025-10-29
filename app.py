@@ -7,7 +7,6 @@ from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api
-from matcher import matcher
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
@@ -114,11 +113,11 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
 
 def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """
-    Find matching video using global search with duration and title matching.
+    Find matching video using simplified search: exact title + duration.
     Uses the refactored implementation from search_helpers module.
     """
     yt_api = get_youtube_api()
-    return search_and_match_video_refactored(ha_media, yt_api, db, matcher)
+    return search_and_match_video_refactored(ha_media, yt_api, db)
 
 
 def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:

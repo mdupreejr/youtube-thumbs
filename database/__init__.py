@@ -73,11 +73,8 @@ class Database:
     def find_by_title_and_duration(self, title, duration):
         return self._video_ops.find_by_title_and_duration(title, duration)
 
-    def find_by_content_hash(self, title, duration, artist=None):
-        return self._video_ops.find_by_content_hash(title, duration, artist)
-
-    def find_fuzzy_matches(self, title, threshold=85.0, limit=20):
-        return self._video_ops.find_fuzzy_matches(title, threshold, limit)
+    def find_by_content_hash(self, title, duration, channel=None):
+        return self._video_ops.find_by_content_hash(title, duration, channel)
 
     # Pending operations
     def upsert_pending_media(self, media):

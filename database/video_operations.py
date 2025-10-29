@@ -286,98 +286,15 @@ class VideoOperations:
             row = cur.fetchone()
         return dict(row) if row else None
 
-    def find_fuzzy_matches(self, title: str, threshold: float = 85.0, limit: int = 20) -> List[Dict[str, Any]]:
+    def find_by_content_hash(self, title: str, duration: Optional[int], channel: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Find videos with fuzzy title matching.
-
-        Args:
-            title: Title to search for
-            threshold: Minimum similarity percentage (0-100)
-            limit: Maximum number of candidates to check
-
-        Returns:
-            List of matching videos sorted by similarity
-        """
-        from fuzzy_matcher import fuzzy_match_titles
-
-        if not title:
-            return []
-
-        # Pre-filter with SQL to get relevant candidates
-        # Extract first few significant words for LIKE query
-        words = title.lower().split()[:3]  # First 3 words
-        where_clauses = []
-        params = []
-
-        for word in words:
-            # Only use substantial words (length > 2) to avoid common articles
-            if len(word) > 2:
-                where_clauses.append("(LOWER(ha_title) LIKE ? OR LOWER(yt_title) LIKE ?)")
-                params.extend([f"%{word}%", f"%{word}%"])
-
-        # Build WHERE clause
-        if where_clauses:
-            where_clause = f"pending_match = 0 AND ({' OR '.join(where_clauses)})"
-        else:
-            # Fallback to basic filtering if no substantial words
-            where_clause = "pending_match = 0"
-
-        # Get candidates with SQL pre-filtering
-        with self._lock:
-            query = f"""
-                SELECT * FROM video_ratings
-                WHERE {where_clause}
-                ORDER BY date_last_played DESC, date_added DESC
-                LIMIT ?
-            """
-            cur = self._conn.execute(query, (*params, limit * 3))
-            candidates = [dict(row) for row in cur.fetchall()]
-
-        if not candidates:
-            return []
-
-        # Perform fuzzy matching
-        fuzzy_matches = fuzzy_match_titles(
-            title,
-            candidates,
-            threshold=threshold,
-            title_key='ha_title',
-            use_levenshtein=True
-        )
-
-        # Also check against YouTube titles
-        yt_title_matches = fuzzy_match_titles(
-            title,
-            candidates,
-            threshold=threshold,
-            title_key='yt_title',
-            use_levenshtein=True
-        )
-
-        # Combine and deduplicate matches
-        all_matches = {}
-        for candidate, score in fuzzy_matches:
-            video_id = candidate['yt_video_id']
-            all_matches[video_id] = (candidate, score)
-
-        for candidate, score in yt_title_matches:
-            video_id = candidate['yt_video_id']
-            if video_id not in all_matches or score > all_matches[video_id][1]:
-                all_matches[video_id] = (candidate, score)
-
-        # Sort by score and return top matches
-        sorted_matches = sorted(all_matches.values(), key=lambda x: x[1], reverse=True)
-        return [match[0] for match in sorted_matches[:limit]]
-
-    def find_by_content_hash(self, title: str, duration: Optional[int], artist: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Find a video by its content hash (title + duration + artist).
-        This allows finding duplicates even if title/artist formatting differs slightly.
+        Find a video by its content hash (title + duration + channel).
+        This allows finding duplicates even if title/channel formatting differs slightly.
         """
         if not title:
             return None
 
-        content_hash = get_content_hash(title, duration, artist)
+        content_hash = get_content_hash(title, duration, channel)
 
         with self._lock:
             cur = self._conn.execute(
