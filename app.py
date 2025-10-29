@@ -3,6 +3,7 @@ from flask import Flask, jsonify, Response, render_template
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
+from werkzeug.middleware.proxy_fix import ProxyFix
 from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
@@ -18,6 +19,10 @@ from search_helpers import search_and_match_video_refactored
 from cache_helpers import find_cached_video_refactored
 
 app = Flask(__name__)
+
+# Configure Flask to work behind Home Assistant ingress proxy
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 db = get_database()
 
 
@@ -463,10 +468,11 @@ def get_metrics() -> Response:
 
 
 if __name__ == '__main__':
-    host = os.getenv('HOST', '127.0.0.1')
+    host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', '21812'))
 
     logger.info(f"Starting YouTube Thumbs service on {host}:{port}")
+    logger.info(f"Flask will be accessible at http://{host}:{port}")
 
     # Initialize YouTube API
     yt_api = None
@@ -479,4 +485,10 @@ if __name__ == '__main__':
     # Run startup health checks
     run_startup_checks(ha_api, yt_api, db)
 
-    app.run(host=host, port=port, debug=False)
+    logger.info("Starting Flask application...")
+    try:
+        app.run(host=host, port=port, debug=False, threaded=True)
+    except Exception as e:
+        logger.error(f"Flask failed to start: {e}")
+        logger.error(traceback.format_exc())
+        raise
