@@ -21,21 +21,15 @@ else
 fi
 
 PORT_CONFIG=$(bashio::config 'port')
-INGRESS_PORT_VALUE="${INGRESS_PORT:-}"
-
-# If ingress is enabled, use the ingress port for Flask
-if bashio::var.has_value "${INGRESS_PORT_VALUE}"; then
-    export PORT="${INGRESS_PORT_VALUE}"
-    bashio::log.info "Using ingress port: ${PORT}"
-elif bashio::var.has_value "${PORT_CONFIG}"; then
+if bashio::var.has_value "${PORT_CONFIG}"; then
     export PORT="${PORT_CONFIG}"
 else
     export PORT=21812
 fi
 
-# Always bind the thumbs API to localhost for safety
-export HOST="127.0.0.1"
-bashio::log.info "API binding forced to localhost (${HOST})"
+# Bind to all interfaces so ingress and direct access work
+export HOST="0.0.0.0"
+bashio::log.info "API binding to all interfaces (${HOST}:${PORT})"
 
 SQLITE_WEB_HOST_CONFIG=$(bashio::config 'sqlite_web_host')
 SQLITE_WEB_HOST_ENV="${SQLITE_WEB_HOST:-}"
