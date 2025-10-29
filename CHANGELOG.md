@@ -1,3 +1,26 @@
+## 1.20.0 - 2025-10-29
+
+### Security - CRITICAL
+- **SQL Injection Prevention**: Added regex validation for timestamp format to prevent SQL injection attacks
+- **Race Condition Fix**: Implemented file locking (fcntl) in QuotaGuard to prevent concurrent access corruption
+- **Data Validation**: Added comprehensive validation for YouTube API responses:
+  - Video IDs must be exactly 11 alphanumeric characters
+  - Descriptions automatically truncated to 5000 characters
+  - Duration validated (0-86400 seconds max)
+
+### Fixed
+- Timestamp strings now validated before use in SQL queries
+- State file operations in QuotaGuard are now atomic with exclusive locking
+- Invalid YouTube video data rejected before database insertion
+- Memory exhaustion prevented from extremely long video descriptions
+
+### Technical
+- Added `_validate_video_id()` method with regex pattern validation
+- Added `_validate_and_truncate_description()` to prevent memory issues
+- Added `_validate_duration()` with reasonable bounds checking
+- Implemented fcntl.LOCK_EX for exclusive file locking in record_success()
+- Timestamp validation pattern: `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}`
+
 ## 1.19.0 - 2025-10-29
 
 ### Added

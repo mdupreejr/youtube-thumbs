@@ -136,6 +136,39 @@ class YouTubeAPI:
             return text
         return None
 
+    def _validate_video_id(self, video_id: str) -> bool:
+        """Validate YouTube video ID format."""
+        if not video_id:
+            return False
+        if len(video_id) != 11:
+            logger.warning("Invalid video ID length: %s", video_id)
+            return False
+        if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
+            logger.warning("Invalid video ID format: %s", video_id)
+            return False
+        return True
+
+    def _validate_and_truncate_description(self, description: str) -> str:
+        """Truncate description to prevent memory issues."""
+        if not description:
+            return ""
+        if len(description) > 5000:
+            logger.warning("Truncating description from %d to 5000 characters", len(description))
+            return description[:5000]
+        return description
+
+    def _validate_duration(self, duration: int) -> Optional[int]:
+        """Validate duration is within reasonable bounds."""
+        if duration is None:
+            return None
+        if duration < 0:
+            logger.warning("Invalid negative duration: %d", duration)
+            return None
+        if duration > 86400:  # 24 hours
+            logger.warning("Invalid duration exceeding 24 hours: %d", duration)
+            return None
+        return duration
+
     def search_video_globally(self, title: str, expected_duration: Optional[int] = None) -> Optional[List[Dict]]:
         """Search for a video globally. Filters by duration (±2s) if provided."""
         if quota_guard.is_blocked():
@@ -172,6 +205,11 @@ class YouTubeAPI:
 
             candidates = []
             for video in details.get('items', []):
+                video_id = video['id']
+                if not self._validate_video_id(video_id):
+                    logger.error("Skipping video with invalid ID: %s", video_id)
+                    continue
+
                 snippet = video.get('snippet') or {}
                 content_details = video.get('contentDetails') or {}
                 recording_details = video.get('recordingDetails') or {}
@@ -189,17 +227,17 @@ class YouTubeAPI:
                             location += f",{loc['altitude']}"
 
                 video_info = {
-                    'yt_video_id': video['id'],
+                    'yt_video_id': video_id,
                     'title': snippet.get('title'),
                     'channel': snippet.get('channelTitle'),
                     'channel_id': snippet.get('channelId'),
-                    'description': snippet.get('description'),
+                    'description': self._validate_and_truncate_description(snippet.get('description')),
                     'published_at': snippet.get('publishedAt'),
                     'category_id': snippet.get('categoryId'),
                     'live_broadcast': snippet.get('liveBroadcastContent'),
                     'location': location,
                     'recording_date': recording_details.get('recordingDate'),
-                    'duration': duration
+                    'duration': self._validate_duration(duration)
                 }
 
                 if expected_duration is not None and duration is not None:

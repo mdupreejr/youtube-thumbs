@@ -2,6 +2,7 @@
 Database connection and schema management.
 """
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime
@@ -194,7 +195,11 @@ class DatabaseConnection:
         if ts:
             cleaned = ts.replace('T', ' ').replace('Z', '').strip()
             if cleaned:
-                return cleaned[:19]  # Truncate to 'YYYY-MM-DD HH:MM:SS'
+                # Validate format matches YYYY-MM-DD HH:MM:SS
+                if not re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', cleaned[:19]):
+                    logger.warning("Invalid timestamp format: %s", cleaned[:19])
+                    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                return cleaned[:19]
         return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
     @property

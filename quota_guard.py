@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import time
@@ -184,27 +185,41 @@ class QuotaGuard:
 
     def record_success(self) -> None:
         """Record a successful API call and potentially reset attempts."""
-        state = self._load_state()
-        if not state:
-            # No state means we're not in a blocked state
+        if not self.state_file.exists():
             return
 
-        # Increment success count
-        success_count = state.get('success_count', 0) + 1
-        state['success_count'] = success_count
+        try:
+            with self.state_file.open('r+', encoding='utf-8') as handle:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    handle.seek(0)
+                    state = json.load(handle)
+                except json.JSONDecodeError:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    return
 
-        # Check if we should reset attempts
-        if success_count >= self.SUCCESS_THRESHOLD:
-            logger.info(
-                "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
-                success_count,
-                state.get('attempt_number', 0)
-            )
-            # Reset attempts but keep state for monitoring
-            state['attempt_number'] = 0
-            state['success_count'] = 0
+                # Increment success count
+                success_count = state.get('success_count', 0) + 1
+                state['success_count'] = success_count
 
-        self._save_state(state)
+                # Check if we should reset attempts
+                if success_count >= self.SUCCESS_THRESHOLD:
+                    logger.info(
+                        "QuotaGuard: %d successful API calls recorded, resetting attempt counter from %d",
+                        success_count,
+                        state.get('attempt_number', 0)
+                    )
+                    # Reset attempts but keep state for monitoring
+                    state['attempt_number'] = 0
+                    state['success_count'] = 0
+
+                # Write back to file
+                handle.seek(0)
+                json.dump(state, handle, indent=2)
+                handle.truncate()
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except OSError as exc:
+            logger.error("Failed to record success: %s", exc)
 
     def trip(self, reason: str, context: Optional[str] = None, detail: Optional[str] = None) -> None:
         """Trip the circuit breaker with exponential backoff."""
