@@ -1,5 +1,5 @@
 import atexit
-from flask import Flask, jsonify, Response, render_template, request as flask_request
+from flask import Flask, jsonify, Response, render_template, request
 from typing import Tuple, Optional, Dict, Any
 import os
 import traceback
@@ -516,17 +516,17 @@ def database_proxy(path):
         target_url = sqlite_web_url
 
     # Forward query parameters
-    if flask_request.query_string:
-        target_url += f"?{flask_request.query_string.decode('utf-8')}"
+    if request.query_string:
+        target_url += f"?{request.query_string.decode('utf-8')}"
 
     try:
         # Forward the request to sqlite_web
         resp = requests.request(
-            method=flask_request.method,
+            method=request.method,
             url=target_url,
-            headers={key: value for (key, value) in flask_request.headers if key != 'Host'},
-            data=flask_request.get_data(),
-            cookies=flask_request.cookies,
+            headers={key: value for (key, value) in request.headers if key != 'Host'},
+            data=request.get_data(),
+            cookies=request.cookies,
             allow_redirects=False,
             timeout=30
         )
