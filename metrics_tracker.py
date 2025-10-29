@@ -5,7 +5,7 @@ Tracks API usage, cache performance, and system health metrics.
 import time
 import threading
 from datetime import datetime, timedelta
-from collections import deque, defaultdict
+from collections import deque, defaultdict, Counter
 from typing import Dict, Any, Optional, List, Tuple
 from logger import logger
 
@@ -270,39 +270,39 @@ class MetricsTracker:
             }
 
     def get_search_stats(self) -> Dict[str, Any]:
-        """Get search operation statistics."""
+        """Get search operation statistics using Python's Counter for efficiency."""
         with self._lock:
-            failed_by_reason = defaultdict(int)
-            for search in self._failed_searches:
-                failed_by_reason[search.get('reason', 'unknown')] += 1
+            # Use Counter for automatic counting
+            reasons = Counter(s.get('reason', 'unknown') for s in self._failed_searches)
+            titles = Counter(s.get('title', '') for s in self._failed_searches if s.get('title'))
 
-            # Get most common failed searches
-            failed_titles = defaultdict(int)
-            for search in self._failed_searches:
-                failed_titles[search.get('title', '')] += 1
-
-            top_failed = sorted(
-                failed_titles.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]
+            # Calculate batch operation averages using generator expressions
+            batch_count = len(self._batch_operations)
+            avg_batch_size = (
+                sum(op['batch_size'] for op in self._batch_operations) / batch_count
+                if batch_count > 0 else 0
+            )
+            avg_success_rate = (
+                sum(op['success_rate'] for op in self._batch_operations) / batch_count
+                if batch_count > 0 else 0
+            )
 
             return {
                 'total_searches': len(self._search_queries),
                 'failed_searches': {
                     'total': len(self._failed_searches),
                     'last_hour': self._count_recent(self._failed_searches, 3600),
-                    'by_reason': dict(failed_by_reason),
+                    'by_reason': dict(reasons),
                     'top_failed_titles': [
                         {'title': title, 'count': count}
-                        for title, count in top_failed
+                        for title, count in titles.most_common(10)
                     ]
                 },
                 'results_distribution': dict(self._search_results_count),
                 'batch_operations': {
-                    'total': len(self._batch_operations),
-                    'average_batch_size': sum(op['batch_size'] for op in self._batch_operations) / len(self._batch_operations) if self._batch_operations else 0,
-                    'average_success_rate': sum(op['success_rate'] for op in self._batch_operations) / len(self._batch_operations) if self._batch_operations else 0
+                    'total': batch_count,
+                    'average_batch_size': avg_batch_size,
+                    'average_success_rate': avg_success_rate
                 }
             }
 
@@ -346,52 +346,67 @@ class MetricsTracker:
     def get_health_score(self) -> Tuple[int, List[str]]:
         """
         Calculate overall system health score (0-100) and warnings.
+        Uses data-driven scoring rules for better maintainability.
 
         Returns:
             Tuple of (health_score, list_of_warnings)
         """
-        score = 100
-        warnings = []
-
         cache_stats = self.get_cache_stats()
         api_stats = self.get_api_stats()
         rating_stats = self.get_rating_stats()
 
-        # Check cache hit rate (weight: 30 points)
-        cache_hit_rate = cache_stats['last_hour']['hit_rate']
-        if cache_hit_rate < 50:
-            score -= 15
-            warnings.append(f"Low cache hit rate: {cache_hit_rate:.1f}%")
-        elif cache_hit_rate < 70:
-            score -= 5
-            warnings.append(f"Cache hit rate could be better: {cache_hit_rate:.1f}%")
+        # Data-driven scoring rules: (value_getter, thresholds, penalties, messages)
+        scoring_rules = [
+            # Cache hit rate (weight: 20 points total)
+            (
+                lambda: cache_stats['last_hour']['hit_rate'],
+                [(50, 15, "Low cache hit rate: {value:.1f}%"),
+                 (70, 5, "Cache hit rate could be better: {value:.1f}%")]
+            ),
+            # API success rate (weight: 30 points total)
+            (
+                lambda: api_stats['success_rate'],
+                [(80, 20, "Low API success rate: {value:.1f}%"),
+                 (95, 10, "API success rate below optimal: {value:.1f}%")]
+            ),
+            # Quota trips (weight: 20 points total) - reversed comparison
+            (
+                lambda: api_stats['quota']['trips'],
+                [(10, 20, "High number of quota trips: {value}", True),
+                 (5, 10, "Multiple quota trips detected: {value}", True)]
+            ),
+            # Rating queue (weight: 20 points total) - reversed comparison
+            (
+                lambda: rating_stats['queued']['total'],
+                [(50, 15, "Large rating queue backlog: {value}", True),
+                 (20, 5, "Moderate rating queue: {value}", True)]
+            )
+        ]
 
-        # Check API success rate (weight: 30 points)
-        api_success_rate = api_stats['success_rate']
-        if api_success_rate < 80:
-            score -= 20
-            warnings.append(f"Low API success rate: {api_success_rate:.1f}%")
-        elif api_success_rate < 95:
-            score -= 10
-            warnings.append(f"API success rate below optimal: {api_success_rate:.1f}%")
+        score = 100
+        warnings = []
 
-        # Check quota trips (weight: 20 points)
-        quota_trips = api_stats['quota']['trips']
-        if quota_trips > 10:
-            score -= 20
-            warnings.append(f"High number of quota trips: {quota_trips}")
-        elif quota_trips > 5:
-            score -= 10
-            warnings.append(f"Multiple quota trips detected: {quota_trips}")
-
-        # Check rating queue (weight: 20 points)
-        queued_ratings = rating_stats['queued']['total']
-        if queued_ratings > 50:
-            score -= 15
-            warnings.append(f"Large rating queue backlog: {queued_ratings}")
-        elif queued_ratings > 20:
-            score -= 5
-            warnings.append(f"Moderate rating queue: {queued_ratings}")
+        for value_getter, thresholds in scoring_rules:
+            try:
+                value = value_getter()
+                for threshold_info in thresholds:
+                    if len(threshold_info) == 4:
+                        threshold, penalty, message, reverse = threshold_info
+                        # For reverse comparisons (higher is worse)
+                        if reverse and value > threshold:
+                            score -= penalty
+                            warnings.append(message.format(value=value))
+                            break  # Apply only the first matching threshold
+                    else:
+                        threshold, penalty, message = threshold_info
+                        # For normal comparisons (lower is worse)
+                        if value < threshold:
+                            score -= penalty
+                            warnings.append(message.format(value=value))
+                            break  # Apply only the first matching threshold
+            except Exception as e:
+                logger.error(f"Error calculating health metric: {e}")
+                # Continue with other metrics if one fails
 
         return max(0, score), warnings
 

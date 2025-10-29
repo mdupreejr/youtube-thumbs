@@ -11,6 +11,7 @@ from googleapiclient.errors import HttpError
 from logger import logger
 from quota_guard import quota_guard
 from error_handler import handle_api_error, log_and_suppress, validate_environment_variable
+from decorators import handle_youtube_error
 
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
@@ -403,6 +404,7 @@ class YouTubeAPI:
                 return_value=None
             )
 
+    @handle_youtube_error(context='get_rating', return_value='none')
     def get_video_rating(self, yt_video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
         if quota_guard.is_blocked():
@@ -412,41 +414,24 @@ class YouTubeAPI:
                 quota_guard.describe_block(),
             )
             return self.NO_RATING
-        try:
-            logger.info(f"Checking rating for video ID: {yt_video_id}")
 
-            request = self.youtube.videos().getRating(id=yt_video_id)
-            response = request.execute()
+        logger.info(f"Checking rating for video ID: {yt_video_id}")
 
-            if response.get('items'):
-                rating = response['items'][0].get('rating', self.NO_RATING)
-                logger.info(f"Current rating for {yt_video_id}: {rating}")
-                # Record successful API call for quota recovery tracking
-                quota_guard.record_success()
-                return rating
+        request = self.youtube.videos().getRating(id=yt_video_id)
+        response = request.execute()
 
-            # Record successful API call even when no items returned
+        if response.get('items'):
+            rating = response['items'][0].get('rating', self.NO_RATING)
+            logger.info(f"Current rating for {yt_video_id}: {rating}")
+            # Record successful API call for quota recovery tracking
             quota_guard.record_success()
-            return self.NO_RATING
+            return rating
 
-        except HttpError as e:
-            detail = self._quota_error_detail(e)
-            if detail is not None:
-                quota_guard.trip('quotaExceeded', context='get_rating', detail=detail)
-            return log_and_suppress(
-                e,
-                f"YouTube API error getting rating | Video ID: {yt_video_id}",
-                level="error",
-                return_value=self.NO_RATING
-            )
-        except Exception as e:
-            return log_and_suppress(
-                e,
-                f"Unexpected error getting video rating | Video ID: {yt_video_id}",
-                level="error",
-                return_value=self.NO_RATING
-            )
+        # Record successful API call even when no items returned
+        quota_guard.record_success()
+        return self.NO_RATING
 
+    @handle_youtube_error(context='set_rating', return_value=False)
     def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
         if quota_guard.is_blocked():
@@ -457,37 +442,19 @@ class YouTubeAPI:
                 quota_guard.describe_block(),
             )
             return False
-        try:
-            logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
 
-            request = self.youtube.videos().rate(
-                id=yt_video_id,
-                rating=rating
-            )
-            request.execute()
+        logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
 
-            logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
-            # Record successful API call for quota recovery tracking
-            quota_guard.record_success()
-            return True
+        request = self.youtube.videos().rate(
+            id=yt_video_id,
+            rating=rating
+        )
+        request.execute()
 
-        except HttpError as e:
-            detail = self._quota_error_detail(e)
-            if detail is not None:
-                quota_guard.trip('quotaExceeded', context='set_rating', detail=detail)
-            return log_and_suppress(
-                e,
-                f"YouTube API error setting rating | Video ID: {yt_video_id} | Rating: {rating}",
-                level="error",
-                return_value=False
-            )
-        except Exception as e:
-            return log_and_suppress(
-                e,
-                f"Unexpected error setting video rating | Video ID: {yt_video_id} | Rating: {rating}",
-                level="error",
-                return_value=False
-            )
+        logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
+        # Record successful API call for quota recovery tracking
+        quota_guard.record_success()
+        return True
 
     def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """

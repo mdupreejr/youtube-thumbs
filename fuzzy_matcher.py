@@ -236,16 +236,18 @@ def find_best_fuzzy_match(
 def get_title_variations(title: str) -> List[str]:
     """
     Generate common variations of a title for matching.
+    Uses set for automatic deduplication and list comprehension for efficiency.
 
     Args:
         title: The original title
 
     Returns:
-        List of title variations
+        List of title variations, sorted for consistency
     """
-    variations = [title]
+    # Use set for automatic deduplication
+    variations = {title}
 
-    # Remove common prefixes/suffixes
+    # Patterns to remove from title
     patterns_to_remove = [
         r'^\s*\[.*?\]\s*',  # [Something] at beginning
         r'\s*\[.*?\]\s*$',  # [Something] at end
@@ -258,15 +260,20 @@ def get_title_variations(title: str) -> List[str]:
         r'\s*feat\..*$',  # feat. featuring
     ]
 
-    for pattern in patterns_to_remove:
-        modified = re.sub(pattern, '', title, flags=re.IGNORECASE).strip()
-        if modified and modified != title and modified not in variations:
-            variations.append(modified)
+    # Generate variations using list comprehension and set union
+    modified_titles = {
+        re.sub(pattern, '', title, flags=re.IGNORECASE).strip()
+        for pattern in patterns_to_remove
+    }
+
+    # Add non-empty, different variations
+    variations.update(m for m in modified_titles if m and m != title)
 
     # Add version without "The" at beginning
     if title.lower().startswith('the '):
         without_the = title[4:].strip()
-        if without_the and without_the not in variations:
-            variations.append(without_the)
+        if without_the:
+            variations.add(without_the)
 
-    return variations
+    # Return as sorted list for consistent ordering
+    return sorted(variations)
