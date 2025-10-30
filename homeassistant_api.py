@@ -40,10 +40,19 @@ class HomeAssistantAPI:
             response = self.session.get(url, timeout=10)
 
             if response.status_code != 200:
-                logger.error(f"Home Assistant API error: HTTP {response.status_code} - {response.text}")
+                logger.error(f"Home Assistant API error: HTTP {response.status_code} - {response.text[:200]}")
                 logger.error(f"Request URL: {url}")
                 return None
-            
+
+            # Check if response is actually JSON (not HTML error page)
+            content_type = response.headers.get('content-type', '')
+            if 'application/json' not in content_type:
+                logger.error(
+                    f"Home Assistant API returned non-JSON response (Content-Type: {content_type}). "
+                    f"This usually indicates a proxy/timeout error. Response preview: {response.text[:200]}"
+                )
+                return None
+
             data = response.json()
             state = data.get('state')
             
@@ -90,8 +99,16 @@ class HomeAssistantAPI:
             )
             return media_info
             
+        except requests.exceptions.Timeout:
+            logger.warning("Home Assistant API request timed out after 10 seconds")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"Home Assistant API connection error: {str(e)}")
+            return None
+        except ValueError as e:
+            # JSON parsing error
+            logger.error(f"Failed to parse Home Assistant response as JSON: {str(e)}")
+            logger.error(f"Response preview: {response.text[:200] if 'response' in locals() else 'N/A'}")
             return None
         except Exception as e:
             logger.error(f"Error fetching current media: {str(e)}")
