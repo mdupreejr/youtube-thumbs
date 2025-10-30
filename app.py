@@ -295,8 +295,8 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         # Step 4: Find or search for video
         video, error_response = find_or_search_video(
             ha_media,
-            find_cached_video,
-            search_and_match_video,
+            _cache_wrapper,
+            _search_wrapper,
             rating_type,
             format_media_info
         )

@@ -195,6 +195,12 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.5 - Fix Rating Endpoint NameError
+- Fixed NameError in thumbs_up/thumbs_down endpoints
+- Changed undefined `find_cached_video` to `_cache_wrapper`
+- Changed undefined `search_and_match_video` to `_search_wrapper`
+- Rating endpoints now work correctly
+
 ### v1.49.4 - Fix Stats Page Loading Through Ingress
 - Fixed statistics dashboard showing as blank/black page
 - Changed hardcoded `/static/` paths to use Flask's `url_for()` function
