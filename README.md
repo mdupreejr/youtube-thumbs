@@ -195,6 +195,12 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.3 - Fix Bulk Rating Interface
+- Fixed missing `get_unrated_videos()` method exposure in Database class
+- Added `find_cached_video_combined()` method exposure
+- Methods were implemented but not exposed through Database wrapper
+- Bulk rating interface now works correctly
+
 ### v1.49.2 - Critical Bug Fixes (Code Review)
 - Fixed pagination semantic inconsistency (total_pages=0 when empty)
 - Added negative duration validation with data corruption detection
