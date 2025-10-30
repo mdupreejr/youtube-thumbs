@@ -407,8 +407,10 @@ def get_unrated_songs() -> Response:
     try:
         try:
             page = int(request.args.get('page', 1))
+            if page < 1:
+                return jsonify({'success': False, 'error': 'Page must be at least 1'}), 400
         except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid page parameter'}), 400
+            return jsonify({'success': False, 'error': 'Invalid page parameter: must be a positive integer'}), 400
 
         logger.debug(f"Fetching page {page} of unrated songs")
 

@@ -745,8 +745,6 @@ class StatsOperations:
         Returns:
             Dictionary with songs list, pagination info, and total count
         """
-        offset = (page - 1) * limit
-
         with self._lock:
             # Get total count of unrated songs
             cursor = self._conn.execute(
@@ -754,6 +752,21 @@ class StatsOperations:
             )
             total_count = cursor.fetchone()['count']
 
+        # Handle empty results
+        if total_count == 0:
+            return {
+                'songs': [],
+                'page': 1,
+                'total_pages': 0,
+                'total_count': 0
+            }
+
+        # Calculate total pages and clamp page to valid range
+        total_pages = (total_count + limit - 1) // limit
+        page = max(1, min(page, total_pages))  # Clamp page to [1, total_pages]
+        offset = (page - 1) * limit
+
+        with self._lock:
             # Get unrated songs, sorted by play count (most played first)
             cursor = self._conn.execute(
                 """
@@ -781,8 +794,8 @@ class StatsOperations:
                 'url': yt_url
             })
 
-        # Ceiling division with minimum of 1 page
-        total_pages = max(1, (total_count + limit - 1) // limit)
+        # Note: page is now clamped to valid range above
+        total_pages = (total_count + limit - 1) // limit
 
         return {
             'songs': songs_list,

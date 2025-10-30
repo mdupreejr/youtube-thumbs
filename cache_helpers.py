@@ -86,6 +86,12 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
         metrics.record_cache_miss()
         return None
 
+    if duration < 0:
+        # Negative duration indicates data corruption or API bugs
+        logger.warning("Cache miss for '%s' - negative duration (%s), possible data corruption", title, duration)
+        metrics.record_cache_miss()
+        return None
+
     artist = ha_media.get('artist')
 
     # Use optimized combined query (single database call instead of two)
@@ -102,7 +108,8 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
             # Hash exists but doesn't match - likely title_duration match
             cache_type = 'title_duration'
         else:
-            # No hash stored, assume title_duration match
+            # No hash stored - either legacy data or pure title_duration match
+            # Both cases should be reported as title_duration for metrics accuracy
             cache_type = 'title_duration'
 
         logger.info(
