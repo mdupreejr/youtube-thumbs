@@ -34,10 +34,12 @@ class HistoryTracker:
         self._thread = threading.Thread(target=self._run, name="history-tracker", daemon=True)
         self._last_failed_key: Optional[str] = None
         self._active_media_key: Optional[str] = None
+        self._last_media_time: float = 0  # Timestamp of last media activity
         self._poll_count = 0
         self._last_status_log = 0
         self._consecutive_failures = 0
         self.max_consecutive_failures = 10
+        self._inactivity_timeout = 3600  # Clear tracking after 1 hour of no media
 
     def start(self) -> None:
         if not self.enabled:
@@ -123,10 +125,18 @@ class HistoryTracker:
 
         media = self.ha_api.get_current_media()
         if not media:
-            # Log when media stops playing (transition from active to none)
+            # Media stopped/paused - but DON'T reset _active_media_key immediately
+            # This prevents counting pause/resume as a new play
+            now = time.time()
             if self._active_media_key:
-                logger.debug("History tracker: Media stopped playing")
-            self._active_media_key = None
+                # Clear tracking after extended inactivity (1 hour default)
+                if self._last_media_time > 0 and (now - self._last_media_time) > self._inactivity_timeout:
+                    logger.debug("History tracker: Clearing tracking after %d seconds of inactivity",
+                                self._inactivity_timeout)
+                    self._active_media_key = None
+                    self._last_media_time = 0
+                else:
+                    logger.debug("History tracker: Media paused/stopped (tracking retained)")
             return
 
         # Skip non-YouTube content to save API calls
@@ -147,6 +157,7 @@ class HistoryTracker:
 
         media_key = f"{title}|{duration}"
         now = time.time()
+        self._last_media_time = now  # Update last activity timestamp
 
         # Only record play when a new song starts (not during continuous playback)
         is_new_song = self._active_media_key != media_key
