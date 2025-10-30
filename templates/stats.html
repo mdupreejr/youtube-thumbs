@@ -354,6 +354,20 @@
         </div>
     </div>
 
+    <script>
+        // Get the base path from the current location for Home Assistant ingress support
+        function getBasePath() {
+            const path = window.location.pathname;
+            if (path.includes('/api/hassio_ingress/')) {
+                const match = path.match(/^(\/api\/hassio_ingress\/[^\/]+)/);
+                return match ? match[1] : '';
+            }
+            return '';
+        }
+
+        const BASE_PATH = getBasePath();
+        console.log('Stats page - Base path detected:', BASE_PATH);
+    </script>
     <script src="{{ url_for('static', filename='js/stats.js') }}"></script>
 </body>
 </html>

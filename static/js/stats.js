@@ -85,7 +85,9 @@ function showEmpty(message, containerId) {
 // Error handling wrapper
 async function fetchWithErrorHandling(endpoint, options = {}) {
     try {
-        const response = await fetch(endpoint, options);
+        // Prepend BASE_PATH for Home Assistant ingress support
+        const url = BASE_PATH + endpoint;
+        const response = await fetch(url, options);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -1165,7 +1167,7 @@ async function applyExplorerFilters() {
     filters.offset = (currentExplorerPage - 1) * explorerPageSize;
 
     try {
-        const response = await fetch('/api/explorer/filter', {
+        const response = await fetch(BASE_PATH + '/api/explorer/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filters)
@@ -1276,7 +1278,7 @@ async function exportResults() {
     filters.limit = 10000; // Get all results for export
 
     try {
-        const response = await fetch('/api/explorer/filter', {
+        const response = await fetch(BASE_PATH + '/api/explorer/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filters)

@@ -195,6 +195,13 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.6 - Fix Stats Page API Calls for Ingress
+- Fixed statistics dashboard API calls to work through Home Assistant ingress
+- Added BASE_PATH detection in stats.html (same as index.html)
+- Updated fetchWithErrorHandling in stats.js to prepend BASE_PATH to all API calls
+- Updated direct fetch calls in explorer filter and export functions
+- Stats page now fully functional with all charts, tabs, and data loading
+
 ### v1.49.5 - Fix Rating Endpoint NameError
 - Fixed NameError in thumbs_up/thumbs_down endpoints
 - Changed undefined `find_cached_video` to `_cache_wrapper`
