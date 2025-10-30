@@ -405,7 +405,11 @@ def get_unrated_songs() -> Response:
     logger.debug(f"Request args: {request.args}")
 
     try:
-        page = int(request.args.get('page', 1))
+        try:
+            page = int(request.args.get('page', 1))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid page parameter'}), 400
+
         logger.debug(f"Fetching page {page} of unrated songs")
 
         result = db.get_unrated_videos(page=page, limit=50)
@@ -830,12 +834,14 @@ def get_stats_summary() -> Response:
 def get_top_rated_api() -> Response:
     """Get top rated videos."""
     try:
-        limit = int(request.args.get('limit', 10))
-        limit = max(1, min(limit, 100))
+        try:
+            limit = int(request.args.get('limit', 10))
+            limit = max(1, min(limit, 100))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
+
         videos = db.get_top_rated(limit)
         return jsonify({'success': True, 'data': videos})
-    except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting top rated: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -845,12 +851,14 @@ def get_top_rated_api() -> Response:
 def get_recent_activity_api() -> Response:
     """Get recent activity."""
     try:
-        limit = int(request.args.get('limit', 20))
-        limit = max(1, min(limit, 100))
+        try:
+            limit = int(request.args.get('limit', 20))
+            limit = max(1, min(limit, 100))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
+
         videos = db.get_recent_activity(limit)
         return jsonify({'success': True, 'data': videos})
-    except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting recent activity: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -871,12 +879,14 @@ def get_category_breakdown_api() -> Response:
 def get_timeline_stats_api() -> Response:
     """Get time-based stats."""
     try:
-        days = int(request.args.get('days', 7))
-        days = max(1, min(days, 365))
+        try:
+            days = int(request.args.get('days', 7))
+            days = max(1, min(days, 365))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid days parameter'}), 400
+
         timeline = db.get_plays_by_period(days)
         return jsonify({'success': True, 'data': timeline})
-    except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting timeline stats: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

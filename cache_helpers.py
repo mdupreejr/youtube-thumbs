@@ -80,7 +80,7 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
         return None
 
     duration = ha_media.get('duration')
-    if not duration:
+    if duration is None:
         # Can't do reliable matching without duration
         logger.debug("Cache miss for '%s' - no duration provided", title)
         metrics.record_cache_miss()
@@ -94,7 +94,16 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
         # Determine which strategy found the match for metrics
         from video_helpers import get_content_hash
         content_hash = get_content_hash(title, duration, artist)
-        cache_type = 'content_hash' if cached_video.get('ha_content_hash') == content_hash else 'title_duration'
+
+        # More robust cache type detection
+        if cached_video.get('ha_content_hash') == content_hash:
+            cache_type = 'content_hash'
+        elif cached_video.get('ha_content_hash') is not None:
+            # Hash exists but doesn't match - likely title_duration match
+            cache_type = 'title_duration'
+        else:
+            # No hash stored, assume title_duration match
+            cache_type = 'title_duration'
 
         logger.info(
             "Cache hit (%s): '%s' (ID: %s)",

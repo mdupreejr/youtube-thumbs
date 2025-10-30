@@ -781,7 +781,8 @@ class StatsOperations:
                 'url': yt_url
             })
 
-        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        # Ceiling division with minimum of 1 page
+        total_pages = max(1, (total_count + limit - 1) // limit)
 
         return {
             'songs': songs_list,
