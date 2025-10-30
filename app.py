@@ -176,20 +176,16 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
             db.mark_pending_rating(video_id, False, str(exc))
             logger.error("Failed to sync pending rating for %s: %s", video_id, exc)
 
-def search_and_match_video(ha_media: Dict[str, Any]) -> Optional[Dict]:
-    """
-    Find matching video using simplified search: exact title + duration.
-    Uses the refactored implementation from search_helpers module.
-    """
+# Wrapper functions for compatibility with HistoryTracker dependency injection
+# These could be refactored to pass the actual modules instead
+def _search_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict]:
+    """Wrapper for search_helpers.search_and_match_video_refactored."""
     yt_api = get_youtube_api()
     return search_and_match_video_refactored(ha_media, yt_api, db)
 
 
-def find_cached_video(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """
-    Attempt to reuse an existing DB record before querying YouTube.
-    Uses the refactored implementation from cache_helpers module.
-    """
+def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Wrapper for cache_helpers.find_cached_video_refactored."""
     return find_cached_video_refactored(db, ha_media)
 
 
@@ -214,8 +210,8 @@ def _history_poll_interval() -> int:
 history_tracker = HistoryTracker(
     ha_api=ha_api,
     database=db,
-    find_cached_video=find_cached_video,
-    search_and_match_video=search_and_match_video,
+    find_cached_video=_cache_wrapper,
+    search_and_match_video=_search_wrapper,
     poll_interval=_history_poll_interval(),
     enabled=_history_tracker_enabled(),
 )
@@ -823,39 +819,12 @@ def get_metrics() -> Response:
 def get_most_played_stats() -> Response:
     """Get most played songs for statistics dashboard."""
     try:
-        # Validate and bound limit parameter to prevent DoS
-        try:
-            limit = int(request.args.get('limit', 10))
-            limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
-
-        with db._lock:
-            cursor = db._conn.execute(
-                """
-                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel,
-                       play_count, rating, yt_url
-                FROM video_ratings
-                WHERE pending_match = 0
-                ORDER BY play_count DESC
-                LIMIT ?
-                """,
-                (limit,)
-            )
-            songs = cursor.fetchall()
-
-        result = []
-        for song in songs:
-            result.append({
-                'id': song['yt_video_id'],
-                'title': song['yt_title'] or song['ha_title'],
-                'artist': song['ha_artist'] or song['yt_channel'],
-                'play_count': song['play_count'],
-                'rating': song['rating'],
-                'url': song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
-            })
-
-        return jsonify({'success': True, 'data': result})
+        limit = int(request.args.get('limit', 10))
+        limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
+        videos = db.get_most_played(limit)
+        return jsonify({'success': True, 'data': videos})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting most played stats: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve most played statistics'}), 500
@@ -865,44 +834,12 @@ def get_most_played_stats() -> Response:
 def get_top_channels_stats() -> Response:
     """Get top channels/artists for statistics dashboard."""
     try:
-        # Validate and bound limit parameter to prevent DoS
-        try:
-            limit = int(request.args.get('limit', 10))
-            limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
-
-        with db._lock:
-            cursor = db._conn.execute(
-                """
-                SELECT yt_channel, yt_channel_id,
-                       COUNT(*) as video_count,
-                       SUM(play_count) as total_plays,
-                       AVG(CASE WHEN rating = 'like' THEN 1
-                                WHEN rating = 'dislike' THEN -1
-                                ELSE 0 END) as avg_rating
-                FROM video_ratings
-                WHERE pending_match = 0 AND yt_channel IS NOT NULL
-                GROUP BY yt_channel_id
-                ORDER BY total_plays DESC
-                LIMIT ?
-                """,
-                (limit,)
-            )
-            channels = cursor.fetchall()
-
-        result = []
-        for channel in channels:
-            # Use 'is not None' to correctly distinguish NULL from 0.0
-            avg_rating = channel['avg_rating']
-            result.append({
-                'channel': channel['yt_channel'],
-                'video_count': channel['video_count'],
-                'total_plays': channel['total_plays'],
-                'avg_rating': round(avg_rating, 2) if avg_rating is not None else 0
-            })
-
-        return jsonify({'success': True, 'data': result})
+        limit = int(request.args.get('limit', 10))
+        limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
+        channels = db.get_top_channels(limit)
+        return jsonify({'success': True, 'data': channels})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting top channels stats: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve top channels statistics'}), 500
@@ -944,20 +881,7 @@ def get_stats_summary() -> Response:
         return jsonify({'success': False, 'error': 'Failed to retrieve summary statistics'}), 500
 
 
-@app.route('/api/stats/most_played', methods=['GET'])
-def get_most_played_api() -> Response:
-    """Get most played videos."""
-    try:
-        limit = int(request.args.get('limit', 10))
-        limit = max(1, min(limit, 100))
-        videos = db.get_most_played(limit)
-        return jsonify({'success': True, 'data': videos})
-    except Exception as e:
-        logger.error(f"Error getting most played: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/stats/top_rated', methods=['GET'])
+@app.route('/api/stats/top-rated', methods=['GET'])
 def get_top_rated_api() -> Response:
     """Get top rated videos."""
     try:
@@ -965,6 +889,8 @@ def get_top_rated_api() -> Response:
         limit = max(1, min(limit, 100))
         videos = db.get_top_rated(limit)
         return jsonify({'success': True, 'data': videos})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting top rated: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -978,21 +904,10 @@ def get_recent_activity_api() -> Response:
         limit = max(1, min(limit, 100))
         videos = db.get_recent_activity(limit)
         return jsonify({'success': True, 'data': videos})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting recent activity: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/stats/channels', methods=['GET'])
-def get_channel_stats_api() -> Response:
-    """Get channel analytics."""
-    try:
-        limit = int(request.args.get('limit', 10))
-        limit = max(1, min(limit, 100))
-        channels = db.get_top_channels(limit)
-        return jsonify({'success': True, 'data': channels})
-    except Exception as e:
-        logger.error(f"Error getting channel stats: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1015,6 +930,8 @@ def get_timeline_stats_api() -> Response:
         days = max(1, min(days, 365))
         timeline = db.get_plays_by_period(days)
         return jsonify({'success': True, 'data': timeline})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting timeline stats: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

@@ -229,8 +229,8 @@ async function loadDashboardData() {
     const [summary, recent, mostPlayed, channels, recommendations] = await Promise.all([
         fetchStats('/api/stats/summary'),
         fetchStats('/api/stats/recent?limit=10'),
-        fetchStats('/api/stats/most_played?limit=5'),
-        fetchStats('/api/stats/channels?limit=5'),
+        fetchStats('/api/stats/most-played?limit=5'),
+        fetchStats('/api/stats/top-channels?limit=5'),
         fetchStats('/api/recommendations?strategy=likes&limit=10')
     ]);
 
@@ -331,9 +331,9 @@ function renderRecommendations(items) {
 // Statistics Tab
 async function loadStatisticsData() {
     const [mostPlayed, topRated, channels, categories, summary] = await Promise.all([
-        fetchStats('/api/stats/most_played?limit=20'),
-        fetchStats('/api/stats/top_rated?limit=20'),
-        fetchStats('/api/stats/channels?limit=10'),
+        fetchStats('/api/stats/most-played?limit=20'),
+        fetchStats('/api/stats/top-rated?limit=20'),
+        fetchStats('/api/stats/top-channels?limit=10'),
         fetchStats('/api/stats/categories'),
         fetchStats('/api/stats/summary')
     ]);
