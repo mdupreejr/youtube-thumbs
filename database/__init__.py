@@ -72,6 +72,9 @@ class Database:
     def find_by_content_hash(self, title, duration, artist=None):
         return self._video_ops.find_by_content_hash(title, duration, artist)
 
+    def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None):
+        return self._video_ops.find_cached_video_combined(title, duration, artist)
+
     # Pending operations
     def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
         return self._pending_ops.upsert_pending_media(media, reason)
@@ -179,6 +182,9 @@ class Database:
 
     def get_recommendations(self, based_on: str = 'likes', limit: int = 10) -> List[Dict]:
         return self._stats_ops.get_recommendations(based_on, limit)
+
+    def get_unrated_videos(self, page: int = 1, limit: int = 50) -> Dict[str, Any]:
+        return self._stats_ops.get_unrated_videos(page, limit)
 
 
 # Singleton instance management
