@@ -689,37 +689,260 @@ def get_rating_distribution() -> Response:
 def get_stats_summary() -> Response:
     """Get summary statistics for dashboard."""
     try:
-        with db._lock:
-            # Optimized: Single query for all statistics (performance + consistency)
-            cursor = db._conn.execute(
-                """
-                SELECT
-                    COUNT(*) as total_videos,
-                    COALESCE(SUM(play_count), 0) as total_plays,
-                    SUM(CASE WHEN rating = 'like' THEN 1 ELSE 0 END) as liked,
-                    SUM(CASE WHEN rating = 'dislike' THEN 1 ELSE 0 END) as disliked,
-                    SUM(CASE WHEN rating = 'none' THEN 1 ELSE 0 END) as unrated,
-                    COUNT(DISTINCT yt_channel_id) as unique_channels
-                FROM video_ratings
-                WHERE pending_match = 0
-                """
-            )
-            stats = cursor.fetchone()
-
+        summary = db.get_stats_summary()
         return jsonify({
             'success': True,
-            'data': {
-                'total_videos': stats['total_videos'],
-                'total_plays': stats['total_plays'],
-                'liked': stats['liked'],
-                'disliked': stats['disliked'],
-                'unrated': stats['unrated'],
-                'unique_channels': stats['unique_channels']
-            }
+            'data': summary
         })
     except Exception as e:
         logger.error(f"Error getting stats summary: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve summary statistics'}), 500
+
+
+@app.route('/api/stats/most_played', methods=['GET'])
+def get_most_played_api() -> Response:
+    """Get most played videos."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        limit = max(1, min(limit, 100))
+        videos = db.get_most_played(limit)
+        return jsonify({'success': True, 'data': videos})
+    except Exception as e:
+        logger.error(f"Error getting most played: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/top_rated', methods=['GET'])
+def get_top_rated_api() -> Response:
+    """Get top rated videos."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        limit = max(1, min(limit, 100))
+        videos = db.get_top_rated(limit)
+        return jsonify({'success': True, 'data': videos})
+    except Exception as e:
+        logger.error(f"Error getting top rated: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/recent', methods=['GET'])
+def get_recent_activity_api() -> Response:
+    """Get recent activity."""
+    try:
+        limit = int(request.args.get('limit', 20))
+        limit = max(1, min(limit, 100))
+        videos = db.get_recent_activity(limit)
+        return jsonify({'success': True, 'data': videos})
+    except Exception as e:
+        logger.error(f"Error getting recent activity: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/channels', methods=['GET'])
+def get_channel_stats_api() -> Response:
+    """Get channel analytics."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        limit = max(1, min(limit, 100))
+        channels = db.get_top_channels(limit)
+        return jsonify({'success': True, 'data': channels})
+    except Exception as e:
+        logger.error(f"Error getting channel stats: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/categories', methods=['GET'])
+def get_category_breakdown_api() -> Response:
+    """Get category breakdown."""
+    try:
+        categories = db.get_category_breakdown()
+        return jsonify({'success': True, 'data': categories})
+    except Exception as e:
+        logger.error(f"Error getting category breakdown: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stats/timeline', methods=['GET'])
+def get_timeline_stats_api() -> Response:
+    """Get time-based stats."""
+    try:
+        days = int(request.args.get('days', 7))
+        days = max(1, min(days, 365))
+        timeline = db.get_plays_by_period(days)
+        return jsonify({'success': True, 'data': timeline})
+    except Exception as e:
+        logger.error(f"Error getting timeline stats: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/history/plays', methods=['GET'])
+def get_play_history_api() -> Response:
+    """Get paginated play history."""
+    try:
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        date_from = request.args.get('from')
+        date_to = request.args.get('to')
+
+        limit = max(1, min(limit, 500))
+        offset = max(0, offset)
+
+        history = db.get_play_history(limit, offset, date_from, date_to)
+        return jsonify({'success': True, 'data': history})
+    except Exception as e:
+        logger.error(f"Error getting play history: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/history/search', methods=['GET'])
+def search_history_api() -> Response:
+    """Search history."""
+    try:
+        query = request.args.get('q', '')
+        if not query or len(query) < 2:
+            return jsonify({'success': False, 'error': 'Query must be at least 2 characters'}), 400
+
+        limit = int(request.args.get('limit', 50))
+        limit = max(1, min(limit, 200))
+
+        results = db.search_history(query, limit)
+        return jsonify({'success': True, 'data': results})
+    except Exception as e:
+        logger.error(f"Error searching history: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/insights/patterns', methods=['GET'])
+def get_listening_patterns_api() -> Response:
+    """Get listening patterns analysis."""
+    try:
+        patterns = db.get_listening_patterns()
+        return jsonify({'success': True, 'data': patterns})
+    except Exception as e:
+        logger.error(f"Error getting listening patterns: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/insights/trends', methods=['GET'])
+def get_trends_api() -> Response:
+    """Get various trend analyses."""
+    try:
+        discovery = db.get_discovery_stats()
+        play_distribution = db.get_play_distribution()
+
+        trends = {
+            'discovery': discovery,
+            'play_distribution': play_distribution
+        }
+        return jsonify({'success': True, 'data': trends})
+    except Exception as e:
+        logger.error(f"Error getting trends: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analytics/correlation', methods=['GET'])
+def get_correlation_stats_api() -> Response:
+    """Get correlation analysis."""
+    try:
+        correlation = db.get_correlation_stats()
+        return jsonify({'success': True, 'data': correlation})
+    except Exception as e:
+        logger.error(f"Error getting correlation stats: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analytics/retention', methods=['GET'])
+def get_retention_analysis_api() -> Response:
+    """Get retention analysis."""
+    try:
+        retention = db.get_retention_analysis()
+        return jsonify({'success': True, 'data': retention})
+    except Exception as e:
+        logger.error(f"Error getting retention analysis: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analytics/duration', methods=['GET'])
+def get_duration_analysis_api() -> Response:
+    """Get duration preferences analysis."""
+    try:
+        duration = db.get_duration_analysis()
+        return jsonify({'success': True, 'data': duration})
+    except Exception as e:
+        logger.error(f"Error getting duration analysis: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analytics/source', methods=['GET'])
+def get_source_breakdown_api() -> Response:
+    """Get source breakdown analysis."""
+    try:
+        source = db.get_source_breakdown()
+        return jsonify({'success': True, 'data': source})
+    except Exception as e:
+        logger.error(f"Error getting source breakdown: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/explorer/filter', methods=['POST'])
+def filter_videos_api() -> Response:
+    """Filter videos with complex criteria."""
+    try:
+        filters = request.get_json() or {}
+        results = db.filter_videos(filters)
+        return jsonify({'success': True, 'data': results})
+    except Exception as e:
+        logger.error(f"Error filtering videos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/explorer/channels', methods=['GET'])
+def get_channels_list_api() -> Response:
+    """Get list of all channels for filter dropdown."""
+    try:
+        channels = db.get_all_channels()
+        return jsonify({'success': True, 'data': channels})
+    except Exception as e:
+        logger.error(f"Error getting channels list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/explorer/categories', methods=['GET'])
+def get_categories_list_api() -> Response:
+    """Get list of all categories."""
+    try:
+        categories = db.get_all_categories()
+        return jsonify({'success': True, 'data': categories})
+    except Exception as e:
+        logger.error(f"Error getting categories list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/recommendations', methods=['GET'])
+def get_recommendations_api() -> Response:
+    """Get video recommendations."""
+    try:
+        based_on = request.args.get('strategy', 'likes')
+        limit = int(request.args.get('limit', 10))
+
+        # Validate strategy
+        if based_on not in ['likes', 'played', 'discover']:
+            based_on = 'likes'
+
+        # Limit range
+        limit = max(1, min(limit, 50))
+
+        recommendations = db.get_recommendations(based_on, limit)
+        return jsonify({'success': True, 'data': recommendations})
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/stats')
+def stats_page() -> str:
+    """Render the statistics and analytics page."""
+    return render_template('stats.html')
 
 
 @app.route('/database', defaults={'path': ''})

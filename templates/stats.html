@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Statistics & Analytics</title>
+    <link rel="stylesheet" href="/static/css/stats.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>YouTube Thumbs Statistics</h1>
+            <button id="dark-mode-toggle" class="theme-toggle">🌙</button>
+        </header>
+
+        <div class="keyboard-hints">
+            <span>Ctrl+1-6: Switch tabs</span>
+            <span>Ctrl+R: Refresh</span>
+        </div>
+
+        <!-- Tab Navigation -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+            <button class="tab-btn" data-tab="statistics">Statistics</button>
+            <button class="tab-btn" data-tab="history">History</button>
+            <button class="tab-btn" data-tab="insights">Insights</button>
+            <button class="tab-btn" data-tab="analytics">Analytics</button>
+            <button class="tab-btn" data-tab="explorer">Explorer</button>
+        </nav>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <!-- Key Metrics Cards -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon">🎵</div>
+                    <div class="metric-value" id="total-videos">-</div>
+                    <div class="metric-label">Total Videos</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">▶️</div>
+                    <div class="metric-value" id="total-plays">-</div>
+                    <div class="metric-label">Total Plays</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">👍</div>
+                    <div class="metric-value" id="total-likes">-</div>
+                    <div class="metric-label">Liked Videos</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">⭐</div>
+                    <div class="metric-value" id="avg-rating">-</div>
+                    <div class="metric-label">Avg Rating Score</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity Section -->
+            <div class="stats-card">
+                <h2>Recent Activity</h2>
+                <div id="recent-activity-list"></div>
+            </div>
+
+            <!-- Quick Stats Section -->
+            <div class="stats-grid">
+                <div class="stats-card">
+                    <h3>Most Played</h3>
+                    <div id="most-played-today"></div>
+                </div>
+                <div class="stats-card">
+                    <h3>Top Channels</h3>
+                    <div id="top-channels-mini"></div>
+                </div>
+            </div>
+
+            <!-- Recommendations Section -->
+            <div class="stats-card">
+                <h3>Recommended for You</h3>
+                <div id="recommendations-list"></div>
+            </div>
+        </div>
+
+        <!-- Statistics Tab -->
+        <div id="statistics" class="tab-content">
+            <!-- Top Lists Section -->
+            <div class="stats-section">
+                <h2>Top Videos</h2>
+
+                <!-- Toggle buttons -->
+                <div class="toggle-buttons">
+                    <button class="toggle-btn active" data-sort="plays">Most Played</button>
+                    <button class="toggle-btn" data-sort="rated">Top Rated</button>
+                </div>
+
+                <!-- Video list -->
+                <div id="top-videos-list"></div>
+            </div>
+
+            <!-- Channel Statistics -->
+            <div class="stats-section">
+                <h2>Channel Statistics</h2>
+                <div id="channel-stats-table"></div>
+            </div>
+
+            <!-- Category Breakdown -->
+            <div class="stats-section">
+                <h2>Category Breakdown</h2>
+                <div id="category-chart-container">
+                    <canvas id="category-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Rating Distribution -->
+            <div class="stats-section">
+                <h2>Rating Distribution</h2>
+                <div class="rating-bars">
+                    <div class="rating-bar">
+                        <span class="label">👍 Liked</span>
+                        <div class="bar-container">
+                            <div class="bar" id="bar-likes"></div>
+                        </div>
+                        <span class="count" id="count-likes">-</span>
+                    </div>
+                    <div class="rating-bar">
+                        <span class="label">👎 Disliked</span>
+                        <div class="bar-container">
+                            <div class="bar" id="bar-dislikes"></div>
+                        </div>
+                        <span class="count" id="count-dislikes">-</span>
+                    </div>
+                    <div class="rating-bar">
+                        <span class="label">➖ No Rating</span>
+                        <div class="bar-container">
+                            <div class="bar" id="bar-none"></div>
+                        </div>
+                        <span class="count" id="count-none">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="history" class="tab-content">
+            <!-- Filter Controls -->
+            <div class="history-filters">
+                <input type="text" id="history-search" placeholder="Search history..." />
+                <div class="date-filters">
+                    <label>From: <input type="date" id="date-from" /></label>
+                    <label>To: <input type="date" id="date-to" /></label>
+                    <button id="apply-filters">Apply</button>
+                    <button id="clear-filters">Clear</button>
+                </div>
+            </div>
+
+            <!-- History Timeline -->
+            <div id="history-timeline"></div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination">
+                <button id="prev-page" disabled>Previous</button>
+                <span id="page-info">Page 1</span>
+                <button id="next-page">Next</button>
+            </div>
+        </div>
+
+        <!-- Insights Tab -->
+        <div id="insights" class="tab-content">
+            <!-- Listening Patterns Section -->
+            <div class="insights-section">
+                <h2>Listening Patterns</h2>
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <h3>By Day of Week</h3>
+                        <canvas id="day-of-week-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>By Hour of Day</h3>
+                        <canvas id="hour-of-day-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Discovery Trends -->
+            <div class="insights-section">
+                <h2>Discovery Trends</h2>
+                <canvas id="discovery-chart"></canvas>
+            </div>
+
+            <!-- Play Count Distribution -->
+            <div class="insights-section">
+                <h2>Play Count Distribution</h2>
+                <canvas id="play-distribution-chart"></canvas>
+            </div>
+
+            <!-- Key Insights Cards -->
+            <div class="insights-cards">
+                <div class="insight-card">
+                    <h3>Most Active Day</h3>
+                    <div class="insight-value" id="most-active-day">-</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Peak Listening Hour</h3>
+                    <div class="insight-value" id="peak-hour">-</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Discovery Rate</h3>
+                    <div class="insight-value" id="discovery-rate">-</div>
+                    <div class="insight-detail">new videos per week</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content">
+            <!-- Correlation Analysis -->
+            <div class="analytics-section">
+                <h2>Play Count vs Rating Analysis</h2>
+                <canvas id="correlation-chart"></canvas>
+                <div class="analysis-text" id="correlation-insight"></div>
+            </div>
+
+            <!-- Retention Analysis -->
+            <div class="analytics-section">
+                <h2>Video Retention</h2>
+                <div class="retention-visual">
+                    <canvas id="retention-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Duration Preferences -->
+            <div class="analytics-section">
+                <h2>Duration Preferences</h2>
+                <canvas id="duration-chart"></canvas>
+            </div>
+
+            <!-- Source Breakdown -->
+            <div class="analytics-section">
+                <h2>Video Sources</h2>
+                <canvas id="source-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Explorer Tab -->
+        <div id="explorer" class="tab-content">
+            <!-- Advanced Filter Panel -->
+            <div class="explorer-filters">
+                <h2>Filter Videos</h2>
+
+                <div class="filter-grid">
+                    <!-- Rating Filter -->
+                    <div class="filter-group">
+                        <label>Rating</label>
+                        <select id="filter-rating">
+                            <option value="">All</option>
+                            <option value="like">Liked</option>
+                            <option value="dislike">Disliked</option>
+                            <option value="none">No Rating</option>
+                        </select>
+                    </div>
+
+                    <!-- Channel Filter -->
+                    <div class="filter-group">
+                        <label>Channel</label>
+                        <select id="filter-channel">
+                            <option value="">All Channels</option>
+                        </select>
+                    </div>
+
+                    <!-- Category Filter -->
+                    <div class="filter-group">
+                        <label>Category</label>
+                        <select id="filter-category">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+
+                    <!-- Source Filter -->
+                    <div class="filter-group">
+                        <label>Source</label>
+                        <select id="filter-source">
+                            <option value="">All Sources</option>
+                            <option value="ha_live">Live Playback</option>
+                            <option value="import_watch_history">Watch History Import</option>
+                            <option value="import_liked_videos">Liked Videos Import</option>
+                        </select>
+                    </div>
+
+                    <!-- Play Count Range -->
+                    <div class="filter-group">
+                        <label>Play Count</label>
+                        <div class="range-inputs">
+                            <input type="number" id="filter-plays-min" placeholder="Min" min="0" />
+                            <span>to</span>
+                            <input type="number" id="filter-plays-max" placeholder="Max" min="0" />
+                        </div>
+                    </div>
+
+                    <!-- Date Range -->
+                    <div class="filter-group">
+                        <label>Date Added</label>
+                        <div class="range-inputs">
+                            <input type="date" id="filter-date-from" />
+                            <span>to</span>
+                            <input type="date" id="filter-date-to" />
+                        </div>
+                    </div>
+
+                    <!-- Duration Range -->
+                    <div class="filter-group">
+                        <label>Duration (seconds)</label>
+                        <div class="range-inputs">
+                            <input type="number" id="filter-duration-min" placeholder="Min" min="0" />
+                            <span>to</span>
+                            <input type="number" id="filter-duration-max" placeholder="Max" min="0" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button id="apply-explorer-filters" class="btn-primary">Apply Filters</button>
+                    <button id="clear-explorer-filters" class="btn-secondary">Clear All</button>
+                    <button id="export-results" class="btn-secondary">Export Results</button>
+                </div>
+            </div>
+
+            <!-- Results Display -->
+            <div class="explorer-results">
+                <div class="results-header">
+                    <h3>Results (<span id="result-count">0</span> videos)</h3>
+                    <div class="sort-controls">
+                        <label>Sort by:</label>
+                        <select id="sort-by">
+                            <option value="date_added">Date Added</option>
+                            <option value="date_last_played">Last Played</option>
+                            <option value="play_count">Play Count</option>
+                            <option value="rating_score">Rating Score</option>
+                            <option value="ha_title">Title</option>
+                        </select>
+                        <select id="sort-order">
+                            <option value="desc">Descending</option>
+                            <option value="asc">Ascending</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="explorer-results-list"></div>
+
+                <div class="pagination">
+                    <button id="explorer-prev-page" disabled>Previous</button>
+                    <span id="explorer-page-info">Page 1</span>
+                    <button id="explorer-next-page">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/stats.js"></script>
+</body>
+</html>

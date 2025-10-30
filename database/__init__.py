@@ -10,6 +10,7 @@ from .video_operations import VideoOperations
 from .pending_operations import PendingOperations
 from .import_operations import ImportOperations
 from .not_found_operations import NotFoundOperations
+from .stats_operations import StatsOperations
 
 
 class Database:
@@ -27,6 +28,7 @@ class Database:
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
         self._import_ops = ImportOperations(self._connection)
         self._not_found_ops = NotFoundOperations(self._connection)
+        self._stats_ops = StatsOperations(self._connection)
 
         # Expose connection properties for backward compatibility
         self.db_path = db_path
@@ -99,6 +101,84 @@ class Database:
 
     def cleanup_old_not_found(self, days: int = 2) -> int:
         return self._not_found_ops.cleanup_old_entries(days)
+
+    # Stats operations
+    def get_total_videos(self) -> int:
+        return self._stats_ops.get_total_videos()
+
+    def get_total_plays(self) -> int:
+        return self._stats_ops.get_total_plays()
+
+    def get_ratings_breakdown(self) -> Dict[str, int]:
+        return self._stats_ops.get_ratings_breakdown()
+
+    def get_most_played(self, limit: int = 10) -> List[Dict]:
+        return self._stats_ops.get_most_played(limit)
+
+    def get_top_rated(self, limit: int = 10) -> List[Dict]:
+        return self._stats_ops.get_top_rated(limit)
+
+    def get_recent_activity(self, limit: int = 20) -> List[Dict]:
+        return self._stats_ops.get_recent_activity(limit)
+
+    def get_top_channels(self, limit: int = 10) -> List[Dict]:
+        return self._stats_ops.get_top_channels(limit)
+
+    def get_category_breakdown(self) -> List[Dict]:
+        return self._stats_ops.get_category_breakdown()
+
+    def get_plays_by_period(self, days: int = 7) -> List[Dict]:
+        return self._stats_ops.get_plays_by_period(days)
+
+    def get_recent_additions(self, days: int = 7) -> List[Dict]:
+        return self._stats_ops.get_recent_additions(days)
+
+    def get_stats_summary(self) -> Dict[str, Any]:
+        return self._stats_ops.get_summary()
+
+    def get_play_history(self, limit: int = 100, offset: int = 0,
+                         date_from: Optional[str] = None,
+                         date_to: Optional[str] = None) -> List[Dict]:
+        return self._stats_ops.get_play_history(limit, offset, date_from, date_to)
+
+    def get_rating_history(self, limit: int = 100, offset: int = 0) -> List[Dict]:
+        return self._stats_ops.get_rating_history(limit, offset)
+
+    def search_history(self, query: str, limit: int = 50) -> List[Dict]:
+        return self._stats_ops.search_history(query, limit)
+
+    def get_listening_patterns(self) -> Dict:
+        return self._stats_ops.get_listening_patterns()
+
+    def get_discovery_stats(self) -> List[Dict]:
+        return self._stats_ops.get_discovery_stats()
+
+    def get_play_distribution(self) -> List[Dict]:
+        return self._stats_ops.get_play_distribution()
+
+    def get_correlation_stats(self) -> Dict:
+        return self._stats_ops.get_correlation_stats()
+
+    def get_retention_analysis(self) -> List[Dict]:
+        return self._stats_ops.get_retention_analysis()
+
+    def get_source_breakdown(self) -> List[Dict]:
+        return self._stats_ops.get_source_breakdown()
+
+    def get_duration_analysis(self) -> List[Dict]:
+        return self._stats_ops.get_duration_analysis()
+
+    def filter_videos(self, filters: Dict) -> Dict:
+        return self._stats_ops.filter_videos(filters)
+
+    def get_all_channels(self) -> List[Dict]:
+        return self._stats_ops.get_all_channels()
+
+    def get_all_categories(self) -> List[int]:
+        return self._stats_ops.get_all_categories()
+
+    def get_recommendations(self, based_on: str = 'likes', limit: int = 10) -> List[Dict]:
+        return self._stats_ops.get_recommendations(based_on, limit)
 
 
 # Singleton instance management
