@@ -48,3 +48,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation with potential personal data
+STATISTICS_COMPLETE.md
+STATS_IMPLEMENTATION_PLAN.md
