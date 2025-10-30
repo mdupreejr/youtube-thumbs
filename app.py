@@ -559,7 +559,12 @@ def thumbs_down() -> Tuple[Response, int]:
 
 @app.route('/health', methods=['GET'])
 def health() -> Response:
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    Query Parameters:
+        format: 'json' (default) or 'html' for formatted view
+    """
     stats = rate_limiter.get_stats()
     guard_status = quota_guard.status()
 
@@ -599,7 +604,7 @@ def health() -> Response:
     else:
         overall_status = "unhealthy"
 
-    return jsonify({
+    response_data = {
         "status": overall_status,
         "health_score": health_score,
         "warnings": warnings,
@@ -613,7 +618,90 @@ def health() -> Response:
             "healthy": prober_healthy,
             "enabled": quota_prober.enabled,
         }
-    })
+    }
+
+    # Check if HTML format is requested (default for browser access)
+    format_type = request.args.get('format', 'html')
+
+    if format_type == 'html':
+        # Return formatted HTML view
+        import json
+        json_str = json.dumps(response_data, indent=2, sort_keys=True)
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>YouTube Thumbs - Health Check</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                    margin: 0;
+                }}
+                .container {{
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                }}
+                h1 {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    margin-bottom: 10px;
+                }}
+                .subtitle {{
+                    color: #666;
+                    margin-bottom: 30px;
+                    font-size: 14px;
+                }}
+                pre {{
+                    background: #f5f5f5;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 20px;
+                    overflow-x: auto;
+                    font-family: 'Monaco', 'Courier New', monospace;
+                    font-size: 13px;
+                    line-height: 1.6;
+                }}
+                .back-link {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    color: #667eea;
+                    text-decoration: none;
+                    font-weight: 600;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    background: #667eea15;
+                    transition: all 0.2s;
+                }}
+                .back-link:hover {{
+                    background: #667eea;
+                    color: white;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>💚 Health Check</h1>
+                <div class="subtitle">System health and status monitoring</div>
+                <pre>{json_str}</pre>
+                <a href="javascript:history.back()" class="back-link">← Back to Dashboard</a>
+            </div>
+        </body>
+        </html>
+        """
+        return html, 200
+
+    return jsonify(response_data)
 
 
 @app.route('/metrics', methods=['GET'])
@@ -627,6 +715,9 @@ def get_metrics() -> Response:
     - Rating operations (success/failed/queued)
     - Search patterns and failures
     - System uptime and health
+
+    Query Parameters:
+        format: 'json' (default) or 'html' for formatted view
     """
     try:
         all_metrics = metrics.get_all_metrics()
@@ -640,6 +731,87 @@ def get_metrics() -> Response:
             },
             **all_metrics
         }
+
+        # Check if HTML format is requested (default for browser access)
+        format_type = request.args.get('format', 'html')
+
+        if format_type == 'html':
+            # Return formatted HTML view
+            import json
+            json_str = json.dumps(response_data, indent=2, sort_keys=True)
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>YouTube Thumbs - Metrics</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        padding: 20px;
+                        margin: 0;
+                    }}
+                    .container {{
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        padding: 40px;
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                    }}
+                    h1 {{
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                        margin-bottom: 10px;
+                    }}
+                    .subtitle {{
+                        color: #666;
+                        margin-bottom: 30px;
+                        font-size: 14px;
+                    }}
+                    pre {{
+                        background: #f5f5f5;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 8px;
+                        padding: 20px;
+                        overflow-x: auto;
+                        font-family: 'Monaco', 'Courier New', monospace;
+                        font-size: 13px;
+                        line-height: 1.6;
+                    }}
+                    .back-link {{
+                        display: inline-block;
+                        margin-top: 20px;
+                        color: #667eea;
+                        text-decoration: none;
+                        font-weight: 600;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        background: #667eea15;
+                        transition: all 0.2s;
+                    }}
+                    .back-link:hover {{
+                        background: #667eea;
+                        color: white;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📈 System Metrics</h1>
+                    <div class="subtitle">Real-time monitoring and performance statistics</div>
+                    <pre>{json_str}</pre>
+                    <a href="javascript:history.back()" class="back-link">← Back to Dashboard</a>
+                </div>
+            </body>
+            </html>
+            """
+            return html, 200
 
         return jsonify(response_data), 200
     except Exception as e:

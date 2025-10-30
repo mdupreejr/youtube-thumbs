@@ -787,7 +787,7 @@
         <div class="header">
             <h1>🎵 YouTube Thumbs Rating</h1>
             <p class="subtitle">System Management & Bulk Rating Interface</p>
-            <p style="margin-top: 15px;"><a href="/stats" style="color: #667eea; text-decoration: none; font-weight: 600; font-size: 16px;">📊 View Advanced Statistics Dashboard →</a></p>
+            <p style="margin-top: 15px;"><a href="#" id="stats-link" style="color: #667eea; text-decoration: none; font-weight: 600; font-size: 16px;">📊 View Advanced Statistics Dashboard →</a></p>
         </div>
 
         <div class="tabs">
@@ -850,9 +850,9 @@
 
             <div class="card">
                 <div class="footer-links">
-                    <a href="#" id="health-link" target="_blank" class="footer-link">💚 Health Check</a>
-                    <a href="#" id="metrics-link" target="_blank" class="footer-link">📈 Metrics</a>
-                    <a href="#" id="database-link" target="_blank" class="footer-link">🗄️ Database Viewer</a>
+                    <a href="#" id="health-link" class="footer-link">💚 Health Check</a>
+                    <a href="#" id="metrics-link" class="footer-link">📈 Metrics</a>
+                    <a href="#" id="database-link" class="footer-link">🗄️ Database Viewer</a>
                 </div>
             </div>
         </div>
@@ -1432,6 +1432,7 @@
         }
 
         // Initialize footer links with BASE_PATH
+        document.getElementById('stats-link').href = `${BASE_PATH}/stats`;
         document.getElementById('health-link').href = `${BASE_PATH}/health`;
         document.getElementById('metrics-link').href = `${BASE_PATH}/metrics`;
         document.getElementById('database-link').href = `${BASE_PATH}/database`;
