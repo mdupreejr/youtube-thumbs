@@ -195,6 +195,12 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.4 - Fix Stats Page Loading Through Ingress
+- Fixed statistics dashboard showing as blank/black page
+- Changed hardcoded `/static/` paths to use Flask's `url_for()` function
+- CSS and JavaScript now load correctly through Home Assistant ingress
+- Stats page now fully functional when accessed through web UI
+
 ### v1.49.3 - Fix Bulk Rating Interface
 - Fixed missing `get_unrated_videos()` method exposure in Database class
 - Added `find_cached_video_combined()` method exposure
