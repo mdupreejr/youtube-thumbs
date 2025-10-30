@@ -12,6 +12,7 @@ from youtube_api import get_youtube_api
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
+from quota_prober import QuotaProber
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES
 from video_helpers import is_youtube_content
@@ -220,6 +221,45 @@ history_tracker = HistoryTracker(
 )
 history_tracker.start()
 atexit.register(history_tracker.stop)
+
+
+def _probe_youtube_api() -> bool:
+    """
+    Lightweight probe to test if YouTube API is accessible.
+    Makes a minimal search query to check quota status.
+
+    Returns:
+        True if API is accessible, False if quota exceeded
+    """
+    try:
+        logger.debug("Probing YouTube API with lightweight test query...")
+        # Search for a well-known video with a simple query
+        # This should be cheap on quota (just 1 search unit)
+        result = yt_api.search_video_globally("test", expected_duration=10)
+
+        # If we get any result (even None), it means no quota error
+        # Quota errors would raise an exception
+        logger.debug("YouTube API probe successful - quota appears available")
+        return True
+    except Exception as exc:
+        # Check if it's a quota error
+        error_str = str(exc).lower()
+        if 'quota' in error_str or '403' in error_str:
+            logger.debug("YouTube API probe failed - quota still exceeded: %s", exc)
+            return False
+        # Other errors might be transient, return True to clear cooldown
+        logger.warning("YouTube API probe failed with unexpected error: %s", exc)
+        return False
+
+
+quota_prober = QuotaProber(
+    quota_guard=quota_guard,
+    probe_func=_probe_youtube_api,
+    check_interval=300,  # Check every 5 minutes if probe is needed
+    enabled=True,
+)
+quota_prober.start()
+atexit.register(quota_prober.stop)
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:
@@ -530,6 +570,13 @@ def health() -> Response:
         history_tracker.ensure_running()
         tracker_healthy = history_tracker.is_healthy()
 
+    # Check quota prober health and attempt recovery if needed
+    prober_healthy = quota_prober.is_healthy()
+    if not prober_healthy:
+        logger.warning("Quota prober unhealthy, attempting restart")
+        quota_prober.ensure_running()
+        prober_healthy = quota_prober.is_healthy()
+
     # Get health score from metrics
     health_score, warnings = metrics.get_health_score()
 
@@ -537,6 +584,11 @@ def health() -> Response:
     if not tracker_healthy:
         warnings.append("History tracker is not running")
         health_score = min(health_score, 50)  # Cap health score if tracker is down
+
+    # Add prober warning if still unhealthy
+    if not prober_healthy:
+        warnings.append("Quota prober is not running")
+        health_score = min(health_score, 60)  # Cap health score if prober is down
 
     if guard_status.get('blocked'):
         overall_status = "cooldown"
@@ -556,6 +608,10 @@ def health() -> Response:
         "history_tracker": {
             "healthy": tracker_healthy,
             "enabled": history_tracker.enabled,
+        },
+        "quota_prober": {
+            "healthy": prober_healthy,
+            "enabled": quota_prober.enabled,
         }
     })
 

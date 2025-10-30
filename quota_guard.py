@@ -46,6 +46,9 @@ class QuotaGuard:
         except OSError as exc:
             logger.warning("QuotaGuard could not create directory %s: %s", self.state_file.parent, exc)
         self._maybe_force_unlock()
+        self._lock = threading.Lock()
+        self._last_probe_time = 0
+        self._probe_interval = 3600  # Probe once per hour during cooldown
 
     @staticmethod
     def _resolve_cooldown() -> int:
@@ -150,7 +153,50 @@ class QuotaGuard:
     def reset(self, reason: Optional[str] = None) -> None:
         """Manually clear the cooldown file."""
         self._clear_state()
+        with self._lock:
+            self._last_probe_time = 0
         logger.info("QuotaGuard reset: %s", reason or "manual request")
+
+    def should_probe_for_recovery(self) -> bool:
+        """Check if we should attempt a probe to see if quota is restored."""
+        if not self.is_blocked():
+            return False
+
+        now = time.time()
+        with self._lock:
+            time_since_last_probe = now - self._last_probe_time
+            if time_since_last_probe >= self._probe_interval:
+                self._last_probe_time = now
+                return True
+        return False
+
+    def attempt_recovery_probe(self, probe_func) -> bool:
+        """
+        Attempt to probe YouTube API to check if quota is restored.
+
+        Args:
+            probe_func: Callable that returns True if API is accessible, False otherwise
+
+        Returns:
+            True if quota is restored and guard was cleared, False otherwise
+        """
+        if not self.is_blocked():
+            return False
+
+        logger.info("QuotaGuard: Probing YouTube API to check if quota is restored...")
+
+        try:
+            if probe_func():
+                logger.info("QuotaGuard: Probe successful! Quota appears to be restored. Clearing cooldown.")
+                self.reset(reason="quota_restored_via_probe")
+                return True
+            else:
+                logger.info("QuotaGuard: Probe failed, quota still exceeded. Will retry in %d seconds.",
+                           self._probe_interval)
+                return False
+        except Exception as exc:
+            logger.warning("QuotaGuard: Probe failed with error: %s", exc)
+            return False
 
     def _maybe_force_unlock(self) -> None:
         if _is_truthy(os.getenv('YTT_FORCE_QUOTA_UNLOCK')):
