@@ -203,15 +203,24 @@ class DatabaseConnection:
             logger.info("Normalized %s timestamp values (%s rows)", column, count)
 
     @staticmethod
-    def timestamp(ts: str = None) -> str:
+    def timestamp(ts = None) -> str:
         """
         Return timestamps in a format compatible with sqlite's built-in converters.
         sqlite3 expects 'YYYY-MM-DD HH:MM:SS' (space separator) for TIMESTAMP columns.
         All timestamps are stored in UTC for consistency and compatibility.
         Returns None if ts is None (for optional timestamp fields).
+
+        Args:
+            ts: Can be None, a string (ISO8601 or sqlite format), or a datetime object
         """
         if ts is None:
             return None
+
+        # If it's a datetime object, convert to string format
+        if isinstance(ts, datetime):
+            return ts.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Handle string input
         if ts:
             cleaned = ts.replace('T', ' ').replace('Z', '').strip()
             if cleaned:
