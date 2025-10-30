@@ -733,3 +733,59 @@ class StatsOperations:
                 return []
 
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_unrated_videos(self, page: int = 1, limit: int = 50) -> Dict[str, Any]:
+        """
+        Get paginated list of unrated videos sorted by play count.
+
+        Args:
+            page: Page number (1-indexed)
+            limit: Number of videos per page
+
+        Returns:
+            Dictionary with songs list, pagination info, and total count
+        """
+        offset = (page - 1) * limit
+
+        with self._lock:
+            # Get total count of unrated songs
+            cursor = self._conn.execute(
+                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0"
+            )
+            total_count = cursor.fetchone()['count']
+
+            # Get unrated songs, sorted by play count (most played first)
+            cursor = self._conn.execute(
+                """
+                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url
+                FROM video_ratings
+                WHERE rating = 'none' AND pending_match = 0
+                ORDER BY play_count DESC, date_last_played DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset)
+            )
+            songs = cursor.fetchall()
+
+        # Format results
+        songs_list = []
+        for song in songs:
+            # Build YouTube URL if not stored
+            yt_url = song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
+
+            songs_list.append({
+                'id': song['yt_video_id'],
+                'title': song['yt_title'] or song['ha_title'] or 'Unknown',
+                'artist': song['ha_artist'] or song['yt_channel'] or 'Unknown',
+                'play_count': song['play_count'] or 0,
+                'url': yt_url
+            })
+
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+
+        return {
+            'songs': songs_list,
+            'page': page,
+            'total_pages': total_pages,
+            'total_count': total_count
+        }

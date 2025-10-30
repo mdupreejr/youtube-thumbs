@@ -80,25 +80,30 @@ def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[
         return None
 
     duration = ha_media.get('duration')
+    if not duration:
+        # Can't do reliable matching without duration
+        logger.debug("Cache miss for '%s' - no duration provided", title)
+        metrics.record_cache_miss()
+        return None
+
     artist = ha_media.get('artist')
 
-    # Strategy 1: Check content hash (title + duration + artist)
-    result = check_content_hash_cache(db, title, duration, artist)
-    if result:
-        return result
+    # Use optimized combined query (single database call instead of two)
+    cached_video = db.find_cached_video_combined(title, duration, artist)
+    if cached_video:
+        # Determine which strategy found the match for metrics
+        from video_helpers import get_content_hash
+        content_hash = get_content_hash(title, duration, artist)
+        cache_type = 'content_hash' if cached_video.get('ha_content_hash') == content_hash else 'title_duration'
 
-    # Strategy 2: Check exact title + duration match
-    if duration:
-        # Find by title and check duration matches exactly (YouTube = HA + 1)
-        exact_match = db.find_by_title_and_duration(title, duration)
-        if exact_match:
-            logger.info(
-                "Cache hit: exact title+duration match for '%s' (ID: %s)",
-                title,
-                exact_match['yt_video_id']
-            )
-            metrics.record_cache_hit('title_duration')
-            return build_video_result(exact_match, title)
+        logger.info(
+            "Cache hit (%s): '%s' (ID: %s)",
+            cache_type,
+            title,
+            cached_video['yt_video_id']
+        )
+        metrics.record_cache_hit(cache_type)
+        return build_video_result(cached_video, title)
 
     # No cache hit - let YouTube search handle it
     logger.debug("Cache miss for '%s' - will search YouTube", title)

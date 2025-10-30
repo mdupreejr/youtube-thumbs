@@ -17,33 +17,33 @@ class MetricsTracker:
         self._lock = threading.Lock()
         self._start_time = time.time()
 
-        # API call tracking
-        self._api_calls = deque(maxlen=10000)  # Store last 10k API calls
-        # Use lambda to create bounded deques for each API type
-        self._api_calls_by_type = defaultdict(lambda: deque(maxlen=1000))
+        # API call tracking - reduced from 10k to 2k (still covers ~1 hour at high load)
+        self._api_calls = deque(maxlen=2000)
+        # Reduced per-type tracking from 1k to 500
+        self._api_calls_by_type = defaultdict(lambda: deque(maxlen=500))
 
-        # Cache performance tracking
-        self._cache_hits = deque(maxlen=10000)
-        self._cache_misses = deque(maxlen=10000)
+        # Cache performance tracking - reduced from 10k to 2k
+        self._cache_hits = deque(maxlen=2000)
+        self._cache_misses = deque(maxlen=2000)
 
-        # Failed searches tracking
-        self._failed_searches = deque(maxlen=1000)
-        self._not_found_cache_hits = deque(maxlen=1000)
+        # Failed searches tracking - reduced from 1k to 500
+        self._failed_searches = deque(maxlen=500)
+        self._not_found_cache_hits = deque(maxlen=500)
 
-        # Rating operations tracking
-        self._ratings_success = deque(maxlen=1000)
-        self._ratings_failed = deque(maxlen=1000)
-        self._ratings_queued = deque(maxlen=1000)
+        # Rating operations tracking - reduced from 1k to 500
+        self._ratings_success = deque(maxlen=500)
+        self._ratings_failed = deque(maxlen=500)
+        self._ratings_queued = deque(maxlen=500)
 
-        # Quota tracking
+        # Quota tracking - kept at 100 (rarely used)
         self._quota_trips = deque(maxlen=100)
         self._quota_recoveries = deque(maxlen=100)
 
-        # YouTube search tracking
-        self._search_queries = deque(maxlen=1000)
+        # YouTube search tracking - reduced from 1k to 500
+        self._search_queries = deque(maxlen=500)
         self._search_results_count = defaultdict(int)
 
-        # Batch operations tracking
+        # Batch operations tracking - kept at 100 (rarely used)
         self._batch_operations = deque(maxlen=100)
 
     def record_api_call(self, api_type: str, success: bool = True, duration_ms: Optional[float] = None):

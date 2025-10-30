@@ -402,65 +402,21 @@ def test_db() -> Response:
 def get_unrated_songs() -> Response:
     """Get unrated songs for bulk rating interface."""
     logger.debug("=== /api/unrated endpoint called ===")
-    logger.debug(f"Request method: {request.method}")
-    logger.debug(f"Request path: {request.path}")
     logger.debug(f"Request args: {request.args}")
 
     try:
         page = int(request.args.get('page', 1))
         logger.debug(f"Fetching page {page} of unrated songs")
 
-        limit = 50
-        offset = (page - 1) * limit
-
-        with db._lock:
-            # Get total count of unrated songs
-            cursor = db._conn.execute(
-                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0"
-            )
-            total_count = cursor.fetchone()['count']
-            logger.debug(f"Total unrated songs: {total_count}")
-
-            # Get unrated songs, sorted by play count (most played first)
-            cursor = db._conn.execute(
-                """
-                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url
-                FROM video_ratings
-                WHERE rating = 'none' AND pending_match = 0
-                ORDER BY play_count DESC, date_last_played DESC
-                LIMIT ? OFFSET ?
-                """,
-                (limit, offset)
-            )
-            songs = cursor.fetchall()
-            logger.debug(f"Retrieved {len(songs)} songs for page {page}")
-
-        # Format results
-        songs_list = []
-        for song in songs:
-            # Build YouTube URL if not stored
-            yt_url = song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
-
-            songs_list.append({
-                'id': song['yt_video_id'],
-                'title': song['yt_title'] or song['ha_title'] or 'Unknown',
-                'artist': song['ha_artist'] or song['yt_channel'] or 'Unknown',
-                'play_count': song['play_count'] or 0,
-                'url': yt_url
-            })
-
-        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        result = db.get_unrated_videos(page=page, limit=50)
+        logger.debug(f"Retrieved {len(result['songs'])} songs for page {page}")
 
         response_data = {
             'success': True,
-            'songs': songs_list,
-            'page': page,
-            'total_pages': total_pages,
-            'total_count': total_count
+            **result
         }
 
-        logger.debug(f"Returning JSON response with {len(songs_list)} songs")
-        logger.debug(f"Response data: success={response_data['success']}, songs_count={len(response_data['songs'])}, page={response_data['page']}, total_pages={response_data['total_pages']}")
+        logger.debug(f"Returning {len(response_data['songs'])} songs, page {response_data['page']}/{response_data['total_pages']}")
 
         return jsonify(response_data)
 
@@ -849,19 +805,8 @@ def get_top_channels_stats() -> Response:
 def get_rating_distribution() -> Response:
     """Get rating distribution for pie chart."""
     try:
-        with db._lock:
-            cursor = db._conn.execute(
-                """
-                SELECT rating, COUNT(*) as count
-                FROM video_ratings
-                WHERE pending_match = 0
-                GROUP BY rating
-                """
-            )
-            ratings = cursor.fetchall()
-
-        result = {row['rating']: row['count'] for row in ratings}
-        return jsonify({'success': True, 'data': result})
+        distribution = db.get_ratings_breakdown()
+        return jsonify({'success': True, 'data': distribution})
     except Exception as e:
         logger.error(f"Error getting rating distribution: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve rating distribution'}), 500
