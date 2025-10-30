@@ -523,8 +523,21 @@ def health() -> Response:
     stats = rate_limiter.get_stats()
     guard_status = quota_guard.status()
 
+    # Check history tracker health and attempt recovery if needed
+    tracker_healthy = history_tracker.is_healthy()
+    if not tracker_healthy:
+        logger.warning("History tracker unhealthy, attempting restart")
+        history_tracker.ensure_running()
+        tracker_healthy = history_tracker.is_healthy()
+
     # Get health score from metrics
     health_score, warnings = metrics.get_health_score()
+
+    # Add tracker warning if still unhealthy
+    if not tracker_healthy:
+        warnings.append("History tracker is not running")
+        health_score = min(health_score, 50)  # Cap health score if tracker is down
+
     if guard_status.get('blocked'):
         overall_status = "cooldown"
     elif health_score >= 70:
@@ -540,6 +553,10 @@ def health() -> Response:
         "warnings": warnings,
         "rate_limiter": stats,
         "quota_guard": guard_status,
+        "history_tracker": {
+            "healthy": tracker_healthy,
+            "enabled": history_tracker.enabled,
+        }
     })
 
 
