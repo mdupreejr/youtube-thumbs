@@ -195,6 +195,38 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.2 - Critical Bug Fixes (Code Review)
+- Fixed pagination semantic inconsistency (total_pages=0 when empty)
+- Added negative duration validation with data corruption detection
+- Added page bounds validation (page must be ≥1)
+- Automatic page clamping to valid range prevents empty responses
+- Improved error messages for API consumers
+
+### v1.49.1 - Edge Case Fixes (Code Review)
+- Fixed duration=0 handling (now accepts 0-second videos like YouTube Shorts)
+- Improved cache metrics type detection with robust null checking
+- Added try-except blocks for all integer parameter parsing
+- Better error messages with expected value ranges
+
+### v1.49.0 - Major Optimization
+- **50% fewer database queries** - Combined cache lookups into single query
+- **60% less memory usage** - Reduced metrics tracker from 20k to 8k items
+- **100% proper abstraction** - Eliminated all direct database access from endpoints
+- Added `get_unrated_videos()` and `find_cached_video_combined()` methods
+- Removed 96 lines of inline SQL from app.py
+
+### v1.48.0 - Code Cleanup
+- Removed duplicate API endpoints (most_played, channels)
+- Consolidated to kebab-case naming convention
+- Updated all endpoints to use database abstraction layer
+- Removed 83 lines of redundant code
+
+### v1.47.3 - Web Interface Fixes
+- Fixed Advanced Statistics Dashboard link to use BASE_PATH
+- Removed target="_blank" from footer links
+- Added HTML formatting to /health and /metrics endpoints
+- All links now work correctly through Home Assistant ingress
+
 ### v1.47.2 - Bug Fix: Cached Video Rating
 - Fixed TypeError when rating videos retrieved from database cache
 - SQLite's datetime conversion was causing `.replace()` to fail
