@@ -195,6 +195,11 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.47.2 - Bug Fix: Cached Video Rating
+- Fixed TypeError when rating videos retrieved from database cache
+- SQLite's datetime conversion was causing `.replace()` to fail
+- timestamp() method now handles both string and datetime inputs
+
 ### v1.40.0 - Database Viewer Integration
 - Added `/database` proxy route to sqlite_web
 - Database viewer accessible through main web UI
