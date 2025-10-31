@@ -343,7 +343,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "An unexpected error occurred while rating the video"}), 500
 
 @app.route('/')
 def index() -> str:
@@ -365,7 +365,7 @@ def test_youtube() -> Response:
         logger.error(f"=== ERROR in /test/youtube endpoint ===")
         logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Error testing YouTube API: {str(e)}"})
+        return jsonify({"success": False, "message": "Error testing YouTube API connection"})
 
 @app.route('/test/ha')
 def test_ha() -> Response:
@@ -381,7 +381,7 @@ def test_ha() -> Response:
         logger.error(f"=== ERROR in /test/ha endpoint ===")
         logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Error: {str(e)}"})
+        return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
 
 @app.route('/test/db')
 def test_db() -> Response:
@@ -397,7 +397,7 @@ def test_db() -> Response:
         logger.error(f"=== ERROR in /test/db endpoint ===")
         logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Error: {str(e)}"})
+        return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
 
 @app.route('/api/unrated')
 def get_unrated_songs() -> Response:
@@ -432,7 +432,7 @@ def get_unrated_songs() -> Response:
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception message: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Failed to retrieve unrated videos'}), 500
 
 @app.route('/api/rate/<video_id>/like', methods=['POST'])
 def rate_song_like(video_id: str) -> Response:
@@ -505,7 +505,8 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 
     except Exception as e:
         logger.error(f"Error rating video {video_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': 'Failed to rate video'}), 500
 
 @app.route('/thumbs_up', methods=['POST'])
 def thumbs_up() -> Tuple[Response, int]:
@@ -834,7 +835,7 @@ def get_metrics() -> Response:
         return jsonify(response_data), 200
     except Exception as e:
         logger.error(f"Error generating metrics: {e}")
-        return jsonify({'error': 'Failed to generate metrics', 'message': str(e)}), 500
+        return jsonify({'error': 'Failed to generate metrics'}), 500
 
 
 @app.route('/api/stats/most-played', methods=['GET'])
@@ -906,7 +907,7 @@ def get_top_rated_api() -> Response:
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error getting top rated: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/stats/recent', methods=['GET'])
@@ -923,7 +924,7 @@ def get_recent_activity_api() -> Response:
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error getting recent activity: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/stats/categories', methods=['GET'])
@@ -934,7 +935,7 @@ def get_category_breakdown_api() -> Response:
         return jsonify({'success': True, 'data': categories})
     except Exception as e:
         logger.error(f"Error getting category breakdown: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/stats/timeline', methods=['GET'])
@@ -951,7 +952,7 @@ def get_timeline_stats_api() -> Response:
         return jsonify({'success': True, 'data': timeline})
     except Exception as e:
         logger.error(f"Error getting timeline stats: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/history/plays', methods=['GET'])
@@ -970,7 +971,7 @@ def get_play_history_api() -> Response:
         return jsonify({'success': True, 'data': history})
     except Exception as e:
         logger.error(f"Error getting play history: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/history/search', methods=['GET'])
@@ -988,7 +989,7 @@ def search_history_api() -> Response:
         return jsonify({'success': True, 'data': results})
     except Exception as e:
         logger.error(f"Error searching history: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/insights/patterns', methods=['GET'])
@@ -999,7 +1000,7 @@ def get_listening_patterns_api() -> Response:
         return jsonify({'success': True, 'data': patterns})
     except Exception as e:
         logger.error(f"Error getting listening patterns: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/insights/trends', methods=['GET'])
@@ -1016,7 +1017,7 @@ def get_trends_api() -> Response:
         return jsonify({'success': True, 'data': trends})
     except Exception as e:
         logger.error(f"Error getting trends: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/analytics/correlation', methods=['GET'])
@@ -1027,7 +1028,7 @@ def get_correlation_stats_api() -> Response:
         return jsonify({'success': True, 'data': correlation})
     except Exception as e:
         logger.error(f"Error getting correlation stats: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/analytics/retention', methods=['GET'])
@@ -1038,7 +1039,7 @@ def get_retention_analysis_api() -> Response:
         return jsonify({'success': True, 'data': retention})
     except Exception as e:
         logger.error(f"Error getting retention analysis: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/analytics/duration', methods=['GET'])
@@ -1049,7 +1050,7 @@ def get_duration_analysis_api() -> Response:
         return jsonify({'success': True, 'data': duration})
     except Exception as e:
         logger.error(f"Error getting duration analysis: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/analytics/source', methods=['GET'])
@@ -1060,7 +1061,7 @@ def get_source_breakdown_api() -> Response:
         return jsonify({'success': True, 'data': source})
     except Exception as e:
         logger.error(f"Error getting source breakdown: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/explorer/filter', methods=['POST'])
@@ -1072,7 +1073,7 @@ def filter_videos_api() -> Response:
         return jsonify({'success': True, 'data': results})
     except Exception as e:
         logger.error(f"Error filtering videos: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/explorer/channels', methods=['GET'])
@@ -1083,7 +1084,7 @@ def get_channels_list_api() -> Response:
         return jsonify({'success': True, 'data': channels})
     except Exception as e:
         logger.error(f"Error getting channels list: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/explorer/categories', methods=['GET'])
@@ -1094,7 +1095,7 @@ def get_categories_list_api() -> Response:
         return jsonify({'success': True, 'data': categories})
     except Exception as e:
         logger.error(f"Error getting categories list: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/api/recommendations', methods=['GET'])
@@ -1115,7 +1116,7 @@ def get_recommendations_api() -> Response:
         return jsonify({'success': True, 'data': recommendations})
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
 @app.route('/stats')
@@ -1257,6 +1258,13 @@ header, .header {
             content = content.replace(b'</head>', custom_css + b'</head>')
 
         response = Response(content, resp.status_code, headers)
+
+        # Add security headers to prevent XSS
+        # Only allow scripts/styles from self to prevent injection attacks
+        response.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data:;"
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
         return response
 
     except requests.exceptions.ConnectionError:
@@ -1264,7 +1272,8 @@ header, .header {
         return Response("Database viewer not available. sqlite_web may not be running.", status=503)
     except Exception as e:
         logger.error(f"Error proxying to sqlite_web: {e}")
-        return Response(f"Error accessing database viewer: {str(e)}", status=500)
+        logger.error(traceback.format_exc())
+        return Response("Error accessing database viewer", status=500)
 
 
 if __name__ == '__main__':
