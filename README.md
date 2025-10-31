@@ -476,6 +476,12 @@ def get_content_hash(title, duration, artist=None):
 
 ## Recent Updates
 
+### v1.51.1 - Database Migration Fix
+- **Bug Fix:** Fixed "no such column: ha_content_id" error on addon startup
+- Moved ha_content_id index creation from schema to migration
+- Ensures proper migration path for both new and existing databases
+- Added comprehensive "Matching System & Database Schema" documentation section
+
 ### v1.51.0 - Automatic Pending Video Retry
 - **New Feature:** Automatic retry mechanism for pending videos after quota recovery
 - When quota is exhausted, unmatched videos are stored as pending (pending_match=1)
