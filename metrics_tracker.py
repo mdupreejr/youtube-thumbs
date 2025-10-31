@@ -46,6 +46,9 @@ class MetricsTracker:
         # Batch operations tracking - kept at 100 (rarely used)
         self._batch_operations = deque(maxlen=100)
 
+        # v1.51.0: Pending video retry tracking
+        self._pending_retries = deque(maxlen=100)
+
     def record_api_call(self, api_type: str, success: bool = True, duration_ms: Optional[float] = None):
         """Record an API call."""
         with self._lock:
@@ -137,6 +140,26 @@ class MetricsTracker:
                 'batch_size': batch_size,
                 'success_count': success_count,
                 'success_rate': success_count / batch_size if batch_size > 0 else 0
+            })
+
+    def record_pending_retry(self, total: int, matched: int, not_found: int, errors: int):
+        """
+        v1.51.0: Record pending video retry operation.
+
+        Args:
+            total: Total number of pending videos attempted
+            matched: Number successfully matched to YouTube
+            not_found: Number marked as not found
+            errors: Number that failed with errors
+        """
+        with self._lock:
+            self._pending_retries.append({
+                'timestamp': time.time(),
+                'total': total,
+                'matched': matched,
+                'not_found': not_found,
+                'errors': errors,
+                'success_rate': matched / total if total > 0 else 0
             })
 
     def _count_recent(self, data_queue: deque, seconds: int) -> int:
@@ -291,6 +314,57 @@ class MetricsTracker:
                 }
             }
 
+    def get_retry_stats(self) -> Dict[str, Any]:
+        """
+        v1.51.0: Get pending video retry statistics.
+
+        Returns:
+            Dict with retry operation statistics
+        """
+        with self._lock:
+            total_retries = len(self._pending_retries)
+
+            if total_retries == 0:
+                return {
+                    'total_operations': 0,
+                    'total_videos_retried': 0,
+                    'total_matched': 0,
+                    'total_not_found': 0,
+                    'total_errors': 0,
+                    'average_success_rate': 0,
+                    'last_retry': None
+                }
+
+            # Calculate totals using generator expressions for efficiency
+            total_videos = sum(r['total'] for r in self._pending_retries)
+            total_matched = sum(r['matched'] for r in self._pending_retries)
+            total_not_found = sum(r['not_found'] for r in self._pending_retries)
+            total_errors = sum(r['errors'] for r in self._pending_retries)
+            avg_success_rate = sum(r['success_rate'] for r in self._pending_retries) / total_retries
+
+            # Get last retry info
+            last_retry = self._pending_retries[-1] if self._pending_retries else None
+            if last_retry:
+                last_retry_info = {
+                    'timestamp': datetime.fromtimestamp(last_retry['timestamp']).isoformat(),
+                    'total': last_retry['total'],
+                    'matched': last_retry['matched'],
+                    'not_found': last_retry['not_found'],
+                    'errors': last_retry['errors']
+                }
+            else:
+                last_retry_info = None
+
+            return {
+                'total_operations': total_retries,
+                'total_videos_retried': total_videos,
+                'total_matched': total_matched,
+                'total_not_found': total_not_found,
+                'total_errors': total_errors,
+                'average_success_rate': round(avg_success_rate * 100, 2),
+                'last_retry': last_retry_info
+            }
+
     def get_system_stats(self) -> Dict[str, Any]:
         """Get system statistics."""
         uptime_seconds = time.time() - self._start_time
@@ -316,6 +390,7 @@ class MetricsTracker:
             ('api', self.get_api_stats),
             ('ratings', self.get_rating_stats),
             ('search', self.get_search_stats),
+            ('retry', self.get_retry_stats),  # v1.51.0: Add retry stats
             ('system', self.get_system_stats)
         ]
 

@@ -32,6 +32,12 @@ configuration:
   force_quota_unlock:
     name: Force quota unlock
     description: Clear the quota cooldown file on startup so YouTube API calls resume immediately.
+  pending_video_retry_enabled:
+    name: Pending video retry enabled
+    description: Automatically retry matching pending videos after quota recovery. When quota is exhausted, unmatched videos are stored as pending. After quota recovers, this automatically searches YouTube for them.
+  pending_video_retry_batch_size:
+    name: Pending video retry batch size
+    description: Maximum number of pending videos to retry per quota recovery event (1-500). Helps prevent re-exhausting quota immediately after recovery.
 network:
   21812/tcp:
     description: Rating API used by /thumbs_up and /thumbs_down commands.

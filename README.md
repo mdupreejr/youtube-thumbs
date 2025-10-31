@@ -97,6 +97,8 @@ Configure in the addon **Configuration** tab:
 | `history_tracker_enabled` | true | Background history tracking |
 | `history_poll_interval` | 60 | Seconds between HA polls (10-300) |
 | `force_quota_unlock` | false | Clear quota block on startup |
+| `pending_video_retry_enabled` | true | Auto-retry pending videos after quota recovery |
+| `pending_video_retry_batch_size` | 50 | Max pending videos to retry per recovery (1-500) |
 
 ## API Endpoints
 
@@ -151,8 +153,10 @@ Proxy to sqlite_web database viewer.
 - Automatic 12-hour cooldown after `quotaExceeded` errors
 - Cooldown state saved in `/config/youtube_thumbs/quota_guard.json`
 - HTTP endpoints return `503` during cooldown
-- History tracker continues but skips YouTube matching
-- Configurable via `quota_cooldown_hours`
+- History tracker continues but skips YouTube matching (videos stored as pending)
+- Automatic quota recovery detection probes YouTube API every hour during cooldown
+- Pending videos automatically retried after quota recovery (v1.51.0)
+- Configurable via `quota_cooldown_hours`, `pending_video_retry_enabled`, `pending_video_retry_batch_size`
 
 ## Data Storage
 
@@ -198,6 +202,17 @@ Access via the **Database Viewer** link in the web interface.
 **Check Logs**: Settings → Add-ons → YouTube Thumbs Rating → Log tab
 
 ## Recent Updates
+
+### v1.51.0 - Automatic Pending Video Retry
+- **New Feature:** Automatic retry mechanism for pending videos after quota recovery
+- When quota is exhausted, unmatched videos are stored as pending (pending_match=1)
+- After quota recovers, QuotaProber automatically retries matching pending videos
+- Added `pending_video_retry_enabled` option (default: true)
+- Added `pending_video_retry_batch_size` option (default: 50, max: 500)
+- Database methods: `get_pending_videos()`, `resolve_pending_video()`, `mark_pending_not_found()`
+- Metrics tracking for retry operations (total, matched, not_found, errors)
+- Prevents quota re-exhaustion with configurable batch size
+- Logs detailed retry progress and statistics
 
 ### v1.50.0 - Major Database Schema Refactor
 - **Breaking Change:** Database schema has been significantly refactored

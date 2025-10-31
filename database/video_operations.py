@@ -320,3 +320,110 @@ class VideoOperations:
             row = cur.fetchone()
 
         return dict(row) if row else None
+
+    def get_pending_videos(self, limit: int = 50, reason_filter: Optional[str] = None) -> List[Dict]:
+        """
+        Get pending videos for retry after quota recovery.
+
+        Args:
+            limit: Maximum number of pending videos to return
+            reason_filter: Optional filter by pending_reason (e.g., 'quota_exceeded')
+
+        Returns:
+            List of pending video records
+        """
+        query = """
+            SELECT * FROM video_ratings
+            WHERE pending_match = 1
+        """
+        params = []
+
+        if reason_filter:
+            query += " AND pending_reason = ?"
+            params.append(reason_filter)
+
+        query += " ORDER BY date_added ASC LIMIT ?"
+        params.append(limit)
+
+        with self._lock:
+            cursor = self._conn.execute(query, tuple(params))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def resolve_pending_video(self, ha_content_id: str, youtube_data: Dict[str, Any]) -> None:
+        """
+        Update pending video with YouTube data and mark as resolved.
+
+        Args:
+            ha_content_id: The placeholder ID (ha_hash:*)
+            youtube_data: YouTube video data to populate
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        UPDATE video_ratings
+                        SET yt_video_id = ?,
+                            yt_title = ?,
+                            yt_channel = ?,
+                            yt_channel_id = ?,
+                            yt_description = ?,
+                            yt_published_at = ?,
+                            yt_category_id = ?,
+                            yt_live_broadcast = ?,
+                            yt_location = ?,
+                            yt_recording_date = ?,
+                            yt_duration = ?,
+                            yt_url = ?,
+                            pending_match = 0,
+                            pending_reason = NULL
+                        WHERE ha_content_id = ? AND pending_match = 1
+                        """,
+                        (
+                            youtube_data.get('yt_video_id'),
+                            youtube_data.get('title'),
+                            youtube_data.get('channel'),
+                            youtube_data.get('channel_id'),
+                            youtube_data.get('description'),
+                            self._timestamp(youtube_data.get('published_at')),
+                            youtube_data.get('category_id'),
+                            youtube_data.get('live_broadcast'),
+                            youtube_data.get('location'),
+                            self._timestamp(youtube_data.get('recording_date')),
+                            youtube_data.get('duration'),
+                            youtube_data.get('url'),
+                            ha_content_id
+                        )
+                    )
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    f"Failed to resolve pending video {ha_content_id}",
+                    level="error"
+                )
+
+    def mark_pending_not_found(self, ha_content_id: str) -> None:
+        """
+        Mark pending video as not found (no YouTube match exists).
+        Updates pending_reason to 'not_found' but keeps pending_match=1.
+
+        Args:
+            ha_content_id: The placeholder ID (ha_hash:*)
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        UPDATE video_ratings
+                        SET pending_reason = 'not_found'
+                        WHERE ha_content_id = ? AND pending_match = 1
+                        """,
+                        (ha_content_id,)
+                    )
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    f"Failed to mark pending video as not found {ha_content_id}",
+                    level="error"
+                )

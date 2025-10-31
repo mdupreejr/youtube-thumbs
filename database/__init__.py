@@ -75,6 +75,15 @@ class Database:
     def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None):
         return self._video_ops.find_cached_video_combined(title, duration, artist)
 
+    def get_pending_videos(self, limit: int = 50, reason_filter: Optional[str] = None):
+        return self._video_ops.get_pending_videos(limit, reason_filter)
+
+    def resolve_pending_video(self, ha_content_id: str, youtube_data: Dict):
+        return self._video_ops.resolve_pending_video(ha_content_id, youtube_data)
+
+    def mark_pending_not_found(self, ha_content_id: str):
+        return self._video_ops.mark_pending_not_found(ha_content_id)
+
     # Pending operations
     def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
         return self._pending_ops.upsert_pending_media(media, reason)
