@@ -21,10 +21,17 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     yt_video_id = video['yt_video_id']
     video_title = video.get('title', ha_media.get('title', 'Unknown'))
 
+    # Calculate ha_content_id from HA metadata for duplicate detection
+    ha_title = ha_media.get('title', video_title)
+    ha_duration = ha_media.get('duration')
+    ha_artist = ha_media.get('artist', 'Unknown')
+    ha_content_id = get_content_hash(ha_title, ha_duration, ha_artist)
+
     return {
         'yt_video_id': yt_video_id,
-        'ha_title': ha_media.get('title', video_title),
-        'ha_artist': ha_media.get('artist', 'Unknown'),
+        'ha_content_id': ha_content_id,
+        'ha_title': ha_title,
+        'ha_artist': ha_artist,
         'ha_app_name': ha_media.get('app_name', 'YouTube'),
         'yt_title': video_title,
         'yt_channel': video.get('channel'),
@@ -35,7 +42,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
         'yt_live_broadcast': video.get('live_broadcast'),
         'yt_location': video.get('location'),
         'yt_recording_date': video.get('recording_date'),
-        'ha_duration': ha_media.get('duration'),
+        'ha_duration': ha_duration,
         'yt_duration': video.get('duration'),
         'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
         'source': source,

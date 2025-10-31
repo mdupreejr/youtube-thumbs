@@ -247,6 +247,9 @@ def execute_rating(
     Returns:
         Response tuple
     """
+    # Enqueue the rating first to populate yt_rating_* columns
+    db.enqueue_rating(yt_video_id, rating_type)
+
     if yt_api.set_video_rating(yt_video_id, rating_type):
         logger.info(f"Successfully rated video {yt_video_id} {rating_type}")
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | SUCCESS")
@@ -267,10 +270,12 @@ def execute_rating(
         rating_type,
         yt_video_id,
     )
+    # Mark as failed (increment attempts)
+    db.mark_pending_rating(yt_video_id, False, "YouTube API error")
     return queue_rating_func(
         yt_video_id,
         rating_type,
         media_info,
         "YouTube API error",
-        record_attempt=True
+        record_attempt=False  # Already marked as failed above
     )
