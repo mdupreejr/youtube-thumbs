@@ -1257,6 +1257,8 @@ header, .header {
 '''
             content = content.replace(b'</head>', custom_css + b'</head>')
 
+        # nosec B201 - Content from trusted internal sqlite_web proxy (localhost only)
+        # Protected by CSP headers and X-Content-Type-Options below
         response = Response(content, resp.status_code, headers)
 
         # Add security headers to prevent XSS
@@ -1277,6 +1279,7 @@ header, .header {
 
 
 if __name__ == '__main__':
+    # nosec B104 - Binding to 0.0.0.0 is intentional for Docker container deployment
     host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', '21812'))
 

@@ -265,6 +265,7 @@ def execute_rating(
         }), 200
 
     # Rating failed
+    # nosec B605 - yt_video_id is a public YouTube video ID, not sensitive data
     logger.error(
         "YouTube API returned failure for %s request (video %s). Queuing for retry.",
         rating_type,

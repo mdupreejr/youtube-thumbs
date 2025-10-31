@@ -596,14 +596,21 @@ class StatsOperations:
 
             where_clause = " AND ".join(where_clauses)
 
-            # Build ORDER BY clause
+            # Build ORDER BY clause with whitelist validation to prevent SQL injection
+            allowed_sort_columns = [
+                'date_added', 'date_last_played', 'play_count', 'rating',
+                'ha_title', 'ha_artist', 'yt_title', 'yt_channel', 'yt_duration'
+            ]
             sort_by = filters.get('sort_by', 'date_added')
+            if sort_by not in allowed_sort_columns:
+                sort_by = 'date_added'  # Default to safe value if invalid
+
             sort_order = filters.get('sort_order', 'desc').upper()
             if sort_order not in ['ASC', 'DESC']:
                 sort_order = 'DESC'
 
             # Get total count
-            count_query = f"SELECT COUNT(*) as count FROM video_ratings WHERE {where_clause}"
+            count_query = f"SELECT COUNT(*) as count FROM video_ratings WHERE {where_clause}"  # nosec B608 - where_clause built from parameterized queries
             cursor = self._conn.execute(count_query, params)
             total = cursor.fetchone()['count']
 
@@ -611,6 +618,7 @@ class StatsOperations:
             limit = int(filters.get('limit', 50))
             offset = int(filters.get('offset', 0))
 
+            # nosec B608 - where_clause built from parameterized queries, sort_by validated against whitelist
             query = f"""
                 SELECT * FROM video_ratings
                 WHERE {where_clause}

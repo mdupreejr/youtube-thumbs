@@ -314,12 +314,14 @@ class DatabaseConnection:
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
+        # Hardcoded column names - safe from SQL injection
         columns = ('date_added', 'date_last_played')
         updates = []
         with self._lock:
             try:
                 with self._conn:
                     for column in columns:
+                        # nosec B608 - column names are hardcoded literals, not user input
                         cursor = self._conn.execute(
                             f"""
                             UPDATE video_ratings
