@@ -86,6 +86,21 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_not_found_searches_last_attempted ON not_found_searches(last_attempted);
     """
 
+    API_USAGE_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS api_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            date TEXT NOT NULL,
+            api_method TEXT NOT NULL,
+            success INTEGER DEFAULT 1,
+            quota_cost INTEGER DEFAULT 1,
+            error_message TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_api_usage_date ON api_usage(date);
+        CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_api_usage_method ON api_usage(api_method);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,6 +134,7 @@ class DatabaseConnection:
                     # PENDING_RATINGS_SCHEMA removed in v1.50.0 - now using video_ratings columns
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
+                    self._conn.executescript(self.API_USAGE_SCHEMA)
 
                     # Add ha_content_hash column if missing (for existing databases)
                     self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')
@@ -152,7 +168,7 @@ class DatabaseConnection:
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage'}
         if table not in VALID_TABLES:
             raise ValueError(f"Invalid table name: {table}")
 
@@ -165,7 +181,7 @@ class DatabaseConnection:
     def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
         """Add a column to a table if it doesn't exist."""
         # Validate inputs to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage'}
         VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
 
         if table not in VALID_TABLES:

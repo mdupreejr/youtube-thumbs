@@ -951,7 +951,15 @@
 
         const BASE_PATH = getBasePath();
         console.log('Stats page - Base path detected:', BASE_PATH);
+
+        // Dynamically load stats.js with correct ingress path
+        const script = document.createElement('script');
+        script.src = BASE_PATH + '/static/js/stats.js';
+        script.onerror = function() {
+            console.error('Failed to load stats.js from:', script.src);
+            document.body.innerHTML = '<div style="padding: 40px; text-align: center; color: #c62828;"><h2>Failed to load statistics script</h2><p>Path attempted: ' + script.src + '</p></div>';
+        };
+        document.head.appendChild(script);
     </script>
-    <script src="{{ url_for('static', filename='js/stats.js') }}"></script>
 </body>
 </html>

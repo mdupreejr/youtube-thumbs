@@ -11,6 +11,7 @@ from .pending_operations import PendingOperations
 from .import_operations import ImportOperations
 from .not_found_operations import NotFoundOperations
 from .stats_operations import StatsOperations
+from .api_usage_operations import APIUsageOperations
 
 
 class Database:
@@ -23,17 +24,18 @@ class Database:
         # Initialize connection
         self._connection = DatabaseConnection(db_path)
 
+        # Expose connection properties for backward compatibility
+        self.db_path = db_path
+        self._conn = self._connection.connection
+        self._lock = self._connection.lock
+
         # Initialize operation modules
         self._video_ops = VideoOperations(self._connection)
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
         self._import_ops = ImportOperations(self._connection)
         self._not_found_ops = NotFoundOperations(self._connection)
         self._stats_ops = StatsOperations(self._connection)
-
-        # Expose connection properties for backward compatibility
-        self.db_path = db_path
-        self._conn = self._connection.connection
-        self._lock = self._connection.lock
+        self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
 
     # Connection methods
     def _table_info(self, table: str):
@@ -194,6 +196,23 @@ class Database:
 
     def get_unrated_videos(self, page: int = 1, limit: int = 50) -> Dict[str, Any]:
         return self._stats_ops.get_unrated_videos(page, limit)
+
+    # API Usage Operations
+    def record_api_call(self, api_method: str, success: bool = True, quota_cost: int = 1, error_message: str = None) -> None:
+        """Record a YouTube API call for usage tracking."""
+        return self._api_usage_ops.record_api_call(api_method, success, quota_cost, error_message)
+
+    def get_api_usage_summary(self, days: int = 30) -> Dict[str, Any]:
+        """Get API usage summary for the last N days."""
+        return self._api_usage_ops.get_usage_summary(days)
+
+    def get_api_daily_usage(self, date_str: str = None) -> Dict[str, Any]:
+        """Get API usage for a specific day."""
+        return self._api_usage_ops.get_daily_usage(date_str)
+
+    def get_api_hourly_usage(self, date_str: str = None) -> List[Dict[str, Any]]:
+        """Get hourly API usage for a specific day."""
+        return self._api_usage_ops.get_hourly_usage(date_str)
 
 
 # Singleton instance management

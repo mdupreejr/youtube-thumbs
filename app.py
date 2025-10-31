@@ -955,6 +955,47 @@ def get_timeline_stats_api() -> Response:
         return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
 
 
+@app.route('/api/stats/api-usage', methods=['GET'])
+def get_api_usage_summary_endpoint() -> Response:
+    """Get YouTube API usage statistics summary."""
+    try:
+        try:
+            days = int(request.args.get('days', 30))
+            days = max(1, min(days, 365))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid days parameter'}), 400
+
+        usage = db.get_api_usage_summary(days)
+        return jsonify({'success': True, 'data': usage})
+    except Exception as e:
+        logger.error(f"Error getting API usage summary: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+
+
+@app.route('/api/stats/api-usage/daily', methods=['GET'])
+def get_api_daily_usage_endpoint() -> Response:
+    """Get YouTube API usage for a specific day."""
+    try:
+        date_str = request.args.get('date')  # YYYY-MM-DD format
+        usage = db.get_api_daily_usage(date_str)
+        return jsonify({'success': True, 'data': usage})
+    except Exception as e:
+        logger.error(f"Error getting daily API usage: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+
+
+@app.route('/api/stats/api-usage/hourly', methods=['GET'])
+def get_api_hourly_usage_endpoint() -> Response:
+    """Get hourly YouTube API usage for a specific day."""
+    try:
+        date_str = request.args.get('date')  # YYYY-MM-DD format
+        usage = db.get_api_hourly_usage(date_str)
+        return jsonify({'success': True, 'data': usage})
+    except Exception as e:
+        logger.error(f"Error getting hourly API usage: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+
+
 @app.route('/api/history/plays', methods=['GET'])
 def get_play_history_api() -> Response:
     """Get paginated play history."""
@@ -1160,10 +1201,26 @@ def database_proxy(path):
         headers = [(name, value) for (name, value) in resp.raw.headers.items()
                    if name.lower() not in excluded_headers]
 
-        # Inject custom CSS for narrower sidebar and proper theming if this is HTML
+        # Inject custom CSS and fix links for Home Assistant ingress if this is HTML
         content = resp.content
         content_type = resp.headers.get('Content-Type', '')
         if 'text/html' in content_type and b'</head>' in content:
+            # Rewrite links for ingress compatibility
+            # sqlite_web generates links like href="/ratings.db/table"
+            # We need to rewrite them to include the ingress prefix
+            if request.environ.get('HTTP_X_INGRESS_PATH'):
+                ingress_path = request.environ.get('HTTP_X_INGRESS_PATH')
+                # Rewrite hrefs to include /database prefix and ingress path
+                content = content.replace(b'href="/', f'href="{ingress_path}/database/'.encode())
+                content = content.replace(b"href='/", f"href='{ingress_path}/database/".encode())
+                content = content.replace(b'action="/', f'action="{ingress_path}/database/'.encode())
+                content = content.replace(b"action='/", f"action='{ingress_path}/database/".encode())
+            else:
+                # Not through ingress, just add /database prefix
+                content = content.replace(b'href="/', b'href="/database/')
+                content = content.replace(b"href='/", b"href='/database/")
+                content = content.replace(b'action="/', b'action="/database/')
+                content = content.replace(b"action='/", b"action='/database/")
             custom_css = b'''
 <style>
 /* Custom CSS to make sqlite_web sidebar narrower and fix theme compatibility */

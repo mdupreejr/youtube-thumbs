@@ -234,25 +234,39 @@ class StatsOperations:
 
         Returns:
             Dictionary with all summary metrics
+
+        Note: total_videos and unique_channels only count successfully matched videos (pending_match = 0),
+              but rating counts include ALL videos to accurately reflect user's rating history.
         """
         with self._lock:
+            # Get matched video statistics
             cursor = self._conn.execute(
                 """
                 SELECT
                     COUNT(*) as total_videos,
                     COALESCE(SUM(play_count), 0) as total_plays,
-                    SUM(CASE WHEN rating = 'like' THEN 1 ELSE 0 END) as liked,
-                    SUM(CASE WHEN rating = 'dislike' THEN 1 ELSE 0 END) as disliked,
-                    SUM(CASE WHEN rating = 'none' THEN 1 ELSE 0 END) as unrated,
                     COUNT(DISTINCT yt_channel_id) as unique_channels,
                     AVG(rating_score) as avg_rating_score
                 FROM video_ratings
                 WHERE pending_match = 0
                 """
             )
-            result = cursor.fetchone()
+            matched_stats = cursor.fetchone()
 
-            if not result:
+            # Get ALL rating counts (including pending videos)
+            # This ensures users see accurate counts of their rated videos
+            cursor = self._conn.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN rating = 'like' THEN 1 ELSE 0 END) as liked,
+                    SUM(CASE WHEN rating = 'dislike' THEN 1 ELSE 0 END) as disliked,
+                    SUM(CASE WHEN rating = 'none' THEN 1 ELSE 0 END) as unrated
+                FROM video_ratings
+                """
+            )
+            rating_stats = cursor.fetchone()
+
+            if not matched_stats or not rating_stats:
                 return {
                     'total_videos': 0,
                     'total_plays': 0,
@@ -264,13 +278,13 @@ class StatsOperations:
                 }
 
             return {
-                'total_videos': result['total_videos'],
-                'total_plays': result['total_plays'],
-                'liked': result['liked'],
-                'disliked': result['disliked'],
-                'unrated': result['unrated'],
-                'unique_channels': result['unique_channels'],
-                'avg_rating_score': round(result['avg_rating_score'], 2) if result['avg_rating_score'] is not None else 0
+                'total_videos': matched_stats['total_videos'],
+                'total_plays': matched_stats['total_plays'],
+                'liked': rating_stats['liked'] or 0,
+                'disliked': rating_stats['disliked'] or 0,
+                'unrated': rating_stats['unrated'] or 0,
+                'unique_channels': matched_stats['unique_channels'] or 0,
+                'avg_rating_score': round(matched_stats['avg_rating_score'], 2) if matched_stats['avg_rating_score'] is not None else 0
             }
 
     def get_play_history(self, limit: int = 100, offset: int = 0,
