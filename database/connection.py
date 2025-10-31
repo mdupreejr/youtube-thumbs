@@ -181,6 +181,15 @@ class DatabaseConnection:
             with self._conn:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
+    def _column_allows_null(self, table: str, column: str) -> bool:
+        """Check if a column allows NULL values by examining table schema."""
+        table_info = self._table_info(table)
+        for col_info in table_info:
+            if col_info['name'] == column:
+                # notnull is 0 if NULL allowed, 1 if NOT NULL
+                return col_info['notnull'] == 0
+        return True  # If column not found, assume it allows NULL
+
     def _migrate_to_unified_schema(self) -> None:
         """
         v1.50.0 Migration: Consolidate database schema
@@ -215,16 +224,37 @@ class DatabaseConnection:
             self._add_column_if_missing('video_ratings', 'yt_rating_last_error', 'TEXT')
 
             # Step 2: Migrate ha_hash:* IDs to ha_content_id
-            cursor = self._conn.execute(
-                """
-                UPDATE video_ratings
-                SET ha_content_id = yt_video_id,
-                    yt_video_id = NULL
-                WHERE yt_video_id LIKE 'ha_hash:%'
-                """
-            )
-            if cursor.rowcount > 0:
-                logger.info(f"Migrated {cursor.rowcount} ha_hash IDs to ha_content_id column")
+            # Check if there are any ha_hash entries and if yt_video_id allows NULL
+            cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings WHERE yt_video_id LIKE 'ha_hash:%'")
+            ha_hash_count = cursor.fetchone()[0]
+
+            if ha_hash_count > 0:
+                logger.info(f"Found {ha_hash_count} ha_hash entries to migrate")
+
+                # Check if yt_video_id allows NULL
+                if self._column_allows_null('video_ratings', 'yt_video_id'):
+                    # Column allows NULL, safe to migrate
+                    cursor = self._conn.execute(
+                        """
+                        UPDATE video_ratings
+                        SET ha_content_id = yt_video_id,
+                            yt_video_id = NULL
+                        WHERE yt_video_id LIKE 'ha_hash:%'
+                        """
+                    )
+                    logger.info(f"Migrated {cursor.rowcount} ha_hash IDs to ha_content_id column")
+                else:
+                    # Column has NOT NULL constraint - copy to ha_content_id but keep in yt_video_id
+                    logger.warning("yt_video_id has NOT NULL constraint - copying ha_hash values to ha_content_id without removing from yt_video_id")
+                    cursor = self._conn.execute(
+                        """
+                        UPDATE video_ratings
+                        SET ha_content_id = yt_video_id
+                        WHERE yt_video_id LIKE 'ha_hash:%'
+                        """
+                    )
+                    logger.info(f"Copied {cursor.rowcount} ha_hash IDs to ha_content_id column (kept in yt_video_id due to NOT NULL constraint)")
+                    logger.warning("NOTE: ha_hash values remain in yt_video_id column - upgrade database schema to allow NULL if full migration is needed")
 
             # Step 3: Migrate pending_ratings data to video_ratings
             try:
