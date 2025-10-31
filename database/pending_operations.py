@@ -24,7 +24,7 @@ class PendingOperations:
         """Generate a deterministic placeholder ID for HA snapshots."""
         parts = [title or '', artist or '', str(duration) if duration is not None else 'unknown']
         normalized = '|'.join(part.strip().lower() for part in parts)
-        digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:16]
+        digest = hashlib.sha1(normalized.encode('utf-8'), usedforsecurity=False).hexdigest()[:16]
         return f"ha_hash:{digest}"
 
     def upsert_pending_media(self, media: Dict[str, Any], reason: str = 'quota_exceeded') -> str:

@@ -119,7 +119,7 @@ def main() -> int:
         logger.info("Processing %s", html_file.name)
         for yt_video_id, title, channel, timestamp, video_url in parse_entries(html_file):
             entry_key = f"{html_file.name}|{yt_video_id}|{timestamp}"
-            entry_id = hashlib.sha1(entry_key.encode('utf-8')).hexdigest()
+            entry_id = hashlib.sha1(entry_key.encode('utf-8'), usedforsecurity=False).hexdigest()
             if db.import_entry_exists(entry_id):
                 deduped += 1
                 continue

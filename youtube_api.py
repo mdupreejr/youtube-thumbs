@@ -55,6 +55,8 @@ class YouTubeAPI:
 
         if os.path.exists('token.pickle'):
             with open('token.pickle', 'rb') as token:
+                # Safe to use pickle here: loading locally generated OAuth tokens only
+                # nosec B301 - pickle is safe for trusted local credential files
                 creds = pickle.load(token)
 
         if not creds or not creds.valid:
