@@ -174,8 +174,8 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE pending_match = 0 AND yt_channel_id IS NOT NULL")
             unique_channels = cursor.fetchone()['count']
 
-            # Count pending ratings queue
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM pending_ratings")
+            # Count pending ratings queue (v1.50.0: now stored in video_ratings columns)
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_rating_pending IS NOT NULL")
             pending_ratings = cursor.fetchone()['count']
 
             # Get recent videos (all videos, not just matched)

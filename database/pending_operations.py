@@ -45,7 +45,8 @@ class PendingOperations:
         pending_id = self._pending_video_id(title, artist, duration)
 
         payload = {
-            'yt_video_id': pending_id,
+            'yt_video_id': None,  # v1.50.0: yt_video_id is NULL for pending videos
+            'ha_content_id': pending_id,  # v1.50.0: Use ha_content_id for placeholder
             'ha_title': title,
             'ha_artist': artist,
             'ha_app_name': app_name,
@@ -70,22 +71,25 @@ class PendingOperations:
         return pending_id
 
     def enqueue_rating(self, yt_video_id: str, rating: str) -> None:
-        payload = (yt_video_id, rating, self._timestamp(''))
+        """
+        v1.50.0: Queue a rating by setting columns in video_ratings table.
+        Replaces insertion into pending_ratings table.
+        """
+        timestamp = self._timestamp('')
         with self._lock:
             try:
                 with self._conn:
                     self._conn.execute(
                         """
-                        INSERT INTO pending_ratings (yt_video_id, rating, requested_at, attempts, last_error, last_attempt)
-                        VALUES (?, ?, ?, 0, NULL, NULL)
-                        ON CONFLICT(yt_video_id) DO UPDATE SET
-                            rating=excluded.rating,
-                            requested_at=excluded.requested_at,
-                            attempts=0,
-                            last_error=NULL,
-                            last_attempt=NULL;
+                        UPDATE video_ratings
+                        SET yt_rating_pending = ?,
+                            yt_rating_requested_at = ?,
+                            yt_rating_attempts = 0,
+                            yt_rating_last_error = NULL,
+                            yt_rating_last_attempt = NULL
+                        WHERE yt_video_id = ?
                         """,
-                        payload,
+                        (rating, timestamp, yt_video_id),
                     )
             except sqlite3.DatabaseError as exc:
                 log_and_suppress(
@@ -96,12 +100,21 @@ class PendingOperations:
                 )
 
     def list_pending_ratings(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        v1.50.0: Query pending ratings from video_ratings table columns.
+        Returns videos where yt_rating_pending IS NOT NULL.
+        """
         with self._lock:
             cur = self._conn.execute(
                 """
-                SELECT yt_video_id, rating, requested_at, attempts, last_error
-                FROM pending_ratings
-                ORDER BY requested_at ASC
+                SELECT yt_video_id,
+                       yt_rating_pending as rating,
+                       yt_rating_requested_at as requested_at,
+                       yt_rating_attempts as attempts,
+                       yt_rating_last_error as last_error
+                FROM video_ratings
+                WHERE yt_rating_pending IS NOT NULL
+                ORDER BY yt_rating_requested_at ASC
                 LIMIT ?
                 """,
                 (limit,),
@@ -110,18 +123,36 @@ class PendingOperations:
         return [dict(row) for row in rows]
 
     def mark_pending_rating(self, yt_video_id: str, success: bool, error: Optional[str] = None) -> None:
+        """
+        v1.50.0: Clear or update pending rating columns in video_ratings table.
+        On success: NULL out all yt_rating_* columns
+        On failure: Increment attempts, record error
+        """
         with self._lock:
             try:
                 with self._conn:
                     if success:
-                        self._conn.execute("DELETE FROM pending_ratings WHERE yt_video_id = ?", (yt_video_id,))
-                    else:
+                        # Clear pending rating columns
                         self._conn.execute(
                             """
-                            UPDATE pending_ratings
-                            SET attempts = attempts + 1,
-                                last_error = ?,
-                                last_attempt = ?
+                            UPDATE video_ratings
+                            SET yt_rating_pending = NULL,
+                                yt_rating_requested_at = NULL,
+                                yt_rating_attempts = 0,
+                                yt_rating_last_error = NULL,
+                                yt_rating_last_attempt = NULL
+                            WHERE yt_video_id = ?
+                            """,
+                            (yt_video_id,)
+                        )
+                    else:
+                        # Increment retry counter and record error
+                        self._conn.execute(
+                            """
+                            UPDATE video_ratings
+                            SET yt_rating_attempts = yt_rating_attempts + 1,
+                                yt_rating_last_error = ?,
+                                yt_rating_last_attempt = ?
                             WHERE yt_video_id = ?
                             """,
                             (error, self._timestamp(''), yt_video_id),

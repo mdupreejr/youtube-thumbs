@@ -36,7 +36,8 @@ class VideoOperations:
         ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_artist)
 
         payload = {
-            'yt_video_id': video['yt_video_id'],
+            'yt_video_id': video.get('yt_video_id'),  # v1.50.0: Can be NULL for pending videos
+            'ha_content_id': video.get('ha_content_id'),  # v1.50.0: New placeholder ID column
             'ha_title': ha_title,
             'ha_artist': video.get('ha_artist'),
             'ha_app_name': video.get('ha_app_name'),
@@ -62,20 +63,21 @@ class VideoOperations:
 
         upsert_sql = """
         INSERT INTO video_ratings (
-            yt_video_id, ha_title, ha_artist, ha_app_name, yt_title, yt_channel, yt_channel_id,
+            yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
             play_count, rating_score, pending_match, pending_reason, source
         )
         VALUES (
-            :yt_video_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
+            :yt_video_id, :ha_content_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
             0, 0, :pending_match, :pending_reason, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
+            ha_content_id=excluded.ha_content_id,
             ha_title=excluded.ha_title,
             ha_artist=excluded.ha_artist,
             ha_app_name=excluded.ha_app_name,

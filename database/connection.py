@@ -20,7 +20,8 @@ class DatabaseConnection:
     VIDEO_RATINGS_SCHEMA = """
         CREATE TABLE IF NOT EXISTS video_ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            yt_video_id TEXT UNIQUE NOT NULL,
+            yt_video_id TEXT UNIQUE,
+            ha_content_id TEXT,
             ha_title TEXT NOT NULL,
             ha_artist TEXT,
             ha_app_name TEXT,
@@ -44,24 +45,24 @@ class DatabaseConnection:
             rating_score INTEGER DEFAULT 0,
             pending_match INTEGER DEFAULT 0,
             pending_reason TEXT,
-            source TEXT DEFAULT 'ha_live'
+            source TEXT DEFAULT 'ha_live',
+            yt_rating_pending TEXT,
+            yt_rating_requested_at TIMESTAMP,
+            yt_rating_attempts INTEGER DEFAULT 0,
+            yt_rating_last_attempt TIMESTAMP,
+            yt_rating_last_error TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
+        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id);
     """
 
-    PENDING_RATINGS_SCHEMA = """
-        CREATE TABLE IF NOT EXISTS pending_ratings (
-            yt_video_id TEXT PRIMARY KEY,
-            rating TEXT NOT NULL,
-            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_attempt TIMESTAMP,
-            attempts INTEGER DEFAULT 0,
-            last_error TEXT
-        );
-    """
+    # PENDING_RATINGS_SCHEMA removed in v1.50.0
+    # Pending ratings are now stored in video_ratings table columns:
+    # - yt_rating_pending, yt_rating_requested_at, yt_rating_attempts,
+    # - yt_rating_last_attempt, yt_rating_last_error
 
     IMPORT_HISTORY_SCHEMA = """
         CREATE TABLE IF NOT EXISTS import_history (
@@ -116,7 +117,7 @@ class DatabaseConnection:
             try:
                 with self._conn:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
-                    self._conn.executescript(self.PENDING_RATINGS_SCHEMA)
+                    # PENDING_RATINGS_SCHEMA removed in v1.50.0 - now using video_ratings columns
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
 
@@ -143,13 +144,16 @@ class DatabaseConnection:
 
                     # Add ha_app_name column if missing (for existing databases)
                     self._add_column_if_missing('video_ratings', 'ha_app_name', 'TEXT')
+
+                    # v1.50.0 Migration: Consolidate pending_ratings into video_ratings
+                    self._migrate_to_unified_schema()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'pending_ratings', 'import_history', 'not_found_searches'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches'}
         if table not in VALID_TABLES:
             raise ValueError(f"Invalid table name: {table}")
 
@@ -162,7 +166,7 @@ class DatabaseConnection:
     def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
         """Add a column to a table if it doesn't exist."""
         # Validate inputs to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'pending_ratings', 'import_history', 'not_found_searches'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches'}
         VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
 
         if table not in VALID_TABLES:
@@ -177,6 +181,101 @@ class DatabaseConnection:
             logger.info(f"Adding missing column {column} to {table} table")
             with self._conn:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
+    def _migrate_to_unified_schema(self) -> None:
+        """
+        v1.50.0 Migration: Consolidate database schema
+        1. Add ha_content_id column for pending video placeholders
+        2. Add yt_rating_pending columns for rating queue with retry logic
+        3. Migrate ha_hash:* IDs to ha_content_id and set yt_video_id to NULL
+        4. Migrate pending_ratings table data to video_ratings columns
+        5. Drop pending_ratings table
+        """
+        columns = self._table_columns('video_ratings')
+
+        # Check if migration already completed
+        if 'ha_content_id' in columns and 'yt_rating_pending' in columns:
+            # Check if pending_ratings table still exists
+            try:
+                self._conn.execute("SELECT 1 FROM pending_ratings LIMIT 1")
+                # Table exists, need to complete migration
+                logger.info("Completing v1.50.0 migration (pending_ratings table cleanup)")
+            except sqlite3.OperationalError:
+                # Table doesn't exist, migration already done
+                return
+
+        logger.info("Starting v1.50.0 database schema migration")
+
+        with self._conn:
+            # Step 1: Add new columns to video_ratings
+            self._add_column_if_missing('video_ratings', 'ha_content_id', 'TEXT')
+            self._add_column_if_missing('video_ratings', 'yt_rating_pending', 'TEXT')
+            self._add_column_if_missing('video_ratings', 'yt_rating_requested_at', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'yt_rating_attempts', 'INTEGER')
+            self._add_column_if_missing('video_ratings', 'yt_rating_last_attempt', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'yt_rating_last_error', 'TEXT')
+
+            # Step 2: Migrate ha_hash:* IDs to ha_content_id
+            cursor = self._conn.execute(
+                """
+                UPDATE video_ratings
+                SET ha_content_id = yt_video_id,
+                    yt_video_id = NULL
+                WHERE yt_video_id LIKE 'ha_hash:%'
+                """
+            )
+            if cursor.rowcount > 0:
+                logger.info(f"Migrated {cursor.rowcount} ha_hash IDs to ha_content_id column")
+
+            # Step 3: Migrate pending_ratings data to video_ratings
+            try:
+                # Check if pending_ratings table exists
+                cursor = self._conn.execute("SELECT COUNT(*) FROM pending_ratings")
+                pending_count = cursor.fetchone()[0]
+
+                if pending_count > 0:
+                    logger.info(f"Migrating {pending_count} pending ratings to video_ratings")
+
+                    # Migrate data
+                    self._conn.execute(
+                        """
+                        UPDATE video_ratings
+                        SET yt_rating_pending = (
+                                SELECT rating FROM pending_ratings
+                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
+                            ),
+                            yt_rating_requested_at = (
+                                SELECT requested_at FROM pending_ratings
+                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
+                            ),
+                            yt_rating_attempts = (
+                                SELECT attempts FROM pending_ratings
+                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
+                            ),
+                            yt_rating_last_attempt = (
+                                SELECT last_attempt FROM pending_ratings
+                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
+                            ),
+                            yt_rating_last_error = (
+                                SELECT last_error FROM pending_ratings
+                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
+                            )
+                        WHERE yt_video_id IN (SELECT yt_video_id FROM pending_ratings)
+                        """
+                    )
+                    logger.info("Successfully migrated pending ratings data")
+
+                # Step 4: Drop pending_ratings table
+                self._conn.execute("DROP TABLE IF EXISTS pending_ratings")
+                logger.info("Dropped pending_ratings table")
+
+            except sqlite3.OperationalError as e:
+                if "no such table" in str(e).lower():
+                    logger.info("pending_ratings table already dropped, skipping migration step")
+                else:
+                    raise
+
+        logger.info("Completed v1.50.0 database schema migration")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""

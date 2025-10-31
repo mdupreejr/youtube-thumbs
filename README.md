@@ -158,10 +158,14 @@ Proxy to sqlite_web database viewer.
 
 All data stored in `/config/youtube_thumbs/ratings.db`:
 
-- **video_ratings** table - All matched videos with metadata, play counts, ratings
-- **pending_ratings** table - Queued ratings (synced when API available)
+- **video_ratings** table - All matched videos with metadata, play counts, ratings, and pending rating queue
+  - Real YouTube videos have `yt_video_id` populated
+  - Pending videos (quota blocked) have `ha_content_id` with NULL `yt_video_id`
+  - Pending ratings stored in `yt_rating_pending`, `yt_rating_attempts`, `yt_rating_last_error` columns
 - **import_history** table - Tracks imported YouTube exports
-- **not_found_searches** table - Caches failed searches (24-48h)
+- **not_found_searches** table - Caches failed searches (7 days default)
+
+**Note:** v1.50.0 removed the separate `pending_ratings` table - all data now in `video_ratings`.
 
 Access via the **Database Viewer** link in the web interface.
 
@@ -194,6 +198,18 @@ Access via the **Database Viewer** link in the web interface.
 **Check Logs**: Settings → Add-ons → YouTube Thumbs Rating → Log tab
 
 ## Recent Updates
+
+### v1.50.0 - Major Database Schema Refactor
+- **Breaking Change:** Database schema has been significantly refactored
+- Moved ha_hash:* placeholder IDs from yt_video_id to new ha_content_id column
+- Consolidated pending_ratings table into video_ratings columns
+- Added yt_rating_pending, yt_rating_requested_at, yt_rating_attempts, yt_rating_last_attempt, yt_rating_last_error columns
+- Automatic migration runs on first startup after upgrade
+- yt_video_id now allows NULL for pending videos (those without YouTube match yet)
+- Cleaner schema separation: yt_video_id for real YouTube IDs, ha_content_id for pending placeholders
+- Dropped pending_ratings table after migrating all data
+- No user action required - migration is automatic and preserves all data
+- **Recommendation:** Backup database before upgrading (automatic backup created during migration)
 
 ### v1.49.7 - Optimize Database Viewer Sidebar Width
 - Added custom CSS injection to database proxy
