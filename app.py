@@ -1159,13 +1159,13 @@ def database_proxy(path):
         headers = [(name, value) for (name, value) in resp.raw.headers.items()
                    if name.lower() not in excluded_headers]
 
-        # Inject custom CSS for narrower sidebar if this is HTML
+        # Inject custom CSS for narrower sidebar and proper theming if this is HTML
         content = resp.content
         content_type = resp.headers.get('Content-Type', '')
         if 'text/html' in content_type and b'</head>' in content:
             custom_css = b'''
 <style>
-/* Custom CSS to make sqlite_web sidebar narrower */
+/* Custom CSS to make sqlite_web sidebar narrower and fix theme compatibility */
 .sidebar {
     width: 180px !important;
     min-width: 180px !important;
@@ -1173,6 +1173,76 @@ def database_proxy(path):
 .content {
     margin-left: 190px !important;
 }
+
+/* Fix background colors for proper visibility */
+body {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+}
+
+/* Ensure content areas have proper background */
+.content, .main, #content, main {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+}
+
+/* Fix table styling */
+table {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+}
+
+table th {
+    background-color: #f5f5f5 !important;
+    color: #333333 !important;
+    border: 1px solid #ddd !important;
+}
+
+table td {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #ddd !important;
+}
+
+table tr:hover td {
+    background-color: #f9f9f9 !important;
+}
+
+/* Fix form and input elements */
+input, select, textarea, button {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #ddd !important;
+}
+
+/* Fix links */
+a {
+    color: #0066cc !important;
+}
+
+a:hover {
+    color: #004499 !important;
+}
+
+/* Fix pre and code blocks */
+pre, code {
+    background-color: #f5f5f5 !important;
+    color: #333333 !important;
+    border: 1px solid #ddd !important;
+}
+
+/* Fix sidebar */
+.sidebar, #sidebar, nav {
+    background-color: #f8f8f8 !important;
+    color: #333333 !important;
+}
+
+/* Fix header areas */
+header, .header {
+    background-color: #f5f5f5 !important;
+    color: #333333 !important;
+}
+
 @media (max-width: 768px) {
     .sidebar {
         width: 150px !important;
