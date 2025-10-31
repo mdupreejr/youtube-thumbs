@@ -351,8 +351,20 @@ def serve_static(filename):
     Explicitly serve static files to work through Home Assistant ingress.
     Flask's default static serving doesn't respect ingress paths properly.
     """
-    static_dir = os.path.join(app.root_path, 'static')
-    return send_from_directory(static_dir, filename)
+    try:
+        static_dir = os.path.join(app.root_path, 'static')
+        logger.debug(f"Serving static file: {filename} from {static_dir}")
+        response = send_from_directory(static_dir, filename)
+        # Add cache headers for static files
+        response.headers['Cache-Control'] = 'public, max-age=300'  # 5 minutes
+        return response
+    except FileNotFoundError:
+        logger.error(f"Static file not found: {filename} in {static_dir}")
+        return f"File not found: {filename}", 404
+    except Exception as e:
+        logger.error(f"Error serving static file {filename}: {e}")
+        logger.error(traceback.format_exc())
+        return f"Error serving file: {str(e)}", 500
 
 @app.route('/')
 def index() -> str:
