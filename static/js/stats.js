@@ -286,14 +286,21 @@ function renderMostPlayedMini(items) {
         return;
     }
 
-    container.innerHTML = items.map((item, idx) => `
-        <div class="activity-item">
-            <div class="activity-title">#${idx + 1} ${item.ha_title || item.yt_title || 'Unknown'}</div>
-            <div class="activity-meta">
-                ${item.play_count} plays • ${getRatingIcon(item.rating)}
+    container.innerHTML = items.map((item, idx) => {
+        // Safely get title - handle empty strings and null/undefined
+        const title = (item.ha_title && item.ha_title.trim()) ||
+                      (item.yt_title && item.yt_title.trim()) ||
+                      'Unknown Title';
+
+        return `
+            <div class="activity-item">
+                <div class="activity-title">#${idx + 1} ${title}</div>
+                <div class="activity-meta">
+                    ${item.play_count || 0} plays • ${getRatingIcon(item.rating)}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderTopChannelsMini(items) {
@@ -391,26 +398,36 @@ function renderVideoList(videos, sortType) {
         return;
     }
 
-    container.innerHTML = videos.map((video, idx) => `
-        <div class="video-item">
-            <div class="rank">#${idx + 1}</div>
-            <div class="video-info">
-                <div class="video-title">${video.ha_title || video.yt_title || 'Unknown'}</div>
-                <div class="video-meta">
-                    ${video.ha_artist || video.yt_channel || 'Unknown'}
+    container.innerHTML = videos.map((video, idx) => {
+        // Safely get title - handle empty strings and null/undefined
+        const title = (video.ha_title && video.ha_title.trim()) ||
+                      (video.yt_title && video.yt_title.trim()) ||
+                      'Unknown Title';
+
+        // Safely get artist/channel - handle empty strings and null/undefined
+        const artist = (video.ha_artist && video.ha_artist.trim()) ||
+                       (video.yt_channel && video.yt_channel.trim()) ||
+                       'Unknown Artist';
+
+        return `
+            <div class="video-item">
+                <div class="rank">#${idx + 1}</div>
+                <div class="video-info">
+                    <div class="video-title">${title}</div>
+                    <div class="video-meta">${artist}</div>
+                </div>
+                <div class="video-stats">
+                    ${sortType === 'plays'
+                        ? `<span>▶️ ${video.play_count || 0} plays</span>`
+                        : `<span>⭐ ${video.rating_score || 0} score</span>`
+                    }
+                    <span class="rating-badge ${video.rating || 'none'}">
+                        ${getRatingIcon(video.rating)}
+                    </span>
                 </div>
             </div>
-            <div class="video-stats">
-                ${sortType === 'plays'
-                    ? `<span>▶️ ${video.play_count} plays</span>`
-                    : `<span>⭐ ${video.rating_score} score</span>`
-                }
-                <span class="rating-badge ${video.rating}">
-                    ${getRatingIcon(video.rating)}
-                </span>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderChannelTable(channels) {
@@ -524,9 +541,9 @@ function renderRatingDistribution(summary) {
     const total = summary.liked + summary.disliked + summary.unrated;
 
     if (total === 0) {
-        document.getElementById('count-likes').textContent = '0';
-        document.getElementById('count-dislikes').textContent = '0';
-        document.getElementById('count-none').textContent = '0';
+        document.getElementById('count-likes').textContent = '0 songs';
+        document.getElementById('count-dislikes').textContent = '0 songs';
+        document.getElementById('count-none').textContent = '0 songs';
         return;
     }
 
@@ -538,9 +555,9 @@ function renderRatingDistribution(summary) {
     document.getElementById('bar-dislikes').style.width = `${dislikePercent}%`;
     document.getElementById('bar-none').style.width = `${nonePercent}%`;
 
-    document.getElementById('count-likes').textContent = summary.liked;
-    document.getElementById('count-dislikes').textContent = summary.disliked;
-    document.getElementById('count-none').textContent = summary.unrated;
+    document.getElementById('count-likes').textContent = `${summary.liked} song${summary.liked !== 1 ? 's' : ''}`;
+    document.getElementById('count-dislikes').textContent = `${summary.disliked} song${summary.disliked !== 1 ? 's' : ''}`;
+    document.getElementById('count-none').textContent = `${summary.unrated} song${summary.unrated !== 1 ? 's' : ''}`;
 }
 
 // History Tab
