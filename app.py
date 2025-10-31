@@ -1099,7 +1099,34 @@ def database_proxy(path):
         headers = [(name, value) for (name, value) in resp.raw.headers.items()
                    if name.lower() not in excluded_headers]
 
-        response = Response(resp.content, resp.status_code, headers)
+        # Inject custom CSS for narrower sidebar if this is HTML
+        content = resp.content
+        content_type = resp.headers.get('Content-Type', '')
+        if 'text/html' in content_type and b'</head>' in content:
+            custom_css = b'''
+<style>
+/* Custom CSS to make sqlite_web sidebar narrower */
+.sidebar {
+    width: 180px !important;
+    min-width: 180px !important;
+}
+.content {
+    margin-left: 190px !important;
+}
+@media (max-width: 768px) {
+    .sidebar {
+        width: 150px !important;
+        min-width: 150px !important;
+    }
+    .content {
+        margin-left: 160px !important;
+    }
+}
+</style>
+'''
+            content = content.replace(b'</head>', custom_css + b'</head>')
+
+        response = Response(content, resp.status_code, headers)
         return response
 
     except requests.exceptions.ConnectionError:

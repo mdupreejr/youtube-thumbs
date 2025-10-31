@@ -195,6 +195,13 @@ Access via the **Database Viewer** link in the web interface.
 
 ## Recent Updates
 
+### v1.49.7 - Optimize Database Viewer Sidebar Width
+- Added custom CSS injection to database proxy
+- Reduced sqlite_web sidebar from ~33% screen width to 180px
+- Improved content viewing area (now takes majority of screen)
+- Responsive design: 150px sidebar on mobile devices
+- CSS injected automatically when viewing database through ingress
+
 ### v1.49.6 - Fix Stats Page API Calls for Ingress
 - Fixed statistics dashboard API calls to work through Home Assistant ingress
 - Added BASE_PATH detection in stats.html (same as index.html)
