@@ -476,6 +476,13 @@ def get_content_hash(title, duration, artist=None):
 
 ## Recent Updates
 
+### v1.51.2 - Database Migration NOT NULL Constraint Fix
+- **Bug Fix:** Fixed "NOT NULL constraint failed: video_ratings.yt_video_id" error
+- Added intelligent migration that detects column constraints before attempting changes
+- Graceful handling of older database schemas with NOT NULL constraints
+- Migration now has two paths: full migration for new schemas, partial migration for old schemas
+- All databases now migrate successfully without data loss
+
 ### v1.51.1 - Database Migration Fix
 - **Bug Fix:** Fixed "no such column: ha_content_id" error on addon startup
 - Moved ha_content_id index creation from schema to migration
