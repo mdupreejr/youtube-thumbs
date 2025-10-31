@@ -1,5 +1,5 @@
 import atexit
-from flask import Flask, jsonify, Response, render_template, request
+from flask import Flask, jsonify, Response, render_template, request, send_from_directory
 from typing import Tuple, Optional, Dict, Any
 import os
 import time
@@ -344,6 +344,15 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
         return jsonify({"success": False, "error": "An unexpected error occurred while rating the video"}), 500
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """
+    Explicitly serve static files to work through Home Assistant ingress.
+    Flask's default static serving doesn't respect ingress paths properly.
+    """
+    static_dir = os.path.join(app.root_path, 'static')
+    return send_from_directory(static_dir, filename)
 
 @app.route('/')
 def index() -> str:
