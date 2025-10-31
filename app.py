@@ -2,6 +2,7 @@ import atexit
 from flask import Flask, jsonify, Response, render_template, request
 from typing import Tuple, Optional, Dict, Any
 import os
+import time
 import traceback
 import requests
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -518,7 +519,66 @@ def thumbs_down() -> Tuple[Response, int]:
 @app.route('/health', methods=['GET'])
 def health() -> Response:
     """
-    Health check endpoint.
+    Fast health check endpoint optimized for frequent polling.
+
+    This endpoint is optimized for speed (< 100ms response time) and does NOT:
+    - Attempt thread restarts
+    - Perform blocking operations
+
+    It provides basic status information for UI polling without expensive operations.
+    For full diagnostics with thread recovery, use /status endpoint instead.
+    """
+    # Quick non-blocking checks only - no thread restarts
+    guard_status = quota_guard.status()
+    tracker_healthy = history_tracker.is_healthy()
+    prober_healthy = quota_prober.is_healthy()
+
+    # Simple health score without expensive metric calculations
+    # Base score of 100, deduct for issues
+    health_score = 100
+    warnings = []
+
+    if not tracker_healthy:
+        warnings.append("History tracker is not running")
+        health_score -= 25
+
+    if not prober_healthy:
+        warnings.append("Quota prober is not running")
+        health_score -= 15
+
+    if guard_status.get('blocked'):
+        overall_status = "cooldown"
+    elif health_score >= 70:
+        overall_status = "healthy"
+    elif health_score >= 40:
+        overall_status = "degraded"
+    else:
+        overall_status = "unhealthy"
+
+    return jsonify({
+        "status": overall_status,
+        "health_score": health_score,
+        "warnings": warnings,
+        "quota_guard": guard_status,
+        "history_tracker": {
+            "healthy": tracker_healthy,
+            "enabled": history_tracker.enabled,
+        },
+        "quota_prober": {
+            "healthy": prober_healthy,
+            "enabled": quota_prober.enabled,
+        },
+        "timestamp": time.time()
+    }), 200
+
+
+@app.route('/status', methods=['GET'])
+def status() -> Response:
+    """
+    Detailed system status endpoint with full diagnostics.
+
+    This endpoint provides comprehensive health information but may be slower
+    due to metric calculations. Use /health for fast uptime checks.
 
     Query Parameters:
         format: 'json' (default) or 'html' for formatted view
@@ -591,7 +651,7 @@ def health() -> Response:
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>YouTube Thumbs - Health Check</title>
+            <title>YouTube Thumbs - System Status</title>
             <style>
                 body {{
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -649,8 +709,8 @@ def health() -> Response:
         </head>
         <body>
             <div class="container">
-                <h1>💚 Health Check</h1>
-                <div class="subtitle">System health and status monitoring</div>
+                <h1>💚 System Status</h1>
+                <div class="subtitle">Detailed health and diagnostics monitoring</div>
                 <pre>{json_str}</pre>
                 <a href="javascript:history.back()" class="back-link">← Back to Dashboard</a>
             </div>
