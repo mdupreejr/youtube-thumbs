@@ -56,7 +56,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
-        CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id);
     """
 
     # PENDING_RATINGS_SCHEMA removed in v1.50.0
@@ -274,6 +273,12 @@ class DatabaseConnection:
                     logger.info("pending_ratings table already dropped, skipping migration step")
                 else:
                     raise
+
+            # Step 5: Create index for ha_content_id (v1.50.0 column)
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
+            )
+            logger.info("Created index on ha_content_id column")
 
         logger.info("Completed v1.50.0 database schema migration")
 
