@@ -13,9 +13,9 @@ def setup_logger() -> logging.Logger:
     logger.handlers = []
     logger.propagate = False
 
-    # Console handler (existing)
+    # Console handler with time-only timestamp
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+    console_handler.setFormatter(logging.Formatter('%(asctime)s | [%(levelname)s] %(message)s', datefmt='%H:%M:%S'))
     logger.addHandler(console_handler)
 
     # Create log directory if it doesn't exist
@@ -65,7 +65,7 @@ def setup_user_action_logger() -> logging.Logger:
     logger.propagate = False
 
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('[USER_ACTION] %(message)s'))
+    handler.setFormatter(logging.Formatter('%(asctime)s | [USER_ACTION] %(message)s', datefmt='%H:%M:%S'))
     logger.addHandler(handler)
 
     return logger
@@ -100,7 +100,7 @@ def setup_rating_logger() -> logging.Logger:
         # Fallback to console if file handler fails
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(
-            logging.Formatter('[RATING] %(message)s')
+            logging.Formatter('%(asctime)s | [RATING] %(message)s', datefmt='%H:%M:%S')
         )
         logger.addHandler(console_handler)
         logger.warning(f"Could not create rating file handler: {e}")
