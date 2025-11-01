@@ -14,6 +14,7 @@ from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
 from quota_prober import QuotaProber
+from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES
 from video_helpers import is_youtube_content
@@ -289,6 +290,11 @@ quota_prober = QuotaProber(
 )
 quota_prober.start()
 atexit.register(quota_prober.stop)
+
+# Start stats refresher background task (refreshes every hour)
+stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
+stats_refresher.start()
+atexit.register(stats_refresher.stop)
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:

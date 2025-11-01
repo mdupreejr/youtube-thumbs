@@ -402,9 +402,47 @@ class DatabaseConnection:
                 """)
 
                 # Copy all data from old table to new table
+                # Handle NULL ha_title by setting default value
                 self._conn.execute("""
                     INSERT INTO video_ratings_new
-                    SELECT * FROM video_ratings
+                    SELECT
+                        id,
+                        yt_video_id,
+                        ha_content_id,
+                        COALESCE(ha_title, 'Unknown Title') as ha_title,
+                        ha_artist,
+                        ha_app_name,
+                        yt_title,
+                        yt_channel,
+                        yt_channel_id,
+                        yt_description,
+                        yt_published_at,
+                        yt_category_id,
+                        yt_live_broadcast,
+                        yt_location,
+                        yt_recording_date,
+                        ha_duration,
+                        yt_duration,
+                        yt_url,
+                        rating,
+                        ha_content_hash,
+                        date_added,
+                        date_last_played,
+                        play_count,
+                        rating_score,
+                        pending_reason,
+                        source,
+                        yt_match_pending,
+                        yt_match_requested_at,
+                        yt_match_attempts,
+                        yt_match_last_attempt,
+                        yt_match_last_error,
+                        rating_queue_pending,
+                        rating_queue_requested_at,
+                        rating_queue_attempts,
+                        rating_queue_last_attempt,
+                        rating_queue_last_error
+                    FROM video_ratings
                 """)
 
                 # Drop old table
