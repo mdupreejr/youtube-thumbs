@@ -41,9 +41,12 @@ app = Flask(__name__)
 print("=== app.py: Flask app created ===", file=sys.stderr, flush=True)
 
 # Configure Flask to work behind Home Assistant ingress proxy
+print("=== app.py: Configuring ProxyFix ===", file=sys.stderr, flush=True)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+print("=== app.py: ProxyFix configured ===", file=sys.stderr, flush=True)
 
 # Request/Response logging middleware
+print("=== app.py: Setting up request/response middleware ===", file=sys.stderr, flush=True)
 @app.before_request
 def log_request_info():
     """Log all incoming requests."""
@@ -101,14 +104,22 @@ def handle_exception(e):
     """
     return html, 500
 
+print("=== app.py: Middleware and error handlers configured ===", file=sys.stderr, flush=True)
+print("=== app.py: Initializing database ===", file=sys.stderr, flush=True)
 db = get_database()
+print("=== app.py: Database initialized ===", file=sys.stderr, flush=True)
 
 # Inject database into youtube_api module for API usage tracking
+print("=== app.py: Injecting database into youtube_api ===", file=sys.stderr, flush=True)
 set_youtube_api_database(db)
+print("=== app.py: Database injected ===", file=sys.stderr, flush=True)
 
 # Initialize and register data API blueprint
+print("=== app.py: Initializing data API routes ===", file=sys.stderr, flush=True)
 init_data_api_routes(db)
+print("=== app.py: Registering data API blueprint ===", file=sys.stderr, flush=True)
 app.register_blueprint(data_api_bp)
+print("=== app.py: Blueprint registered ===", file=sys.stderr, flush=True)
 
 
 def format_media_info(title: str, artist: str) -> str:
