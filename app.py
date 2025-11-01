@@ -4,7 +4,6 @@ from typing import Tuple, Optional, Dict, Any
 import os
 import time
 import traceback
-import requests
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from logger import logger, user_action_logger, rating_logger
