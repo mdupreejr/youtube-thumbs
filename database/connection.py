@@ -187,6 +187,9 @@ class DatabaseConnection:
 
                     # v1.58.1 Migration: Fix NULL yt_match_pending values
                     self._fix_match_pending_nulls()
+
+                    # v1.58.5 Migration: Ensure all required columns exist
+                    self._ensure_required_columns()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -469,6 +472,29 @@ class DatabaseConnection:
                     # SQLite version doesn't support DROP COLUMN
                     logger.warning(f"Cannot drop pending_match column: {e}")
                     logger.warning("Column will remain but is unused - requires SQLite 3.35.0+ to drop")
+
+    def _ensure_required_columns(self) -> None:
+        """
+        v1.58.5 Migration: Ensure all required columns exist.
+        Adds back columns that may have been accidentally dropped during manual cleanup.
+        """
+        logger.info("v1.58.5 Migration: Checking for required columns")
+
+        # Ensure yt_match_* columns all exist
+        self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
+        self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
+        self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
+        self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
+        self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
+
+        # Ensure rating_queue_* columns all exist
+        self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
+        self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
+        self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
+        self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
+        self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
+
+        logger.info("Completed v1.58.5 migration - all required columns verified")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
