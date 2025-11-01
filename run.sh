@@ -192,13 +192,15 @@ trap cleanup EXIT
 
 bashio::log.info "Running startup health checks..."
 
-# Start the Flask application with error output
+# Start the Flask application with full error capture
 bashio::log.info "Starting Flask application..."
-python3 app.py 2>&1 | while IFS= read -r line; do
+bash /app/run_app.sh 2>&1 | while IFS= read -r line; do
     bashio::log.info "$line"
 done
 
 # If we get here, app.py exited unexpectedly
-EXIT_CODE=$?
-bashio::log.error "Flask application exited unexpectedly with code: ${EXIT_CODE}"
-exit ${EXIT_CODE}
+EXIT_CODE=${PIPESTATUS[0]}
+if [ $EXIT_CODE -ne 0 ]; then
+    bashio::log.error "Flask application exited with code: ${EXIT_CODE}"
+    exit ${EXIT_CODE}
+fi
