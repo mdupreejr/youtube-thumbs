@@ -459,6 +459,17 @@ class DatabaseConnection:
 
             logger.info("Completed v1.58.1 migration - yt_match_pending values fixed")
 
+            # Drop pending_match column if it exists
+            if 'pending_match' in columns:
+                try:
+                    # Try to drop the column (requires SQLite 3.35.0+)
+                    self._conn.execute("ALTER TABLE video_ratings DROP COLUMN pending_match")
+                    logger.info("Dropped pending_match column")
+                except sqlite3.OperationalError as e:
+                    # SQLite version doesn't support DROP COLUMN
+                    logger.warning(f"Cannot drop pending_match column: {e}")
+                    logger.warning("Column will remain but is unused - requires SQLite 3.35.0+ to drop")
+
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
         # Hardcoded column names - safe from SQL injection
