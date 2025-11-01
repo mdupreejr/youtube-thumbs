@@ -1481,11 +1481,11 @@ def database_proxy(path):
 <style>
 /* Custom CSS to make sqlite_web sidebar narrower and fix theme compatibility */
 .sidebar {
-    width: 180px !important;
-    min-width: 180px !important;
+    width: 100px !important;
+    min-width: 100px !important;
 }
 .content {
-    margin-left: 190px !important;
+    margin-left: 110px !important;
 }
 
 /* Fix background colors for proper visibility */
@@ -1559,11 +1559,11 @@ header, .header {
 
 @media (max-width: 768px) {
     .sidebar {
-        width: 150px !important;
-        min-width: 150px !important;
+        width: 80px !important;
+        min-width: 80px !important;
     }
     .content {
-        margin-left: 160px !important;
+        margin-left: 90px !important;
     }
 }
 </style>
