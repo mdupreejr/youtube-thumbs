@@ -355,12 +355,10 @@ class DatabaseConnection:
 
             logger.info("Migrating video_ratings table to allow NULL in yt_video_id column")
 
-            # Begin transaction for migration
-            self._conn.execute("BEGIN TRANSACTION")
-
             try:
+                # Note: executescript() implicitly commits, so we don't use BEGIN/COMMIT manually
                 # Create new table with correct schema (without NOT NULL on yt_video_id)
-                self._conn.executescript("""
+                self._conn.execute("""
                     CREATE TABLE video_ratings_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         yt_video_id TEXT UNIQUE,
@@ -398,7 +396,7 @@ class DatabaseConnection:
                         rating_queue_attempts INTEGER DEFAULT 0,
                         rating_queue_last_attempt TIMESTAMP,
                         rating_queue_last_error TEXT
-                    );
+                    )
                 """)
 
                 # Copy all data from old table to new table
@@ -452,27 +450,24 @@ class DatabaseConnection:
                 self._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
 
                 # Recreate indexes
-                self._conn.executescript("""
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash);
-                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id);
-                """)
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)")
 
-                # Commit the transaction
-                self._conn.execute("COMMIT")
+                # Commit changes
+                self._conn.commit()
 
                 logger.info("Successfully migrated video_ratings table to allow NULL in yt_video_id")
 
             except Exception as exc:
-                # Rollback on any error
-                self._conn.execute("ROLLBACK")
                 logger.error(f"Failed to migrate video_ratings table: {exc}")
-                # Clean up temporary table
+                # Clean up temporary table if it exists
                 try:
                     self._conn.execute("DROP TABLE IF EXISTS video_ratings_new")
+                    self._conn.commit()
                 except sqlite3.DatabaseError:
                     pass
                 raise
