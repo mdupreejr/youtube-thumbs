@@ -1120,8 +1120,9 @@ def stats_page() -> str:
 
 
 # Database proxy routes - delegates to database_proxy module
-app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''})
-app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler())
+# Allow all HTTP methods (GET, POST, etc.) for sqlite_web functionality like exports
+app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler(), methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 
 
 if __name__ == '__main__':
