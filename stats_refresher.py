@@ -79,7 +79,7 @@ class StatsRefresher:
                 ('top_rated_10', lambda: self.db.get_top_rated(10), 600),
                 ('recent_activity_20', lambda: self.db.get_recent_activity(20), 60),  # 1 min TTL
                 ('category_breakdown', lambda: self.db.get_category_breakdown(), 3600),  # 1 hour TTL
-                ('api_usage_7d', lambda: self.db.get_api_usage_stats(7), 3600),
+                ('api_usage_7d', lambda: self.db.get_api_usage_summary(7), 3600),  # Use get_api_usage_summary
             ]
 
             refreshed_count = 0
