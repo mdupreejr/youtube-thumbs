@@ -113,20 +113,27 @@ class QuotaProber:
                 logger.info("No pending videos to retry after quota recovery")
                 return
 
-            logger.info("Found %d pending videos to retry after quota recovery", len(pending))
+            estimated_minutes = (len(pending) - 1) * 10 / 60  # 10 seconds between each, except first
+            logger.info("Found %d pending videos to retry after quota recovery (estimated time: %.1f minutes)",
+                       len(pending), estimated_minutes)
 
             success_count = 0
             not_found_count = 0
             error_count = 0
 
-            for video in pending:
+            for idx, video in enumerate(pending):
+                # Rate limit: Add 10 second delay between retries (except first one)
+                if idx > 0:
+                    logger.debug("Waiting 10 seconds before next retry to avoid quota exhaustion...")
+                    time.sleep(10)
+
                 ha_content_id = video.get('ha_content_id')
                 ha_title = video.get('ha_title', 'Unknown')
                 ha_duration = video.get('ha_duration')
                 ha_artist = video.get('ha_artist')
 
                 try:
-                    logger.info("Retrying match for: %s (duration: %s)", ha_title[:50], ha_duration)
+                    logger.info("Retrying match for: %s (duration: %s) [%d/%d]", ha_title[:50], ha_duration, idx + 1, len(pending))
 
                     # Search YouTube for this video
                     result = self.search_wrapper(ha_title, ha_duration, ha_artist)
