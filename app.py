@@ -1595,29 +1595,15 @@ header, .header {
             if 'video_ratings' in path.lower() and 'content' in path.lower():
                 auto_sort_js = b'''
 <script>
-// Auto-sort video_ratings table by date_last_played (descending)
+// Auto-sort video_ratings table by date_last_played (descending, NULLs last)
 document.addEventListener('DOMContentLoaded', function() {
-    // Find all table headers
-    const headers = document.querySelectorAll('th a');
+    const currentUrl = window.location.href;
 
-    // Look for the date_last_played column header
-    for (let header of headers) {
-        if (header.textContent.includes('date_last_played')) {
-            // Check if table is already sorted by this column
-            const currentUrl = window.location.href;
-            if (!currentUrl.includes('_sort') && !currentUrl.includes('order')) {
-                console.log('Auto-sorting by date_last_played (descending)');
-                // Click twice: once for ascending, once for descending
-                // Use setTimeout to ensure clicks are processed
-                setTimeout(function() {
-                    header.click();
-                    setTimeout(function() {
-                        header.click();
-                    }, 100);
-                }, 100);
-            }
-            break;
-        }
+    // Check if already sorted (either ascending or descending)
+    if (!currentUrl.includes('ordering=')) {
+        console.log('Auto-sorting by date_last_played (descending)');
+        // Redirect to sorted view with descending order (- prefix means descending in sqlite_web)
+        window.location.href = currentUrl + (currentUrl.includes('?') ? '&' : '?') + 'ordering=-date_last_played';
     }
 });
 </script>
