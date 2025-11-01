@@ -296,9 +296,9 @@
 
         <!-- Navigation -->
         <div class="nav-tabs">
-            <a href="/?tab=tests" class="{{ 'active' if current_tab == 'tests' else '' }}">🔧 Connection Tests</a>
-            <a href="/?tab=rating" class="{{ 'active' if current_tab == 'rating' else '' }}">⚡ Bulk Rating</a>
-            <a href="/stats" >📊 Statistics</a>
+            <a href="{{ ingress_path }}/?tab=tests" class="{{ 'active' if current_tab == 'tests' else '' }}">🔧 Connection Tests</a>
+            <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if current_tab == 'rating' else '' }}">⚡ Bulk Rating</a>
+            <a href="{{ ingress_path }}/stats" >📊 Statistics</a>
         </div>
 
         <!-- Connection Tests Tab -->
@@ -306,7 +306,7 @@
         <div class="card">
             <h2>System Status</h2>
             <div class="refresh-note">
-                <a href="/?tab=tests" style="color: #667eea; text-decoration: none;">🔄 Refresh Tests</a>
+                <a href="{{ ingress_path }}/?tab=tests" style="color: #667eea; text-decoration: none;">🔄 Refresh Tests</a>
             </div>
             <br>
             <div class="test-grid">
@@ -368,7 +368,7 @@
                 <!-- Pagination -->
                 <div class="pagination">
                     {% if current_page > 1 %}
-                        <a href="/?tab=rating&page={{ current_page - 1 }}" style="text-decoration: none;">
+                        <a href="{{ ingress_path }}/?tab=rating&page={{ current_page - 1 }}" style="text-decoration: none;">
                             <button>← Previous</button>
                         </a>
                     {% else %}
@@ -378,7 +378,7 @@
                     <span style="color: white; font-weight: 600;">Page {{ current_page }} of {{ total_pages }}</span>
 
                     {% if current_page < total_pages %}
-                        <a href="/?tab=rating&page={{ current_page + 1 }}" style="text-decoration: none;">
+                        <a href="{{ ingress_path }}/?tab=rating&page={{ current_page + 1 }}" style="text-decoration: none;">
                             <button>Next →</button>
                         </a>
                     {% else %}
@@ -397,9 +397,9 @@
 
         <!-- Footer Links -->
         <div class="footer-links">
-            <a href="/stats" class="footer-link">📊 Statistics</a>
-            <a href="/database" class="footer-link">🗄️ Database Viewer</a>
-            <a href="/health" class="footer-link">❤️ Health Check</a>
+            <a href="{{ ingress_path }}/stats" class="footer-link">📊 Statistics</a>
+            <a href="{{ ingress_path }}/database" class="footer-link">🗄️ Database Viewer</a>
+            <a href="{{ ingress_path }}/health" class="footer-link">❤️ Health Check</a>
         </div>
     </div>
 </body>

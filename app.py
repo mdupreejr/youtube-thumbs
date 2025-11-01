@@ -379,9 +379,13 @@ def index() -> str:
         if current_tab not in ['tests', 'rating']:
             current_tab = 'tests'
 
+        # Get ingress path for proper link generation
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
         # Initialize template data
         template_data = {
             'current_tab': current_tab,
+            'ingress_path': ingress_path,
             'ha_test': {'success': False, 'message': 'Not tested'},
             'yt_test': {'success': False, 'message': 'Not tested'},
             'db_test': {'success': False, 'message': 'Not tested'},
@@ -1311,9 +1315,14 @@ def stats_page() -> str:
     All processing done on server, no client-side JavaScript required.
     """
     try:
+        # Get ingress path for proper link generation
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
         # Check cache first (5 minute TTL)
         cached = db.get_cached_stats('stats_page')
         if cached:
+            # Add ingress_path to cached data
+            cached['ingress_path'] = ingress_path
             return render_template('stats_server.html', **cached)
 
         # Fetch fresh data
@@ -1380,6 +1389,7 @@ def stats_page() -> str:
 
         # Prepare template data
         template_data = {
+            'ingress_path': ingress_path,
             'summary': summary,
             'rating_percentages': rating_percentages,
             'most_played': formatted_most_played,
