@@ -1331,13 +1331,17 @@ def stats_page() -> str:
         top_channels = db.get_top_channels(10)
         recent = db.get_recent_activity(15)
 
-        # Calculate rating percentages
-        total = summary['liked'] + summary['disliked'] + summary['unrated']
+        # Calculate rating percentages (ensure integers to avoid type errors)
+        liked = int(summary.get('liked', 0) or 0)
+        disliked = int(summary.get('disliked', 0) or 0)
+        unrated = int(summary.get('unrated', 0) or 0)
+        total = liked + disliked + unrated
+
         if total > 0:
             rating_percentages = {
-                'liked': (summary['liked'] / total) * 100,
-                'disliked': (summary['disliked'] / total) * 100,
-                'unrated': (summary['unrated'] / total) * 100
+                'liked': (liked / total) * 100,
+                'disliked': (disliked / total) * 100,
+                'unrated': (unrated / total) * 100
             }
         else:
             rating_percentages = {'liked': 0, 'disliked': 0, 'unrated': 0}
@@ -1605,6 +1609,10 @@ if __name__ == '__main__':
 
     # Run startup health checks
     run_startup_checks(ha_api, yt_api, db)
+
+    # Clear stats cache on startup to prevent stale data issues
+    logger.info("Clearing stats cache...")
+    db.invalidate_stats_cache()
 
     logger.info("Starting Flask application...")
     try:
