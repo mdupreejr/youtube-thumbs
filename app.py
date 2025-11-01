@@ -1413,9 +1413,18 @@ def database_proxy(path):
     else:
         target_url = sqlite_web_url
 
+    # Auto-sort video_ratings table by date_last_played (descending) if no sort specified
+    query_string = request.query_string.decode('utf-8')
+    if 'video_ratings' in path and not any(x in query_string for x in ['_sort', '_sort_desc']):
+        # Add default sort by date_last_played descending
+        if query_string:
+            query_string += '&_sort_desc=date_last_played'
+        else:
+            query_string = '_sort_desc=date_last_played'
+
     # Forward query parameters
-    if request.query_string:
-        target_url += f"?{request.query_string.decode('utf-8')}"
+    if query_string:
+        target_url += f"?{query_string}"
 
     try:
         # Forward the request to sqlite_web
