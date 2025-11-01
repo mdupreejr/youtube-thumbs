@@ -209,6 +209,24 @@ def _history_poll_interval() -> int:
         return 60
 
 
+def _pending_retry_enabled() -> bool:
+    value = os.getenv('PENDING_VIDEO_RETRY_ENABLED', 'true')
+    return value.lower() not in FALSE_VALUES if isinstance(value, str) else True
+
+
+def _pending_retry_batch_size() -> int:
+    raw_size = os.getenv('PENDING_VIDEO_RETRY_BATCH_SIZE', '50')
+    try:
+        size = int(raw_size)
+        return size if 1 <= size <= 500 else 50
+    except ValueError:
+        logger.warning(
+            "Invalid PENDING_VIDEO_RETRY_BATCH_SIZE '%s'; using default 50",
+            raw_size,
+        )
+        return 50
+
+
 history_tracker = HistoryTracker(
     ha_api=ha_api,
     database=db,
@@ -255,6 +273,11 @@ quota_prober = QuotaProber(
     probe_func=_probe_youtube_api,
     check_interval=300,  # Check every 5 minutes if probe is needed
     enabled=True,
+    db=db,
+    search_wrapper=_search_wrapper,
+    retry_enabled=_pending_retry_enabled(),
+    retry_batch_size=_pending_retry_batch_size(),
+    metrics_tracker=metrics,
 )
 quota_prober.start()
 atexit.register(quota_prober.stop)
@@ -1427,33 +1450,10 @@ def database_proxy(path):
     else:
         target_url = sqlite_web_url
 
-    # Auto-sort video_ratings table by date_last_played (descending) if no sort specified
-    query_string = request.query_string.decode('utf-8')
-
-    # Debug logging to see what path we're getting
-    logger.debug(f"Database proxy path: {path}")
-    logger.debug(f"Database proxy query_string: {query_string}")
-
-    # Check if viewing video_ratings table (could be in path or as table= parameter)
-    is_video_ratings_table = (
-        'video_ratings' in path.lower() or
-        'table=video_ratings' in query_string.lower() or
-        path.endswith('video_ratings')
-    )
-
-    if is_video_ratings_table and not any(x in query_string for x in ['_sort', '_sort_desc']):
-        # Add default sort by date_last_played descending
-        logger.info("Auto-sorting video_ratings table by date_last_played")
-        if query_string:
-            query_string += '&_sort_desc=date_last_played'
-        else:
-            query_string = '_sort_desc=date_last_played'
-
     # Forward query parameters
+    query_string = request.query_string.decode('utf-8')
     if query_string:
         target_url += f"?{query_string}"
-
-    logger.debug(f"Final target URL for sqlite_web: {target_url}")
 
     try:
         # Forward the request to sqlite_web
