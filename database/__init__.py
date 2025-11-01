@@ -24,13 +24,8 @@ class Database:
     """
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
-        import sys
-        print(f"=== Database.__init__: Starting with path {db_path} ===", file=sys.stderr, flush=True)
-
         # Initialize connection
-        print("=== Database.__init__: Creating DatabaseConnection ===", file=sys.stderr, flush=True)
         self._connection = DatabaseConnection(db_path)
-        print("=== Database.__init__: DatabaseConnection created ===", file=sys.stderr, flush=True)
 
         # Expose connection properties for backward compatibility
         self.db_path = db_path
@@ -38,29 +33,21 @@ class Database:
         self._lock = self._connection.lock
 
         # Initialize operation modules
-        print("=== Database.__init__: Initializing VideoOperations ===", file=sys.stderr, flush=True)
         self._video_ops = VideoOperations(self._connection)
-        print("=== Database.__init__: Initializing PendingOperations ===", file=sys.stderr, flush=True)
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
-        print("=== Database.__init__: Initializing ImportOperations ===", file=sys.stderr, flush=True)
         self._import_ops = ImportOperations(self._connection)
-        print("=== Database.__init__: Initializing StatsOperations ===", file=sys.stderr, flush=True)
         self._stats_ops = StatsOperations(self._connection)
-        print("=== Database.__init__: Initializing APIUsageOperations ===", file=sys.stderr, flush=True)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
-        print("=== Database.__init__: Initializing StatsCacheOperations ===", file=sys.stderr, flush=True)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
 
         # Not found cache configuration (previously in NotFoundOperations)
         # Default to 7 days (168 hours) to prevent wasting quota on failed searches
-        print("=== Database.__init__: Validating environment variable ===", file=sys.stderr, flush=True)
         self._not_found_cache_hours = validate_environment_variable(
             'NOT_FOUND_CACHE_HOURS',
             default=168,
             converter=int,
             validator=lambda x: 1 <= x <= 168  # 1 hour to 1 week
         )
-        print("=== Database.__init__: Initialization complete ===", file=sys.stderr, flush=True)
 
     # Connection methods
     def _table_info(self, table: str):

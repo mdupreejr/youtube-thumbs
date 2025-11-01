@@ -1,6 +1,3 @@
-import sys
-print("=== app.py: Starting imports ===", file=sys.stderr, flush=True)
-
 import atexit
 from flask import Flask, jsonify, Response, render_template, request, send_from_directory
 from typing import Tuple, Optional, Dict, Any
@@ -9,20 +6,12 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
-
-print("=== app.py: Importing logger ===", file=sys.stderr, flush=True)
 from logger import logger, user_action_logger, rating_logger
-print("=== app.py: Logger imported ===", file=sys.stderr, flush=True)
 from rate_limiter import rate_limiter
-print("=== app.py: rate_limiter imported ===", file=sys.stderr, flush=True)
 from homeassistant_api import ha_api
-print("=== app.py: ha_api imported ===", file=sys.stderr, flush=True)
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
-print("=== app.py: youtube_api imported ===", file=sys.stderr, flush=True)
 from database import get_database
-print("=== app.py: database imported ===", file=sys.stderr, flush=True)
 from history_tracker import HistoryTracker
-print("=== app.py: HistoryTracker imported ===", file=sys.stderr, flush=True)
 from quota_guard import quota_guard
 from quota_prober import QuotaProber
 from stats_refresher import StatsRefresher
@@ -34,19 +23,13 @@ from search_helpers import search_and_match_video_refactored
 from cache_helpers import find_cached_video_refactored
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
-print("=== app.py: All imports completed ===", file=sys.stderr, flush=True)
 
-print("=== app.py: Creating Flask app ===", file=sys.stderr, flush=True)
 app = Flask(__name__)
-print("=== app.py: Flask app created ===", file=sys.stderr, flush=True)
 
 # Configure Flask to work behind Home Assistant ingress proxy
-print("=== app.py: Configuring ProxyFix ===", file=sys.stderr, flush=True)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-print("=== app.py: ProxyFix configured ===", file=sys.stderr, flush=True)
 
 # Request/Response logging middleware
-print("=== app.py: Setting up request/response middleware ===", file=sys.stderr, flush=True)
 @app.before_request
 def log_request_info():
     """Log all incoming requests."""
@@ -104,22 +87,14 @@ def handle_exception(e):
     """
     return html, 500
 
-print("=== app.py: Middleware and error handlers configured ===", file=sys.stderr, flush=True)
-print("=== app.py: Initializing database ===", file=sys.stderr, flush=True)
 db = get_database()
-print("=== app.py: Database initialized ===", file=sys.stderr, flush=True)
 
 # Inject database into youtube_api module for API usage tracking
-print("=== app.py: Injecting database into youtube_api ===", file=sys.stderr, flush=True)
 set_youtube_api_database(db)
-print("=== app.py: Database injected ===", file=sys.stderr, flush=True)
 
 # Initialize and register data API blueprint
-print("=== app.py: Initializing data API routes ===", file=sys.stderr, flush=True)
 init_data_api_routes(db)
-print("=== app.py: Registering data API blueprint ===", file=sys.stderr, flush=True)
 app.register_blueprint(data_api_bp)
-print("=== app.py: Blueprint registered ===", file=sys.stderr, flush=True)
 
 
 def format_media_info(title: str, artist: str) -> str:
