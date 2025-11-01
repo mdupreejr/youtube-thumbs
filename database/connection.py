@@ -160,6 +160,9 @@ class DatabaseConnection:
                     # Migrate api_usage table if needed
                     self._migrate_api_usage_table()
 
+                    # v1.64.3: Drop deprecated not_found_searches table if it exists
+                    self._drop_not_found_searches_table()
+
                     self._conn.executescript(self.API_USAGE_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
 
@@ -315,6 +318,33 @@ class DatabaseConnection:
         except sqlite3.DatabaseError as exc:
             logger.error(f"Failed to migrate api_usage table: {exc}")
             raise
+
+    def _drop_not_found_searches_table(self) -> None:
+        """
+        Drop the deprecated not_found_searches table if it exists.
+        v1.64.0: This functionality has been consolidated into video_ratings table
+        using pending_reason='not_found' column.
+        """
+        try:
+            # Check if not_found_searches table exists
+            cursor = self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='not_found_searches'"
+            )
+            if not cursor.fetchone():
+                # Table doesn't exist, nothing to do
+                return
+
+            logger.info("Dropping deprecated not_found_searches table (data consolidated into video_ratings)")
+
+            # Drop the table - data should already be migrated to video_ratings
+            with self._conn:
+                self._conn.execute("DROP TABLE IF EXISTS not_found_searches")
+
+            logger.info("Successfully dropped not_found_searches table")
+
+        except sqlite3.DatabaseError as exc:
+            logger.error(f"Failed to drop not_found_searches table: {exc}")
+            # Don't raise - this is a non-critical cleanup operation
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
