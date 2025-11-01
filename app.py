@@ -1429,8 +1429,21 @@ def database_proxy(path):
 
     # Auto-sort video_ratings table by date_last_played (descending) if no sort specified
     query_string = request.query_string.decode('utf-8')
-    if 'video_ratings' in path and not any(x in query_string for x in ['_sort', '_sort_desc']):
+
+    # Debug logging to see what path we're getting
+    logger.debug(f"Database proxy path: {path}")
+    logger.debug(f"Database proxy query_string: {query_string}")
+
+    # Check if viewing video_ratings table (could be in path or as table= parameter)
+    is_video_ratings_table = (
+        'video_ratings' in path.lower() or
+        'table=video_ratings' in query_string.lower() or
+        path.endswith('video_ratings')
+    )
+
+    if is_video_ratings_table and not any(x in query_string for x in ['_sort', '_sort_desc']):
         # Add default sort by date_last_played descending
+        logger.info("Auto-sorting video_ratings table by date_last_played")
         if query_string:
             query_string += '&_sort_desc=date_last_played'
         else:
