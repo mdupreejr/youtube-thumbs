@@ -501,6 +501,9 @@ class DatabaseConnection:
         """
         Migrate old pending videos that have ha_hash: IDs in yt_video_id column.
         These should be moved to ha_content_id column with yt_video_id set to NULL.
+
+        NOTE: This method is called from _ensure_schema() which already holds self._lock,
+        so we don't acquire the lock again to avoid deadlock.
         """
         try:
             # Check if video_ratings table exists
@@ -511,29 +514,28 @@ class DatabaseConnection:
                 return
 
             # Find all rows with ha_hash: in yt_video_id
-            with self._lock:
-                cursor = self._conn.execute(
-                    "SELECT COUNT(*) FROM video_ratings WHERE yt_video_id LIKE 'ha_hash:%'"
-                )
-                count = cursor.fetchone()[0]
+            # NOTE: Lock already held by caller (_ensure_schema)
+            cursor = self._conn.execute(
+                "SELECT COUNT(*) FROM video_ratings WHERE yt_video_id LIKE 'ha_hash:%'"
+            )
+            count = cursor.fetchone()[0]
 
-                if count == 0:
-                    # No old entries to migrate
-                    return
+            if count == 0:
+                # No old entries to migrate
+                return
 
-                logger.info(f"Migrating {count} old ha_hash entries from yt_video_id to ha_content_id")
+            logger.info(f"Migrating {count} old ha_hash entries from yt_video_id to ha_content_id")
 
-                with self._conn:
-                    # Move ha_hash IDs from yt_video_id to ha_content_id, set yt_video_id to NULL
-                    self._conn.execute("""
-                        UPDATE video_ratings
-                        SET ha_content_id = yt_video_id,
-                            yt_video_id = NULL,
-                            yt_match_pending = 1
-                        WHERE yt_video_id LIKE 'ha_hash:%'
-                    """)
+            # Move ha_hash IDs from yt_video_id to ha_content_id, set yt_video_id to NULL
+            self._conn.execute("""
+                UPDATE video_ratings
+                SET ha_content_id = yt_video_id,
+                    yt_video_id = NULL,
+                    yt_match_pending = 1
+                WHERE yt_video_id LIKE 'ha_hash:%'
+            """)
 
-                logger.info(f"Successfully migrated {count} ha_hash entries")
+            logger.info(f"Successfully migrated {count} ha_hash entries")
 
         except sqlite3.DatabaseError as exc:
             logger.error(f"Failed to migrate ha_hash entries: {exc}")
