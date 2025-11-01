@@ -148,51 +148,42 @@ class DatabaseConnection:
         with self._lock:
             try:
                 with self._conn:
+                    # Create all tables
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
-                    # PENDING_RATINGS_SCHEMA removed in v1.50.0 - now using video_ratings columns
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
                     self._conn.executescript(self.API_USAGE_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
 
-                    # Add ha_content_hash column if missing (for existing databases)
+                    # Ensure all required columns exist (handles both new and existing DBs)
                     self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')
-                    # Create index for ha_content_hash after column is added
+                    self._add_column_if_missing('video_ratings', 'pending_reason', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'ha_app_name', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'source', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'ha_content_id', 'TEXT')
+
+                    # Ensure matching status columns exist
+                    self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
+                    self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
+                    self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
+                    self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
+                    self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
+
+                    # Ensure rating queue columns exist
+                    self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
+                    self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
+                    self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
+                    self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
+                    self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
+
+                    # Create indexes
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
                     )
+                    self._conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
+                    )
 
-                    # Add pending_reason column if missing (for existing databases)
-                    self._add_column_if_missing('video_ratings', 'pending_reason', 'TEXT')
-
-                    # Migrate ha_channel to ha_artist (for existing databases)
-                    columns = self._table_columns('video_ratings')
-                    if 'ha_channel' in columns and 'ha_artist' not in columns:
-                        logger.info("Migrating ha_channel column to ha_artist")
-                        # SQLite doesn't support RENAME COLUMN directly in all versions
-                        # Add new column, copy data, drop old column
-                        self._conn.execute("ALTER TABLE video_ratings ADD COLUMN ha_artist TEXT")
-                        self._conn.execute("UPDATE video_ratings SET ha_artist = ha_channel")
-                        # Note: Cannot drop column in SQLite easily, so we leave ha_channel empty
-                        # New inserts will only use ha_artist
-
-                    # Add ha_app_name column if missing (for existing databases)
-                    self._add_column_if_missing('video_ratings', 'ha_app_name', 'TEXT')
-
-                    # v1.50.0 Migration: Consolidate pending_ratings into video_ratings
-                    self._migrate_to_unified_schema()
-
-                    # v1.58.0 Migration: Rename yt_rating_* to yt_match_* and remove pending_match
-                    self._migrate_to_match_columns()
-
-                    # v1.58.1 Migration: Fix NULL yt_match_pending values
-                    self._fix_match_pending_nulls()
-
-                    # v1.58.5 Migration: Ensure all required columns exist
-                    self._ensure_required_columns()
-
-                    # v1.58.6 Migration: Drop deprecated yt_rating_* columns
-                    self._drop_deprecated_columns()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -227,325 +218,6 @@ class DatabaseConnection:
             logger.info(f"Adding missing column {column} to {table} table")
             with self._conn:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
-
-    def _column_allows_null(self, table: str, column: str) -> bool:
-        """Check if a column allows NULL values by examining table schema."""
-        table_info = self._table_info(table)
-        for col_info in table_info:
-            if col_info['name'] == column:
-                # notnull is 0 if NULL allowed, 1 if NOT NULL
-                return col_info['notnull'] == 0
-        return True  # If column not found, assume it allows NULL
-
-    def _migrate_to_unified_schema(self) -> None:
-        """
-        v1.50.0 Migration: Consolidate database schema
-        1. Add ha_content_id column for pending video placeholders
-        2. Add yt_rating_pending columns for rating queue with retry logic
-        3. Migrate ha_hash:* IDs to ha_content_id and set yt_video_id to NULL
-        4. Migrate pending_ratings table data to video_ratings columns
-        5. Drop pending_ratings table
-        """
-        columns = self._table_columns('video_ratings')
-
-        # Check if migration already completed
-        if 'ha_content_id' in columns and 'yt_rating_pending' in columns:
-            # Check if pending_ratings table still exists
-            try:
-                self._conn.execute("SELECT 1 FROM pending_ratings LIMIT 1")
-                # Table exists, need to complete migration
-                logger.info("Completing v1.50.0 migration (pending_ratings table cleanup)")
-            except sqlite3.OperationalError:
-                # Table doesn't exist, migration already done
-                return
-
-        logger.info("Starting v1.50.0 database schema migration")
-
-        with self._conn:
-            # Step 1: Add new columns to video_ratings
-            self._add_column_if_missing('video_ratings', 'ha_content_id', 'TEXT')
-            self._add_column_if_missing('video_ratings', 'yt_rating_pending', 'TEXT')
-            self._add_column_if_missing('video_ratings', 'yt_rating_requested_at', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'yt_rating_attempts', 'INTEGER')
-            self._add_column_if_missing('video_ratings', 'yt_rating_last_attempt', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'yt_rating_last_error', 'TEXT')
-
-            # Step 2: Migrate ha_hash:* IDs to ha_content_id
-            # Check if there are any ha_hash entries and if yt_video_id allows NULL
-            cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings WHERE yt_video_id LIKE 'ha_hash:%'")
-            ha_hash_count = cursor.fetchone()[0]
-
-            if ha_hash_count > 0:
-                logger.info(f"Found {ha_hash_count} ha_hash entries to migrate")
-
-                # Check if yt_video_id allows NULL
-                if self._column_allows_null('video_ratings', 'yt_video_id'):
-                    # Column allows NULL, safe to migrate
-                    cursor = self._conn.execute(
-                        """
-                        UPDATE video_ratings
-                        SET ha_content_id = yt_video_id,
-                            yt_video_id = NULL
-                        WHERE yt_video_id LIKE 'ha_hash:%'
-                        """
-                    )
-                    logger.info(f"Migrated {cursor.rowcount} ha_hash IDs to ha_content_id column")
-                else:
-                    # Column has NOT NULL constraint - copy to ha_content_id but keep in yt_video_id
-                    logger.warning("yt_video_id has NOT NULL constraint - copying ha_hash values to ha_content_id without removing from yt_video_id")
-                    cursor = self._conn.execute(
-                        """
-                        UPDATE video_ratings
-                        SET ha_content_id = yt_video_id
-                        WHERE yt_video_id LIKE 'ha_hash:%'
-                        """
-                    )
-                    logger.info(f"Copied {cursor.rowcount} ha_hash IDs to ha_content_id column (kept in yt_video_id due to NOT NULL constraint)")
-                    logger.warning("NOTE: ha_hash values remain in yt_video_id column - upgrade database schema to allow NULL if full migration is needed")
-
-            # Step 3: Migrate pending_ratings data to video_ratings
-            try:
-                # Check if pending_ratings table exists
-                cursor = self._conn.execute("SELECT COUNT(*) FROM pending_ratings")
-                pending_count = cursor.fetchone()[0]
-
-                if pending_count > 0:
-                    logger.info(f"Migrating {pending_count} pending ratings to video_ratings")
-
-                    # Migrate data
-                    self._conn.execute(
-                        """
-                        UPDATE video_ratings
-                        SET yt_rating_pending = (
-                                SELECT rating FROM pending_ratings
-                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
-                            ),
-                            yt_rating_requested_at = (
-                                SELECT requested_at FROM pending_ratings
-                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
-                            ),
-                            yt_rating_attempts = (
-                                SELECT attempts FROM pending_ratings
-                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
-                            ),
-                            yt_rating_last_attempt = (
-                                SELECT last_attempt FROM pending_ratings
-                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
-                            ),
-                            yt_rating_last_error = (
-                                SELECT last_error FROM pending_ratings
-                                WHERE pending_ratings.yt_video_id = video_ratings.yt_video_id
-                            )
-                        WHERE yt_video_id IN (SELECT yt_video_id FROM pending_ratings)
-                        """
-                    )
-                    logger.info("Successfully migrated pending ratings data")
-
-                # Step 4: Drop pending_ratings table
-                self._conn.execute("DROP TABLE IF EXISTS pending_ratings")
-                logger.info("Dropped pending_ratings table")
-
-            except sqlite3.OperationalError as e:
-                if "no such table" in str(e).lower():
-                    logger.info("pending_ratings table already dropped, skipping migration step")
-                else:
-                    raise
-
-            # Step 5: Create index for ha_content_id (v1.50.0 column)
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
-            )
-            logger.info("Created index on ha_content_id column")
-
-        logger.info("Completed v1.50.0 database schema migration")
-
-    def _migrate_to_match_columns(self) -> None:
-        """
-        v1.58.0 Migration: Separate matching status from rating queue
-        1. Create yt_match_* columns for YouTube matching status
-        2. Create rating_queue_* columns for like/dislike queue
-        3. Migrate pending_match → yt_match_pending (0=matched, 1=pending)
-        4. Migrate yt_rating_* → rating_queue_* (rating queue data)
-        5. Leave old columns for backwards compatibility
-        """
-        columns = self._table_columns('video_ratings')
-
-        # Check if migration already completed
-        if 'yt_match_pending' in columns and 'rating_queue_pending' in columns:
-            return
-
-        logger.info("Starting v1.58.0 database schema migration (separate matching from rating queue)")
-
-        with self._conn:
-            # Add new match status columns
-            self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
-            self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
-            self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
-
-            # Add new rating queue columns
-            self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
-            self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
-            self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
-            self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
-
-            # Migrate matching status from pending_match
-            # Set yt_match_pending based on whether video has been matched to YouTube
-            self._conn.execute(
-                """
-                UPDATE video_ratings
-                SET yt_match_pending = CASE
-                    WHEN yt_video_id IS NOT NULL THEN 0
-                    WHEN yt_video_id IS NULL THEN 1
-                    ELSE 1
-                END
-                WHERE yt_match_pending IS NULL
-                """
-            )
-            logger.info("Set yt_match_pending based on yt_video_id status")
-
-            # Migrate rating queue from yt_rating_*
-            if 'yt_rating_pending' in columns:
-                self._conn.execute(
-                    """
-                    UPDATE video_ratings
-                    SET rating_queue_pending = yt_rating_pending,
-                        rating_queue_requested_at = yt_rating_requested_at,
-                        rating_queue_attempts = COALESCE(yt_rating_attempts, 0),
-                        rating_queue_last_attempt = yt_rating_last_attempt,
-                        rating_queue_last_error = yt_rating_last_error
-                    WHERE rating_queue_pending IS NULL AND yt_rating_pending IS NOT NULL
-                    """
-                )
-                logger.info("Migrated yt_rating_* → rating_queue_*")
-
-            # Note: SQLite doesn't support DROP COLUMN easily before version 3.35.0
-            # We'll leave the old columns in place but stop using them
-            logger.warning("Old columns (yt_rating_*, pending_match) left in place for backwards compatibility")
-            logger.warning("These columns are no longer used and can be manually dropped if needed")
-
-        logger.info("Completed v1.58.0 database schema migration")
-
-    def _fix_match_pending_nulls(self) -> None:
-        """
-        v1.58.1 Migration: Fix NULL yt_match_pending values from incomplete v1.58.0 migration.
-        Sets yt_match_pending based on whether video has been matched to YouTube.
-        """
-        columns = self._table_columns('video_ratings')
-
-        if 'yt_match_pending' not in columns:
-            # Column doesn't exist, nothing to fix
-            return
-
-        with self._conn:
-            # Check if there are NULL values that need fixing
-            cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings WHERE yt_match_pending IS NULL")
-            null_count = cursor.fetchone()[0]
-
-            if null_count == 0:
-                # No NULL values, migration already completed
-                return
-
-            logger.info(f"v1.58.1 Migration: Fixing {null_count} NULL yt_match_pending values")
-
-            # Set yt_match_pending based on whether video has yt_video_id
-            self._conn.execute(
-                """
-                UPDATE video_ratings
-                SET yt_match_pending = CASE
-                    WHEN yt_video_id IS NOT NULL THEN 0
-                    WHEN yt_video_id IS NULL THEN 1
-                    ELSE 1
-                END
-                WHERE yt_match_pending IS NULL
-                """
-            )
-
-            logger.info("Completed v1.58.1 migration - yt_match_pending values fixed")
-
-            # Drop pending_match column if it exists
-            if 'pending_match' in columns:
-                try:
-                    # Try to drop the column (requires SQLite 3.35.0+)
-                    self._conn.execute("ALTER TABLE video_ratings DROP COLUMN pending_match")
-                    logger.info("Dropped pending_match column")
-                except sqlite3.OperationalError as e:
-                    # SQLite version doesn't support DROP COLUMN
-                    logger.warning(f"Cannot drop pending_match column: {e}")
-                    logger.warning("Column will remain but is unused - requires SQLite 3.35.0+ to drop")
-
-    def _ensure_required_columns(self) -> None:
-        """
-        v1.58.5 Migration: Ensure all required columns exist.
-        Adds back columns that may have been accidentally dropped during manual cleanup.
-        """
-        logger.info("v1.58.5 Migration: Checking for required columns")
-
-        # Ensure yt_match_* columns all exist
-        self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
-        self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
-        self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
-        self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
-        self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
-
-        # Ensure rating_queue_* columns all exist
-        self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
-        self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
-        self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
-        self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
-        self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
-
-        logger.info("Completed v1.58.5 migration - all required columns verified")
-
-    def _drop_deprecated_columns(self) -> None:
-        """
-        v1.58.6 Migration: Drop deprecated yt_rating_* columns.
-        These columns were replaced by yt_match_* and rating_queue_* in v1.58.0.
-        Requires SQLite 3.35.0+ for DROP COLUMN support.
-        """
-        logger.info("v1.58.6 Migration: Dropping deprecated yt_rating_* columns")
-
-        columns_to_drop = [
-            'yt_rating_pending',
-            'yt_rating_requested_at',
-            'yt_rating_attempts',
-            'yt_rating_last_attempt',
-            'yt_rating_last_error'
-        ]
-
-        existing_columns = self._table_columns('video_ratings')
-        dropped = []
-        failed = []
-
-        for column in columns_to_drop:
-            if column not in existing_columns:
-                logger.info(f"Column {column} already dropped, skipping")
-                continue
-
-            try:
-                with self._conn:
-                    self._conn.execute(f"ALTER TABLE video_ratings DROP COLUMN {column}")
-                logger.info(f"Dropped deprecated column: {column}")
-                dropped.append(column)
-            except sqlite3.OperationalError as e:
-                if 'no such column' in str(e).lower():
-                    logger.info(f"Column {column} already dropped")
-                elif 'drop column' in str(e).lower():
-                    logger.warning(f"Cannot drop {column}: SQLite version doesn't support DROP COLUMN (requires 3.35.0+)")
-                    failed.append(column)
-                else:
-                    logger.warning(f"Failed to drop {column}: {e}")
-                    failed.append(column)
-
-        if dropped:
-            logger.info(f"Successfully dropped {len(dropped)} deprecated columns: {', '.join(dropped)}")
-        if failed:
-            logger.warning(f"Could not drop {len(failed)} columns (requires SQLite 3.35.0+): {', '.join(failed)}")
-            logger.warning("These columns are unused and can remain - they don't affect functionality")
-
-        logger.info("Completed v1.58.6 migration")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
