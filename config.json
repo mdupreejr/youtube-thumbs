@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.64.9",
+  "version": "1.65.0",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/mdupreejr/youtube-thumbs",
@@ -30,7 +30,9 @@
     "history_poll_interval": 60,
     "force_quota_unlock": false,
     "pending_video_retry_enabled": true,
-    "pending_video_retry_batch_size": 50
+    "pending_video_retry_batch_size": 50,
+    "search_max_results": 25,
+    "search_max_candidates": 10
   },
   "schema": {
     "media_player_entity": "str",
@@ -46,6 +48,8 @@
     "history_poll_interval": "int(10,300)?",
     "force_quota_unlock": "bool?",
     "pending_video_retry_enabled": "bool?",
-    "pending_video_retry_batch_size": "int(1,500)?"
+    "pending_video_retry_batch_size": "int(1,500)?",
+    "search_max_results": "int(1,50)?",
+    "search_max_candidates": "int(1,50)?"
   }
 }

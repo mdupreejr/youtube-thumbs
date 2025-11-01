@@ -51,6 +51,17 @@ export HISTORY_POLL_INTERVAL=$(bashio::config 'history_poll_interval')
 export PENDING_VIDEO_RETRY_ENABLED=$(bashio::config 'pending_video_retry_enabled')
 export PENDING_VIDEO_RETRY_BATCH_SIZE=$(bashio::config 'pending_video_retry_batch_size')
 
+# YouTube search configuration
+SEARCH_MAX_RESULTS_CONFIG=$(bashio::config 'search_max_results')
+if bashio::var.has_value "${SEARCH_MAX_RESULTS_CONFIG}" && [ "${SEARCH_MAX_RESULTS_CONFIG}" != "null" ]; then
+    export YTT_SEARCH_MAX_RESULTS="${SEARCH_MAX_RESULTS_CONFIG}"
+fi
+
+SEARCH_MAX_CANDIDATES_CONFIG=$(bashio::config 'search_max_candidates')
+if bashio::var.has_value "${SEARCH_MAX_CANDIDATES_CONFIG}" && [ "${SEARCH_MAX_CANDIDATES_CONFIG}" != "null" ]; then
+    export YTT_SEARCH_MAX_CANDIDATES="${SEARCH_MAX_CANDIDATES_CONFIG}"
+fi
+
 if bashio::config.true 'force_quota_unlock'; then
     export YTT_FORCE_QUOTA_UNLOCK=1
     bashio::log.warning "force_quota_unlock enabled; quota guard state will be cleared on startup"
