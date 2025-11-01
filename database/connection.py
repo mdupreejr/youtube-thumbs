@@ -101,6 +101,16 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_api_usage_method ON api_usage(api_method);
     """
 
+    STATS_CACHE_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS stats_cache (
+            cache_key TEXT PRIMARY KEY,
+            cache_data TEXT NOT NULL,
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_stats_cache_expires ON stats_cache(expires_at);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -135,6 +145,7 @@ class DatabaseConnection:
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
                     self._conn.executescript(self.API_USAGE_SCHEMA)
+                    self._conn.executescript(self.STATS_CACHE_SCHEMA)
 
                     # Add ha_content_hash column if missing (for existing databases)
                     self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')
@@ -168,7 +179,7 @@ class DatabaseConnection:
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage', 'stats_cache'}
         if table not in VALID_TABLES:
             raise ValueError(f"Invalid table name: {table}")
 
@@ -181,7 +192,7 @@ class DatabaseConnection:
     def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
         """Add a column to a table if it doesn't exist."""
         # Validate inputs to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage', 'stats_cache'}
         VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
 
         if table not in VALID_TABLES:

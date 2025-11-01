@@ -5,6 +5,7 @@ import os
 import time
 import traceback
 import requests
+from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
@@ -1183,8 +1184,97 @@ def get_recommendations_api() -> Response:
 
 @app.route('/stats')
 def stats_page() -> str:
-    """Render the statistics and analytics page."""
-    return render_template('stats.html')
+    """
+    Server-side rendered statistics page.
+    All processing done on server, no client-side JavaScript required.
+    """
+    try:
+        # Check cache first (5 minute TTL)
+        cached = db.get_cached_stats('stats_page')
+        if cached:
+            return render_template('stats_server.html', **cached)
+
+        # Fetch fresh data
+        summary = db.get_stats_summary()
+        most_played = db.get_most_played(10)
+        top_channels = db.get_top_channels(10)
+        recent = db.get_recent_activity(15)
+
+        # Calculate rating percentages
+        total = summary['liked'] + summary['disliked'] + summary['unrated']
+        if total > 0:
+            rating_percentages = {
+                'liked': (summary['liked'] / total) * 100,
+                'disliked': (summary['disliked'] / total) * 100,
+                'unrated': (summary['unrated'] / total) * 100
+            }
+        else:
+            rating_percentages = {'liked': 0, 'disliked': 0, 'unrated': 0}
+
+        # Format recent activity
+        recent_activity = []
+        for item in recent:
+            title = (item.get('ha_title') or item.get('yt_title') or 'Unknown').strip() or 'Unknown'
+            artist = (item.get('ha_artist') or item.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+
+            # Calculate time ago
+            if item.get('date_last_played'):
+                try:
+                    played_dt = datetime.fromisoformat(item['date_last_played'].replace(' ', 'T'))
+                    delta = datetime.now() - played_dt
+                    if delta.days > 0:
+                        time_ago = f"{delta.days}d ago"
+                    elif delta.seconds >= 3600:
+                        time_ago = f"{delta.seconds // 3600}h ago"
+                    elif delta.seconds >= 60:
+                        time_ago = f"{delta.seconds // 60}m ago"
+                    else:
+                        time_ago = "Just now"
+                except:
+                    time_ago = "Recently"
+            else:
+                time_ago = "Recently"
+
+            rating_icons = {'like': '👍', 'dislike': '👎', 'none': '➖'}
+            rating_icon = rating_icons.get(item.get('rating', 'none'), '➖')
+
+            recent_activity.append({
+                'title': title,
+                'artist': artist,
+                'time_ago': time_ago,
+                'rating_icon': rating_icon
+            })
+
+        # Format most played
+        formatted_most_played = []
+        for video in most_played:
+            title = (video.get('ha_title') or video.get('yt_title') or 'Unknown').strip() or 'Unknown'
+            artist = (video.get('ha_artist') or video.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+            formatted_most_played.append({
+                'title': title,
+                'artist': artist,
+                'play_count': video.get('play_count', 0)
+            })
+
+        # Prepare template data
+        template_data = {
+            'summary': summary,
+            'rating_percentages': rating_percentages,
+            'most_played': formatted_most_played,
+            'top_channels': top_channels,
+            'recent_activity': recent_activity,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        # Cache for 5 minutes
+        db.set_cached_stats('stats_page', template_data, ttl_seconds=300)
+
+        return render_template('stats_server.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering stats page: {e}")
+        logger.error(traceback.format_exc())
+        return f"<h1>Error loading statistics</h1><p>{str(e)}</p>", 500
 
 
 @app.route('/database', defaults={'path': ''})

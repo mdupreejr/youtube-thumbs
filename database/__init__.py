@@ -12,6 +12,7 @@ from .import_operations import ImportOperations
 from .not_found_operations import NotFoundOperations
 from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
+from .stats_cache_operations import StatsCacheOperations
 
 
 class Database:
@@ -36,6 +37,7 @@ class Database:
         self._not_found_ops = NotFoundOperations(self._connection)
         self._stats_ops = StatsOperations(self._connection)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
+        self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
 
     # Connection methods
     def _table_info(self, table: str):
@@ -213,6 +215,19 @@ class Database:
     def get_api_hourly_usage(self, date_str: str = None) -> List[Dict[str, Any]]:
         """Get hourly API usage for a specific day."""
         return self._api_usage_ops.get_hourly_usage(date_str)
+
+    # Stats Cache Operations
+    def get_cached_stats(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve cached statistics."""
+        return self._stats_cache_ops.get_cached_stats(cache_key)
+
+    def set_cached_stats(self, cache_key: str, data: Dict[str, Any], ttl_seconds: int = 300) -> None:
+        """Store statistics in cache."""
+        return self._stats_cache_ops.set_cached_stats(cache_key, data, ttl_seconds)
+
+    def invalidate_stats_cache(self, cache_key: Optional[str] = None) -> None:
+        """Invalidate cached statistics."""
+        return self._stats_cache_ops.invalidate_cache(cache_key)
 
 
 # Singleton instance management
