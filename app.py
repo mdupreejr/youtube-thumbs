@@ -1453,6 +1453,8 @@ def database_proxy(path):
     if query_string:
         target_url += f"?{query_string}"
 
+    logger.debug(f"Final target URL for sqlite_web: {target_url}")
+
     try:
         # Forward the request to sqlite_web
         resp = requests.request(
