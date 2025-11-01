@@ -190,6 +190,9 @@ class DatabaseConnection:
 
                     # v1.58.5 Migration: Ensure all required columns exist
                     self._ensure_required_columns()
+
+                    # v1.58.6 Migration: Drop deprecated yt_rating_* columns
+                    self._drop_deprecated_columns()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -495,6 +498,54 @@ class DatabaseConnection:
         self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
 
         logger.info("Completed v1.58.5 migration - all required columns verified")
+
+    def _drop_deprecated_columns(self) -> None:
+        """
+        v1.58.6 Migration: Drop deprecated yt_rating_* columns.
+        These columns were replaced by yt_match_* and rating_queue_* in v1.58.0.
+        Requires SQLite 3.35.0+ for DROP COLUMN support.
+        """
+        logger.info("v1.58.6 Migration: Dropping deprecated yt_rating_* columns")
+
+        columns_to_drop = [
+            'yt_rating_pending',
+            'yt_rating_requested_at',
+            'yt_rating_attempts',
+            'yt_rating_last_attempt',
+            'yt_rating_last_error'
+        ]
+
+        existing_columns = self._table_columns('video_ratings')
+        dropped = []
+        failed = []
+
+        for column in columns_to_drop:
+            if column not in existing_columns:
+                logger.info(f"Column {column} already dropped, skipping")
+                continue
+
+            try:
+                with self._conn:
+                    self._conn.execute(f"ALTER TABLE video_ratings DROP COLUMN {column}")
+                logger.info(f"Dropped deprecated column: {column}")
+                dropped.append(column)
+            except sqlite3.OperationalError as e:
+                if 'no such column' in str(e).lower():
+                    logger.info(f"Column {column} already dropped")
+                elif 'drop column' in str(e).lower():
+                    logger.warning(f"Cannot drop {column}: SQLite version doesn't support DROP COLUMN (requires 3.35.0+)")
+                    failed.append(column)
+                else:
+                    logger.warning(f"Failed to drop {column}: {e}")
+                    failed.append(column)
+
+        if dropped:
+            logger.info(f"Successfully dropped {len(dropped)} deprecated columns: {', '.join(dropped)}")
+        if failed:
+            logger.warning(f"Could not drop {len(failed)} columns (requires SQLite 3.35.0+): {', '.join(failed)}")
+            logger.warning("These columns are unused and can remain - they don't affect functionality")
+
+        logger.info("Completed v1.58.6 migration")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
