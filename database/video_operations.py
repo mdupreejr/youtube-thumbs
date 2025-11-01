@@ -184,10 +184,17 @@ class VideoOperations:
                         old_rating = current['rating'] or 'none'
                         current_score = current['rating_score'] or 0
 
-                        # Calculate score change based on transition
-                        old_value = 1 if old_rating == 'like' else (-1 if old_rating == 'dislike' else 0)
-                        new_value = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
-                        score_delta = new_value - old_value
+                        # Calculate score change
+                        # If rating the same thing again, add to the score (+1 for like, -1 for dislike)
+                        # If changing rating, calculate delta from old to new
+                        if rating == old_rating:
+                            # Same rating - increment score in same direction
+                            score_delta = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
+                        else:
+                            # Rating changed - calculate transition delta
+                            old_value = 1 if old_rating == 'like' else (-1 if old_rating == 'dislike' else 0)
+                            new_value = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
+                            score_delta = new_value - old_value
 
                         if increment_counter and score_delta != 0:
                             self._conn.execute(
