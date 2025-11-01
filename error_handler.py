@@ -4,7 +4,6 @@ Standardized error handling utilities for consistent error management.
 
 from typing import Optional, Any, Callable
 from functools import wraps
-import sqlite3
 from logger import logger
 
 
@@ -86,103 +85,6 @@ def log_and_reraise(
     if as_type:
         raise as_type(f"{message}: {exc}") from exc
     raise
-
-
-def handle_database_error(
-    operation: str,
-    critical: bool = False
-) -> Callable:
-    """
-    Decorator for consistent database error handling.
-
-    Args:
-        operation: Description of the database operation
-        critical: Whether this is a critical operation that should re-raise
-
-    Returns:
-        Decorated function
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except sqlite3.DatabaseError as exc:
-                error_msg = f"Database {operation} failed"
-
-                # Critical errors should be re-raised
-                if critical or "no such table" in str(exc).lower():
-                    log_and_reraise(
-                        exc, error_msg,
-                        level="critical" if critical else "error",
-                        as_type=DatabaseError
-                    )
-
-                # Non-critical errors can be suppressed with proper logging
-                return log_and_suppress(
-                    exc, error_msg,
-                    level="error",
-                    return_value=None if func.__name__ != 'record_play' else False
-                )
-            except Exception as exc:
-                # Unexpected errors should always be logged
-                return log_and_suppress(
-                    exc, f"Unexpected error during {operation}",
-                    level="error",
-                    return_value=None if func.__name__ != 'record_play' else False
-                )
-        return wrapper
-    return decorator
-
-
-def handle_api_error(
-    api_name: str,
-    operation: str,
-    default_return: Any = None
-) -> Callable:
-    """
-    Decorator for consistent API error handling.
-
-    Args:
-        api_name: Name of the API (YouTube, Home Assistant)
-        operation: Description of the API operation
-        default_return: Default value to return on error
-
-    Returns:
-        Decorated function
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as exc:
-                # Check for quota errors (critical)
-                if 'quota' in str(exc).lower():
-                    log_and_suppress(
-                        exc, f"{api_name} API quota exceeded during {operation}",
-                        level="critical",
-                        return_value=default_return
-                    )
-                    # Could trigger quota guard here
-                    return default_return
-
-                # Check for auth errors (critical)
-                if any(word in str(exc).lower() for word in ['auth', 'credential', 'token']):
-                    log_and_reraise(
-                        exc, f"{api_name} API authentication failed during {operation}",
-                        level="critical",
-                        as_type=APIError
-                    )
-
-                # Other API errors are logged but not critical
-                return log_and_suppress(
-                    exc, f"{api_name} API error during {operation}",
-                    level="error",
-                    return_value=default_return
-                )
-        return wrapper
-    return decorator
 
 
 def validate_environment_variable(

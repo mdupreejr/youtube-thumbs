@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 
 from logger import logger
 from video_helpers import get_content_hash
-from error_handler import handle_database_error, log_and_suppress
+from error_handler import log_and_suppress
 
 
 class VideoOperations:

@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import logger
 from quota_guard import quota_guard
-from error_handler import handle_api_error, log_and_suppress, validate_environment_variable
+from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
 
 class YouTubeAPI:
