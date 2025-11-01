@@ -39,7 +39,5 @@ configuration:
     name: Pending video retry batch size
     description: Maximum number of pending videos to retry per quota recovery event (1-500). Helps prevent re-exhausting quota immediately after recovery.
 network:
-  21812/tcp:
-    description: Rating API used by /thumbs_up and /thumbs_down commands.
-  8080/tcp:
-    description: sqlite_web database UI.
+  21812/tcp: "Rating API used by /thumbs_up and /thumbs_down commands."
+  8080/tcp: "sqlite_web database UI."

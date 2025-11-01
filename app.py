@@ -236,6 +236,7 @@ def _pending_retry_batch_size() -> int:
         return 50
 
 
+logger.info("Initializing history tracker...")
 history_tracker = HistoryTracker(
     ha_api=ha_api,
     database=db,
@@ -244,8 +245,10 @@ history_tracker = HistoryTracker(
     poll_interval=_history_poll_interval(),
     enabled=_history_tracker_enabled(),
 )
+logger.info("Starting history tracker...")
 history_tracker.start()
 atexit.register(history_tracker.stop)
+logger.info("History tracker started successfully")
 
 
 def _probe_youtube_api() -> bool:
@@ -277,6 +280,7 @@ def _probe_youtube_api() -> bool:
         return False
 
 
+logger.info("Initializing quota prober...")
 quota_prober = QuotaProber(
     quota_guard=quota_guard,
     probe_func=_probe_youtube_api,
@@ -288,13 +292,18 @@ quota_prober = QuotaProber(
     retry_batch_size=_pending_retry_batch_size(),
     metrics_tracker=metrics,
 )
+logger.info("Starting quota prober...")
 quota_prober.start()
 atexit.register(quota_prober.stop)
+logger.info("Quota prober started successfully")
 
 # Start stats refresher background task (refreshes every hour)
+logger.info("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
+logger.info("Starting stats refresher...")
 stats_refresher.start()
 atexit.register(stats_refresher.stop)
+logger.info("Stats refresher started successfully")
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:
