@@ -42,7 +42,18 @@ class StatsCacheOperations:
                 return None
 
             # Check if expired
-            expires_at = datetime.fromisoformat(result['expires_at'].replace(' ', 'T'))
+            # Handle both string and datetime types (SQLite may return either)
+            expires_at_raw = result['expires_at']
+            if isinstance(expires_at_raw, str):
+                expires_at = datetime.fromisoformat(expires_at_raw.replace(' ', 'T'))
+            elif isinstance(expires_at_raw, datetime):
+                expires_at = expires_at_raw
+            else:
+                # Invalid type, delete cache entry and return None
+                self._conn.execute("DELETE FROM stats_cache WHERE cache_key = ?", (cache_key,))
+                self._conn.commit()
+                return None
+
             if datetime.utcnow() > expires_at:
                 # Expired, delete and return None
                 self._conn.execute("DELETE FROM stats_cache WHERE cache_key = ?", (cache_key,))
