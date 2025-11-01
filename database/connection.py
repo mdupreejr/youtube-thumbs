@@ -124,8 +124,11 @@ class DatabaseConnection:
     """
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
+        import sys
+        print(f"=== DatabaseConnection: Initializing with path {db_path} ===", file=sys.stderr, flush=True)
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        print("=== DatabaseConnection: Connecting to SQLite ===", file=sys.stderr, flush=True)
         self._conn = sqlite3.connect(
             self.db_path,
             check_same_thread=False,
@@ -133,10 +136,15 @@ class DatabaseConnection:
         )
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        print("=== DatabaseConnection: Connected ===", file=sys.stderr, flush=True)
 
+        print("=== DatabaseConnection: Configuring ===", file=sys.stderr, flush=True)
         self._configure()
+        print("=== DatabaseConnection: Ensuring schema ===", file=sys.stderr, flush=True)
         self._ensure_schema()
+        print("=== DatabaseConnection: Normalizing timestamps ===", file=sys.stderr, flush=True)
         self._normalize_existing_timestamps()
+        print("=== DatabaseConnection: Initialization complete ===", file=sys.stderr, flush=True)
 
     def _configure(self) -> None:
         """Set SQLite pragmas for durability and concurrency."""
@@ -149,27 +157,37 @@ class DatabaseConnection:
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not exist."""
+        import sys
+        print("=== _ensure_schema: Starting ===", file=sys.stderr, flush=True)
         with self._lock:
             try:
                 with self._conn:
                     # Create all tables
+                    print("=== _ensure_schema: Creating video_ratings table ===", file=sys.stderr, flush=True)
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
+                    print("=== _ensure_schema: Creating import_history table ===", file=sys.stderr, flush=True)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     # v1.64.0: Removed not_found_searches table - now using video_ratings
 
                     # v1.64.6: Migrate video_ratings table to remove NOT NULL from yt_video_id
+                    print("=== _ensure_schema: Migrating video_ratings nullable_id ===", file=sys.stderr, flush=True)
                     self._migrate_video_ratings_nullable_id()
 
                     # v1.64.6: Clean up old ha_hash entries in yt_video_id column
+                    print("=== _ensure_schema: Migrating ha_hash entries ===", file=sys.stderr, flush=True)
                     self._migrate_ha_hash_entries()
 
                     # Migrate api_usage table if needed
+                    print("=== _ensure_schema: Migrating api_usage table ===", file=sys.stderr, flush=True)
                     self._migrate_api_usage_table()
 
                     # v1.64.3: Drop deprecated not_found_searches table if it exists
+                    print("=== _ensure_schema: Dropping not_found_searches table ===", file=sys.stderr, flush=True)
                     self._drop_not_found_searches_table()
 
+                    print("=== _ensure_schema: Creating api_usage schema ===", file=sys.stderr, flush=True)
                     self._conn.executescript(self.API_USAGE_SCHEMA)
+                    print("=== _ensure_schema: Creating stats_cache schema ===", file=sys.stderr, flush=True)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
 
                     # Ensure all required columns exist (handles both new and existing DBs)
@@ -194,14 +212,17 @@ class DatabaseConnection:
                     self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
 
                     # Create indexes
+                    print("=== _ensure_schema: Creating indexes ===", file=sys.stderr, flush=True)
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
                     )
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
                     )
+                    print("=== _ensure_schema: Completed successfully ===", file=sys.stderr, flush=True)
 
             except sqlite3.DatabaseError as exc:
+                print(f"=== _ensure_schema: FAILED with error: {exc} ===", file=sys.stderr, flush=True)
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
 
