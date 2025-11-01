@@ -67,14 +67,16 @@ class VideoOperations:
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
-            play_count, rating_score, yt_match_pending, pending_reason, source
+            play_count, rating_score, yt_match_pending, pending_reason, source,
+            yt_match_requested_at, yt_match_attempts, yt_match_last_attempt, yt_match_last_error
         )
         VALUES (
             :yt_video_id, :ha_content_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
-            0, 0, :yt_match_pending, :pending_reason, :source
+            0, 0, :yt_match_pending, :pending_reason, :source,
+            :yt_match_requested_at, :yt_match_attempts, :yt_match_last_attempt, :yt_match_last_error
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_content_id=excluded.ha_content_id,
@@ -95,6 +97,10 @@ class VideoOperations:
             yt_url=excluded.yt_url,
             ha_content_hash=excluded.ha_content_hash,
             yt_match_pending=excluded.yt_match_pending,
+            yt_match_requested_at=excluded.yt_match_requested_at,
+            yt_match_attempts=excluded.yt_match_attempts,
+            yt_match_last_attempt=excluded.yt_match_last_attempt,
+            yt_match_last_error=excluded.yt_match_last_error,
             pending_reason=excluded.pending_reason,
             source=excluded.source;
         """

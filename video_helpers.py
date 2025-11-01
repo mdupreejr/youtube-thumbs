@@ -3,6 +3,7 @@ Helper functions for video operations.
 """
 import hashlib
 import re
+from datetime import datetime
 from typing import Dict, Any, Optional
 
 
@@ -27,6 +28,9 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     ha_artist = ha_media.get('artist', 'Unknown')
     ha_content_id = get_content_hash(ha_title, ha_duration, ha_artist)
 
+    # Current timestamp for match tracking
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
     return {
         'yt_video_id': yt_video_id,
         'ha_content_id': ha_content_id,
@@ -46,6 +50,12 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
         'yt_duration': video.get('duration'),
         'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
         'source': source,
+        # YouTube matching status - video successfully matched
+        'yt_match_pending': 0,
+        'yt_match_requested_at': now,
+        'yt_match_attempts': 1,
+        'yt_match_last_attempt': now,
+        'yt_match_last_error': None,
     }
 
 
