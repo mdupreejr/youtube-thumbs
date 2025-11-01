@@ -9,7 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
-from youtube_api import get_youtube_api
+from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
 from history_tracker import HistoryTracker
 from quota_guard import quota_guard
@@ -87,6 +87,9 @@ def handle_exception(e):
     return html, 500
 
 db = get_database()
+
+# Inject database into youtube_api module for API usage tracking
+set_youtube_api_database(db)
 
 # Initialize and register data API blueprint
 init_data_api_routes(db)

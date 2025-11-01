@@ -13,6 +13,14 @@ from quota_guard import quota_guard
 from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
 
+# Global database instance for API usage tracking (injected from app.py)
+_db = None
+
+def set_database(db):
+    """Set the database instance for API usage tracking."""
+    global _db
+    _db = db
+
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
 
@@ -338,6 +346,10 @@ class YouTubeAPI:
                 fields=self.SEARCH_FIELDS,
             ).execute()
 
+            # Track API usage
+            if _db:
+                _db.record_api_call('search', success=True, quota_cost=100)
+
             items = response.get('items', [])
             if not items:
                 logger.error(f"No videos found globally for: '{title}'")
@@ -351,6 +363,10 @@ class YouTubeAPI:
                 id=','.join(video_ids),
                 fields=self.VIDEO_FIELDS,
             ).execute()
+
+            # Track API usage
+            if _db:
+                _db.record_api_call('videos.list', success=True, quota_cost=1)
 
             # Process search results and filter by duration
             candidates = []
@@ -446,6 +462,10 @@ class YouTubeAPI:
         )
         request.execute()
 
+        # Track API usage
+        if _db:
+            _db.record_api_call('videos.rate', success=True, quota_cost=50)
+
         logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
         # Record successful API call for quota recovery tracking
         quota_guard.record_success()
@@ -487,6 +507,10 @@ class YouTubeAPI:
                     id=','.join(batch)
                 )
                 response = request.execute()
+
+                # Track API usage
+                if _db:
+                    _db.record_api_call('videos.list', success=True, quota_cost=1)
 
                 # Process response
                 for item in response.get('items', []):
