@@ -2,6 +2,7 @@
 Database module for YouTube Thumbs addon.
 Provides a unified interface for all database operations.
 """
+import os
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -9,10 +10,11 @@ from .connection import DatabaseConnection, DEFAULT_DB_PATH
 from .video_operations import VideoOperations
 from .pending_operations import PendingOperations
 from .import_operations import ImportOperations
-from .not_found_operations import NotFoundOperations
 from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
+from video_helpers import get_content_hash
+from error_handler import validate_environment_variable
 
 
 class Database:
@@ -34,10 +36,18 @@ class Database:
         self._video_ops = VideoOperations(self._connection)
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
         self._import_ops = ImportOperations(self._connection)
-        self._not_found_ops = NotFoundOperations(self._connection)
         self._stats_ops = StatsOperations(self._connection)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
+
+        # Not found cache configuration (previously in NotFoundOperations)
+        # Default to 7 days (168 hours) to prevent wasting quota on failed searches
+        self._not_found_cache_hours = validate_environment_variable(
+            'NOT_FOUND_CACHE_HOURS',
+            default=168,
+            converter=int,
+            validator=lambda x: 1 <= x <= 168  # 1 hour to 1 week
+        )
 
     # Connection methods
     def _table_info(self, table: str):
@@ -108,15 +118,133 @@ class Database:
     def log_import_entry(self, entry_id, source, yt_video_id):
         return self._import_ops.log_import_entry(entry_id, source, yt_video_id)
 
-    # Not found cache operations
+    # Not found cache operations (v1.64.0: consolidated into video_ratings table)
     def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
-        return self._not_found_ops.is_recently_not_found(title, artist, duration)
+        """
+        Check if this content was recently searched and not found.
+        Now queries video_ratings table instead of separate not_found_searches table.
+
+        Args:
+            title: Media title
+            artist: Media artist (optional, not used in hash)
+            duration: Media duration in seconds (optional)
+
+        Returns:
+            True if search failed within cache period, False otherwise
+        """
+        if not title:
+            return False
+
+        # Use content hash for consistent identification
+        content_hash = get_content_hash(title, duration)
+
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT ha_content_id, yt_match_last_attempt, yt_match_attempts
+                FROM video_ratings
+                WHERE ha_content_hash = ?
+                  AND yt_video_id IS NULL
+                  AND pending_reason = 'not_found'
+                  AND yt_match_last_attempt > datetime('now', '-' || ? || ' hours')
+                """,
+                (content_hash, self._not_found_cache_hours)
+            )
+            row = cur.fetchone()
+
+        if row:
+            from logger import logger
+            logger.debug(
+                "Skipping search for '%s' - not found %d times, last attempt: %s",
+                title, row['yt_match_attempts'], row['yt_match_last_attempt']
+            )
+            return True
+
+        return False
 
     def record_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None, search_query: Optional[str] = None) -> bool:
-        return self._not_found_ops.record_not_found(title, artist, duration, search_query)
+        """
+        Record a failed search attempt.
+        Now uses video_ratings table instead of separate not_found_searches table.
+
+        Args:
+            title: Media title that wasn't found
+            artist: Media artist (optional)
+            duration: Media duration in seconds (optional)
+            search_query: The actual query sent to YouTube (optional, deprecated)
+
+        Returns:
+            True if successfully recorded, False otherwise
+        """
+        if not title:
+            return False
+
+        # Use upsert_pending_media with reason='not_found'
+        media = {
+            'title': title,
+            'artist': artist,
+            'duration': duration
+        }
+
+        try:
+            self.upsert_pending_media(media, reason='not_found')
+            from logger import logger
+            logger.info(
+                "Cached not found result for '%s' (duration: %s)",
+                title, duration
+            )
+            return True
+        except Exception as exc:
+            from logger import logger
+            from error_handler import log_and_suppress
+            return log_and_suppress(
+                exc,
+                "Failed to record not found search for '%s'",
+                title,
+                level="error",
+                return_value=False
+            )
 
     def cleanup_old_not_found(self, days: int = 2) -> int:
-        return self._not_found_ops.cleanup_old_entries(days)
+        """
+        Remove old not found entries from video_ratings.
+        Now operates on video_ratings table instead of separate not_found_searches table.
+
+        Args:
+            days: Remove entries older than this many days
+
+        Returns:
+            Number of entries removed
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    cur = self._conn.execute(
+                        """
+                        DELETE FROM video_ratings
+                        WHERE yt_video_id IS NULL
+                          AND pending_reason = 'not_found'
+                          AND datetime(yt_match_last_attempt, '+' || ? || ' days') < datetime('now')
+                        """,
+                        (days,)
+                    )
+                    deleted = cur.rowcount
+                    if deleted > 0:
+                        from logger import logger
+                        logger.info(
+                            "Cleaned up %d old not found entries (older than %d days)",
+                            deleted, days
+                        )
+                    return deleted
+            except Exception as exc:
+                from logger import logger
+                from error_handler import log_and_suppress
+                return log_and_suppress(
+                    exc,
+                    "Failed to cleanup not found cache",
+                    level="error",
+                    return_value=0
+                )
 
     # Stats operations
     def get_total_videos(self) -> int:

@@ -81,18 +81,7 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_import_history_yt_video_id ON import_history(yt_video_id);
     """
 
-    NOT_FOUND_SEARCHES_SCHEMA = """
-        CREATE TABLE IF NOT EXISTS not_found_searches (
-            search_hash TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            artist TEXT,
-            duration INTEGER,
-            search_query TEXT,
-            last_attempted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            attempt_count INTEGER DEFAULT 1
-        );
-        CREATE INDEX IF NOT EXISTS idx_not_found_searches_last_attempted ON not_found_searches(last_attempted);
-    """
+    # v1.64.0: Removed NOT_FOUND_SEARCHES_SCHEMA - now using video_ratings table
 
     API_USAGE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS api_usage (
@@ -166,7 +155,7 @@ class DatabaseConnection:
                     # Create all tables
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
-                    self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
+                    # v1.64.0: Removed not_found_searches table - now using video_ratings
 
                     # Migrate api_usage table if needed
                     self._migrate_api_usage_table()
@@ -329,7 +318,7 @@ class DatabaseConnection:
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage', 'stats_cache'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'api_usage', 'stats_cache'}
         if table not in VALID_TABLES:
             raise ValueError(f"Invalid table name: {table}")
 
@@ -342,7 +331,7 @@ class DatabaseConnection:
     def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
         """Add a column to a table if it doesn't exist."""
         # Validate inputs to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'not_found_searches', 'api_usage', 'stats_cache'}
+        VALID_TABLES = {'video_ratings', 'import_history', 'api_usage', 'stats_cache'}
         VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
 
         if table not in VALID_TABLES:
