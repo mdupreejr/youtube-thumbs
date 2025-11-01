@@ -184,6 +184,9 @@ class DatabaseConnection:
 
                     # v1.58.0 Migration: Rename yt_rating_* to yt_match_* and remove pending_match
                     self._migrate_to_match_columns()
+
+                    # v1.58.1 Migration: Fix NULL yt_match_pending values
+                    self._fix_match_pending_nulls()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -383,15 +386,19 @@ class DatabaseConnection:
             self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
 
             # Migrate matching status from pending_match
-            if 'pending_match' in columns:
-                self._conn.execute(
-                    """
-                    UPDATE video_ratings
-                    SET yt_match_pending = COALESCE(pending_match, 1)
-                    WHERE yt_match_pending IS NULL
-                    """
-                )
-                logger.info("Migrated pending_match → yt_match_pending")
+            # Set yt_match_pending based on whether video has been matched to YouTube
+            self._conn.execute(
+                """
+                UPDATE video_ratings
+                SET yt_match_pending = CASE
+                    WHEN yt_video_id IS NOT NULL THEN 0
+                    WHEN yt_video_id IS NULL THEN 1
+                    ELSE 1
+                END
+                WHERE yt_match_pending IS NULL
+                """
+            )
+            logger.info("Set yt_match_pending based on yt_video_id status")
 
             # Migrate rating queue from yt_rating_*
             if 'yt_rating_pending' in columns:
@@ -414,6 +421,43 @@ class DatabaseConnection:
             logger.warning("These columns are no longer used and can be manually dropped if needed")
 
         logger.info("Completed v1.58.0 database schema migration")
+
+    def _fix_match_pending_nulls(self) -> None:
+        """
+        v1.58.1 Migration: Fix NULL yt_match_pending values from incomplete v1.58.0 migration.
+        Sets yt_match_pending based on whether video has been matched to YouTube.
+        """
+        columns = self._table_columns('video_ratings')
+
+        if 'yt_match_pending' not in columns:
+            # Column doesn't exist, nothing to fix
+            return
+
+        with self._conn:
+            # Check if there are NULL values that need fixing
+            cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings WHERE yt_match_pending IS NULL")
+            null_count = cursor.fetchone()[0]
+
+            if null_count == 0:
+                # No NULL values, migration already completed
+                return
+
+            logger.info(f"v1.58.1 Migration: Fixing {null_count} NULL yt_match_pending values")
+
+            # Set yt_match_pending based on whether video has yt_video_id
+            self._conn.execute(
+                """
+                UPDATE video_ratings
+                SET yt_match_pending = CASE
+                    WHEN yt_video_id IS NOT NULL THEN 0
+                    WHEN yt_video_id IS NULL THEN 1
+                    ELSE 1
+                END
+                WHERE yt_match_pending IS NULL
+                """
+            )
+
+            logger.info("Completed v1.58.1 migration - yt_match_pending values fixed")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
