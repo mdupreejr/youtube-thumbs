@@ -123,6 +123,24 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_stats_cache_expires ON stats_cache(expires_at);
     """
 
+    # v1.67.1: Opportunistic search results cache
+    # Stores all videos from search results, not just matched ones
+    # Lightweight table, auto-expires after 30 days
+    SEARCH_RESULTS_CACHE_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS search_results_cache (
+            yt_video_id TEXT PRIMARY KEY,
+            yt_title TEXT NOT NULL,
+            yt_channel TEXT,
+            yt_channel_id TEXT,
+            yt_duration INTEGER,
+            cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_search_cache_duration ON search_results_cache(yt_duration);
+        CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_results_cache(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_search_cache_title ON search_results_cache(yt_title);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -171,6 +189,7 @@ class DatabaseConnection:
 
                     self._conn.executescript(self.API_USAGE_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
+                    self._conn.executescript(self.SEARCH_RESULTS_CACHE_SCHEMA)
 
                     # Ensure all required columns exist (handles both new and existing DBs)
                     self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')

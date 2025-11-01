@@ -13,6 +13,7 @@ from .import_operations import ImportOperations
 from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
+from .search_cache_operations import SearchCacheOperations
 from video_helpers import get_content_hash
 from error_handler import validate_environment_variable
 
@@ -39,6 +40,7 @@ class Database:
         self._stats_ops = StatsOperations(self._connection)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
+        self._search_cache_ops = SearchCacheOperations(self._conn, self._lock)
 
         # Not found cache configuration (previously in NotFoundOperations)
         # Default to 7 days (168 hours) to prevent wasting quota on failed searches
@@ -356,6 +358,27 @@ class Database:
     def invalidate_stats_cache(self, cache_key: Optional[str] = None) -> None:
         """Invalidate cached statistics."""
         return self._stats_cache_ops.invalidate_cache(cache_key)
+
+    # Search Cache Operations (v1.67.1: Opportunistic caching)
+    def cache_search_results(self, videos: List[Dict[str, Any]], ttl_days: int = 30) -> int:
+        """Cache all videos from a search result."""
+        return self._search_cache_ops.cache_search_results(videos, ttl_days)
+
+    def find_in_search_cache_by_duration(self, duration: int, tolerance: int = 2) -> Optional[List[Dict[str, Any]]]:
+        """Find cached videos by duration."""
+        return self._search_cache_ops.find_by_duration(duration, tolerance)
+
+    def find_in_search_cache(self, title: str, duration: int, tolerance: int = 2) -> Optional[Dict[str, Any]]:
+        """Find cached video by title and duration."""
+        return self._search_cache_ops.find_by_title_and_duration(title, duration, tolerance)
+
+    def cleanup_search_cache(self) -> int:
+        """Remove expired search cache entries."""
+        return self._search_cache_ops.cleanup_expired()
+
+    def get_search_cache_stats(self) -> Dict[str, int]:
+        """Get search cache statistics."""
+        return self._search_cache_ops.get_stats()
 
 
 # Singleton instance management

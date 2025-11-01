@@ -148,6 +148,7 @@ def search_and_match_video_refactored(
 ) -> Optional[Dict]:
     """
     Simplified video search: find YouTube video by exact title and duration (+1s).
+    Now with opportunistic caching of all search results!
 
     Args:
         ha_media: Media information from Home Assistant (must have channel='YouTube')
@@ -163,23 +164,45 @@ def search_and_match_video_refactored(
         return None
     title, duration = validation_result
 
-    # Step 2: Check if should skip search
+    # Step 2: Check opportunistic search cache FIRST (0 API cost!)
+    cached_result = db.find_in_search_cache(title, duration + 1, tolerance=2)  # +1 for YouTube duration
+    if cached_result:
+        logger.info(f"Opportunistic cache HIT: '{title}' → {cached_result['yt_video_id']} (saved 101 quota units!)")
+        metrics.record_cache_hit('search_results')
+        # Return in same format as YouTube search results
+        return {
+            'yt_video_id': cached_result['yt_video_id'],
+            'title': cached_result['yt_title'],
+            'channel': cached_result['yt_channel'],
+            'channel_id': cached_result['yt_channel_id'],
+            'duration': cached_result['yt_duration']
+        }
+
+    # Step 3: Check if should skip search
     if should_skip_search(db, title, duration):
         return None
 
-    # Step 3: Search YouTube (with exact duration matching)
+    # Step 4: Search YouTube (with exact duration matching)
     candidates = search_youtube_for_video(yt_api, title, duration)
     if not candidates:
         record_failed_search(db, title, duration)
         return None
 
-    # Step 4: Select best match (just take first result)
+    # Step 5: Opportunistically cache ALL search results (not just the match!)
+    # This costs 0 extra API units and might help with future searches
+    try:
+        cached_count = db.cache_search_results(candidates, ttl_days=30)
+        logger.debug(f"Cached {cached_count} videos from search results for future lookups")
+    except Exception as exc:
+        logger.warning(f"Failed to cache search results: {exc}")
+
+    # Step 6: Select best match (just take first result)
     video = select_best_match(candidates, title)
     if not video:
         record_failed_search(db, title, duration)
         return None
 
-    # Step 5: Log success
+    # Step 7: Log success
     logger.info(
         f"MATCHED: HA='{title}' ({duration}s) → YT='{video['title']}' ({video.get('duration', 0)}s) | "
         f"Channel: {video.get('channel')} | ID: {video['yt_video_id']}"
