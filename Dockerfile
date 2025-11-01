@@ -20,8 +20,17 @@ COPY *.py ./
 # Copy the database module directory
 COPY database/ ./database/
 
+# Copy the routes module directory
+COPY routes/ ./routes/
+
 # Copy templates directory for Flask web UI
 COPY templates/ ./templates/
+
+# Copy static files directory
+COPY static/ ./static/
+
+# Copy translations directory
+COPY translations/ ./translations/
 
 # Copy startup script
 COPY run.sh .
