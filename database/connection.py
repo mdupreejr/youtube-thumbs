@@ -157,6 +157,12 @@ class DatabaseConnection:
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     # v1.64.0: Removed not_found_searches table - now using video_ratings
 
+                    # v1.64.6: Migrate video_ratings table to remove NOT NULL from yt_video_id
+                    self._migrate_video_ratings_nullable_id()
+
+                    # v1.64.6: Clean up old ha_hash entries in yt_video_id column
+                    self._migrate_ha_hash_entries()
+
                     # Migrate api_usage table if needed
                     self._migrate_api_usage_table()
 
@@ -318,6 +324,166 @@ class DatabaseConnection:
         except sqlite3.DatabaseError as exc:
             logger.error(f"Failed to migrate api_usage table: {exc}")
             raise
+
+    def _migrate_video_ratings_nullable_id(self) -> None:
+        """
+        Migrate video_ratings table to allow NULL in yt_video_id column.
+        Older schemas had NOT NULL constraint which prevents pending videos.
+        """
+        try:
+            # Check if video_ratings table exists
+            cursor = self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings'"
+            )
+            if not cursor.fetchone():
+                # Table doesn't exist yet, will be created with correct schema
+                return
+
+            # Check if yt_video_id has NOT NULL constraint
+            cursor = self._conn.execute("PRAGMA table_info(video_ratings)")
+            columns = {row[1]: row for row in cursor.fetchall()}
+
+            # Column info format: (cid, name, type, notnull, dflt_value, pk)
+            if 'yt_video_id' not in columns:
+                # Column doesn't exist, nothing to migrate
+                return
+
+            yt_video_id_notnull = columns['yt_video_id'][3]  # notnull flag
+            if yt_video_id_notnull == 0:
+                # Already nullable, nothing to do
+                return
+
+            logger.info("Migrating video_ratings table to allow NULL in yt_video_id column")
+
+            # Begin transaction for migration
+            self._conn.execute("BEGIN TRANSACTION")
+
+            try:
+                # Create new table with correct schema (without NOT NULL on yt_video_id)
+                self._conn.executescript("""
+                    CREATE TABLE video_ratings_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        yt_video_id TEXT UNIQUE,
+                        ha_content_id TEXT,
+                        ha_title TEXT NOT NULL,
+                        ha_artist TEXT,
+                        ha_app_name TEXT,
+                        yt_title TEXT,
+                        yt_channel TEXT,
+                        yt_channel_id TEXT,
+                        yt_description TEXT,
+                        yt_published_at TIMESTAMP,
+                        yt_category_id INTEGER,
+                        yt_live_broadcast TEXT,
+                        yt_location TEXT,
+                        yt_recording_date TIMESTAMP,
+                        ha_duration INTEGER,
+                        yt_duration INTEGER,
+                        yt_url TEXT,
+                        rating TEXT DEFAULT 'none',
+                        ha_content_hash TEXT,
+                        date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        date_last_played TIMESTAMP,
+                        play_count INTEGER DEFAULT 1,
+                        rating_score INTEGER DEFAULT 0,
+                        pending_reason TEXT,
+                        source TEXT DEFAULT 'ha_live',
+                        yt_match_pending INTEGER DEFAULT 1,
+                        yt_match_requested_at TIMESTAMP,
+                        yt_match_attempts INTEGER DEFAULT 0,
+                        yt_match_last_attempt TIMESTAMP,
+                        yt_match_last_error TEXT,
+                        rating_queue_pending TEXT,
+                        rating_queue_requested_at TIMESTAMP,
+                        rating_queue_attempts INTEGER DEFAULT 0,
+                        rating_queue_last_attempt TIMESTAMP,
+                        rating_queue_last_error TEXT
+                    );
+                """)
+
+                # Copy all data from old table to new table
+                self._conn.execute("""
+                    INSERT INTO video_ratings_new
+                    SELECT * FROM video_ratings
+                """)
+
+                # Drop old table
+                self._conn.execute("DROP TABLE video_ratings")
+
+                # Rename new table to original name
+                self._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
+
+                # Recreate indexes
+                self._conn.executescript("""
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id);
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash);
+                    CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id);
+                """)
+
+                # Commit the transaction
+                self._conn.execute("COMMIT")
+
+                logger.info("Successfully migrated video_ratings table to allow NULL in yt_video_id")
+
+            except Exception as exc:
+                # Rollback on any error
+                self._conn.execute("ROLLBACK")
+                logger.error(f"Failed to migrate video_ratings table: {exc}")
+                # Clean up temporary table
+                try:
+                    self._conn.execute("DROP TABLE IF EXISTS video_ratings_new")
+                except sqlite3.DatabaseError:
+                    pass
+                raise
+
+        except sqlite3.DatabaseError as exc:
+            logger.error(f"Failed to check/migrate video_ratings table: {exc}")
+            raise
+
+    def _migrate_ha_hash_entries(self) -> None:
+        """
+        Migrate old pending videos that have ha_hash: IDs in yt_video_id column.
+        These should be moved to ha_content_id column with yt_video_id set to NULL.
+        """
+        try:
+            # Check if video_ratings table exists
+            cursor = self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings'"
+            )
+            if not cursor.fetchone():
+                return
+
+            # Find all rows with ha_hash: in yt_video_id
+            with self._lock:
+                cursor = self._conn.execute(
+                    "SELECT COUNT(*) FROM video_ratings WHERE yt_video_id LIKE 'ha_hash:%'"
+                )
+                count = cursor.fetchone()[0]
+
+                if count == 0:
+                    # No old entries to migrate
+                    return
+
+                logger.info(f"Migrating {count} old ha_hash entries from yt_video_id to ha_content_id")
+
+                with self._conn:
+                    # Move ha_hash IDs from yt_video_id to ha_content_id, set yt_video_id to NULL
+                    self._conn.execute("""
+                        UPDATE video_ratings
+                        SET ha_content_id = yt_video_id,
+                            yt_video_id = NULL,
+                            yt_match_pending = 1
+                        WHERE yt_video_id LIKE 'ha_hash:%'
+                    """)
+
+                logger.info(f"Successfully migrated {count} ha_hash entries")
+
+        except sqlite3.DatabaseError as exc:
+            logger.error(f"Failed to migrate ha_hash entries: {exc}")
+            # Don't raise - this is a non-critical cleanup operation
 
     def _drop_not_found_searches_table(self) -> None:
         """
