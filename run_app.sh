@@ -4,12 +4,16 @@
 set -e
 
 echo "=== Starting Python app with full error capture ===" >&2
+echo "=== Python version: $(python3 --version) ===" >&2
+echo "=== Current directory: $(pwd) ===" >&2
+echo "=== Files in /app: $(ls -la /app/*.py 2>&1 | head -5) ===" >&2
 
 # Run Python with unbuffered output and capture exit code
-python3 -u app.py 2>&1
-EXIT_CODE=$?
-
-if [ $EXIT_CODE -ne 0 ]; then
-    echo "=== Python exited with code: $EXIT_CODE ===" >&2
+echo "=== Launching python3 -u app.py ===" >&2
+python3 -u app.py 2>&1 || {
+    EXIT_CODE=$?
+    echo "=== Python crashed or exited with code: $EXIT_CODE ===" >&2
     exit $EXIT_CODE
-fi
+}
+
+echo "=== Python process completed normally ===" >&2
