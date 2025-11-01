@@ -1120,8 +1120,8 @@ def stats_page() -> str:
 
 
 # Database proxy routes - delegates to database_proxy module
-app.route('/database', defaults={'path': ''})(create_database_proxy_handler())
-app.route('/database/<path:path>')(create_database_proxy_handler())
+app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''})
+app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler())
 
 
 if __name__ == '__main__':
