@@ -96,17 +96,32 @@ class DatabaseConnection:
 
     API_USAGE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS api_usage (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            date TEXT NOT NULL,
-            api_method TEXT NOT NULL,
-            success INTEGER DEFAULT 1,
-            quota_cost INTEGER DEFAULT 1,
-            error_message TEXT
+            date TEXT PRIMARY KEY,
+            hour_00 INTEGER DEFAULT 0,
+            hour_01 INTEGER DEFAULT 0,
+            hour_02 INTEGER DEFAULT 0,
+            hour_03 INTEGER DEFAULT 0,
+            hour_04 INTEGER DEFAULT 0,
+            hour_05 INTEGER DEFAULT 0,
+            hour_06 INTEGER DEFAULT 0,
+            hour_07 INTEGER DEFAULT 0,
+            hour_08 INTEGER DEFAULT 0,
+            hour_09 INTEGER DEFAULT 0,
+            hour_10 INTEGER DEFAULT 0,
+            hour_11 INTEGER DEFAULT 0,
+            hour_12 INTEGER DEFAULT 0,
+            hour_13 INTEGER DEFAULT 0,
+            hour_14 INTEGER DEFAULT 0,
+            hour_15 INTEGER DEFAULT 0,
+            hour_16 INTEGER DEFAULT 0,
+            hour_17 INTEGER DEFAULT 0,
+            hour_18 INTEGER DEFAULT 0,
+            hour_19 INTEGER DEFAULT 0,
+            hour_20 INTEGER DEFAULT 0,
+            hour_21 INTEGER DEFAULT 0,
+            hour_22 INTEGER DEFAULT 0,
+            hour_23 INTEGER DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS idx_api_usage_date ON api_usage(date);
-        CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_api_usage_method ON api_usage(api_method);
     """
 
     STATS_CACHE_SCHEMA = """
@@ -152,6 +167,10 @@ class DatabaseConnection:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.NOT_FOUND_SEARCHES_SCHEMA)
+
+                    # Migrate api_usage table if needed
+                    self._migrate_api_usage_table()
+
                     self._conn.executescript(self.API_USAGE_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
 
@@ -187,6 +206,108 @@ class DatabaseConnection:
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
+
+    def _migrate_api_usage_table(self) -> None:
+        """
+        Migrate api_usage table from old schema to new hourly schema.
+        Old schema: timestamp, date, api_method, success, quota_cost, error_message
+        New schema: date, hour_00 through hour_23
+        """
+        try:
+            # Check if api_usage table exists and has old schema
+            cursor = self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='api_usage'"
+            )
+            if not cursor.fetchone():
+                # Table doesn't exist yet, nothing to migrate
+                return
+
+            # Check if table has old schema (has 'timestamp' column)
+            cursor = self._conn.execute("PRAGMA table_info(api_usage)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'timestamp' not in columns:
+                # Already using new schema or empty table
+                return
+
+            logger.info("Migrating api_usage table to new hourly schema")
+
+            # Create temporary table with aggregated hourly data
+            self._conn.execute("""
+                CREATE TABLE IF NOT EXISTS api_usage_new (
+                    date TEXT PRIMARY KEY,
+                    hour_00 INTEGER DEFAULT 0,
+                    hour_01 INTEGER DEFAULT 0,
+                    hour_02 INTEGER DEFAULT 0,
+                    hour_03 INTEGER DEFAULT 0,
+                    hour_04 INTEGER DEFAULT 0,
+                    hour_05 INTEGER DEFAULT 0,
+                    hour_06 INTEGER DEFAULT 0,
+                    hour_07 INTEGER DEFAULT 0,
+                    hour_08 INTEGER DEFAULT 0,
+                    hour_09 INTEGER DEFAULT 0,
+                    hour_10 INTEGER DEFAULT 0,
+                    hour_11 INTEGER DEFAULT 0,
+                    hour_12 INTEGER DEFAULT 0,
+                    hour_13 INTEGER DEFAULT 0,
+                    hour_14 INTEGER DEFAULT 0,
+                    hour_15 INTEGER DEFAULT 0,
+                    hour_16 INTEGER DEFAULT 0,
+                    hour_17 INTEGER DEFAULT 0,
+                    hour_18 INTEGER DEFAULT 0,
+                    hour_19 INTEGER DEFAULT 0,
+                    hour_20 INTEGER DEFAULT 0,
+                    hour_21 INTEGER DEFAULT 0,
+                    hour_22 INTEGER DEFAULT 0,
+                    hour_23 INTEGER DEFAULT 0
+                )
+            """)
+
+            # Migrate data: aggregate by date and hour
+            # Get all distinct dates
+            cursor = self._conn.execute("SELECT DISTINCT date FROM api_usage ORDER BY date")
+            dates = [row[0] for row in cursor.fetchall()]
+
+            for date in dates:
+                # For each date, count calls per hour
+                hourly_counts = {}
+                for hour in range(24):
+                    hour_str = f"{hour:02d}"
+                    cursor = self._conn.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM api_usage
+                        WHERE date = ? AND strftime('%H', timestamp) = ?
+                        """,
+                        (date, hour_str)
+                    )
+                    count = cursor.fetchone()[0]
+                    hourly_counts[f"hour_{hour_str}"] = count
+
+                # Insert aggregated data into new table
+                columns_str = "date, " + ", ".join([f"hour_{h:02d}" for h in range(24)])
+                values_str = "?, " + ", ".join(["?" for _ in range(24)])
+                values = [date] + [hourly_counts[f"hour_{h:02d}"] for h in range(24)]
+
+                self._conn.execute(
+                    f"INSERT INTO api_usage_new ({columns_str}) VALUES ({values_str})",
+                    values
+                )
+
+            # Drop old table and rename new one
+            self._conn.execute("DROP TABLE api_usage")
+            self._conn.execute("ALTER TABLE api_usage_new RENAME TO api_usage")
+
+            logger.info(f"Successfully migrated {len(dates)} days of API usage data to hourly schema")
+
+        except sqlite3.DatabaseError as exc:
+            logger.error(f"Failed to migrate api_usage table: {exc}")
+            # If migration fails, try to clean up
+            try:
+                self._conn.execute("DROP TABLE IF EXISTS api_usage_new")
+            except:
+                pass
+            raise
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:
         # Validate table name to prevent SQL injection
