@@ -1590,7 +1590,39 @@ header, .header {
 }
 </style>
 '''
-            content = content.replace(b'</head>', custom_css + b'</head>')
+            # Auto-sort video_ratings table by date_last_played using JavaScript
+            auto_sort_js = b''
+            if 'video_ratings' in path.lower() and 'content' in path.lower():
+                auto_sort_js = b'''
+<script>
+// Auto-sort video_ratings table by date_last_played (descending)
+document.addEventListener('DOMContentLoaded', function() {
+    // Find all table headers
+    const headers = document.querySelectorAll('th a');
+
+    // Look for the date_last_played column header
+    for (let header of headers) {
+        if (header.textContent.includes('date_last_played')) {
+            // Check if table is already sorted by this column
+            const currentUrl = window.location.href;
+            if (!currentUrl.includes('_sort') && !currentUrl.includes('order')) {
+                console.log('Auto-sorting by date_last_played (descending)');
+                // Click twice: once for ascending, once for descending
+                // Use setTimeout to ensure clicks are processed
+                setTimeout(function() {
+                    header.click();
+                    setTimeout(function() {
+                        header.click();
+                    }, 100);
+                }, 100);
+            }
+            break;
+        }
+    }
+});
+</script>
+'''
+            content = content.replace(b'</head>', custom_css + auto_sort_js + b'</head>')
 
         # nosec B201 - Content from trusted internal sqlite_web proxy (localhost only)
         # Protected by CSP headers and X-Content-Type-Options below
