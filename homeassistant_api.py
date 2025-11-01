@@ -61,10 +61,31 @@ class HomeAssistantAPI:
                 return None
             
             attributes = data.get('attributes', {})
+
+            # Log ALL attributes to see what AppleTV is actually sending
+            logger.debug("=== ALL Home Assistant attributes ===")
+            for key, value in attributes.items():
+                # Truncate long values for readability
+                value_str = str(value)
+                if len(value_str) > 100:
+                    value_str = value_str[:100] + "..."
+                logger.debug(f"  {key}: {value_str}")
+            logger.debug("=== End attributes ===")
+
             media_title = attributes.get('media_title')
             media_artist = attributes.get('media_artist')
             app_name = attributes.get('app_name')
             media_duration = attributes.get('media_duration')
+
+            # Check for YouTube video ID in various possible fields
+            media_content_id = attributes.get('media_content_id')
+            entity_picture = attributes.get('entity_picture')
+            media_album_name = attributes.get('media_album_name')
+
+            if media_content_id:
+                logger.debug(f"Found media_content_id: {media_content_id}")
+            if entity_picture:
+                logger.debug(f"Found entity_picture: {entity_picture}")
 
             # Debug logging to understand what HA is actually sending
             logger.debug(
