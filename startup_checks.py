@@ -140,47 +140,47 @@ def check_database(db) -> Tuple[bool, str]:
             total_videos = cursor.fetchone()['count']
 
             # Count matched videos (successfully found on YouTube)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 0")
             matched_videos = cursor.fetchone()['count']
 
             # Count pending videos (not yet matched to YouTube)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE pending_match = 1")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 1")
             pending_videos = cursor.fetchone()['count']
 
             # Get pending reason breakdown
             cursor = db._conn.execute("""
                 SELECT pending_reason, COUNT(*) as count
                 FROM video_ratings
-                WHERE pending_match = 1
+                WHERE yt_match_pending = 1
                 GROUP BY pending_reason
             """)
             pending_reasons = {row['pending_reason']: row['count'] for row in cursor.fetchall()}
 
             # Count rated videos breakdown
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like' AND pending_match = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like' AND yt_match_pending = 0")
             liked_videos = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike' AND pending_match = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike' AND yt_match_pending = 0")
             disliked_videos = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND pending_match = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND yt_match_pending = 0")
             unrated_videos = cursor.fetchone()['count']
 
             # Total plays
-            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings WHERE pending_match = 0")
+            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings WHERE yt_match_pending = 0")
             total_plays = cursor.fetchone()['total'] or 0
 
             # Unique channels
-            cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE pending_match = 0 AND yt_channel_id IS NOT NULL")
+            cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE yt_match_pending = 0 AND yt_channel_id IS NOT NULL")
             unique_channels = cursor.fetchone()['count']
 
             # Count pending ratings queue (v1.50.0: now stored in video_ratings columns)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_rating_pending IS NOT NULL")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating_queue_pending IS NOT NULL")
             pending_ratings = cursor.fetchone()['count']
 
             # Get recent videos (all videos, not just matched)
             cursor = db._conn.execute("""
-                SELECT ha_title, date_last_played, pending_match
+                SELECT ha_title, date_last_played, yt_match_pending
                 FROM video_ratings
                 WHERE date_last_played IS NOT NULL
                 ORDER BY date_last_played DESC

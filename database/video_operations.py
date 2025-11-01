@@ -55,7 +55,7 @@ class VideoOperations:
             'yt_url': video.get('yt_url'),
             'rating': video.get('rating', 'none') or 'none',
             'ha_content_hash': ha_content_hash,
-            'pending_match': 1 if video.get('pending_match') else 0,
+            'yt_match_pending': 1 if video.get('yt_match_pending') else 0,
             'pending_reason': video.get('pending_reason'),
             'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
@@ -67,14 +67,14 @@ class VideoOperations:
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
-            play_count, rating_score, pending_match, pending_reason, source
+            play_count, rating_score, yt_match_pending, pending_reason, source
         )
         VALUES (
             :yt_video_id, :ha_content_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
-            0, 0, :pending_match, :pending_reason, :source
+            0, 0, :yt_match_pending, :pending_reason, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_content_id=excluded.ha_content_id,
@@ -94,7 +94,7 @@ class VideoOperations:
             yt_duration=excluded.yt_duration,
             yt_url=excluded.yt_url,
             ha_content_hash=excluded.ha_content_hash,
-            pending_match=excluded.pending_match,
+            yt_match_pending=excluded.yt_match_pending,
             pending_reason=excluded.pending_reason,
             source=excluded.source;
         """
@@ -130,7 +130,7 @@ class VideoOperations:
                             """
                             INSERT INTO video_ratings (
                                 yt_video_id, ha_title, yt_title, rating,
-                                date_added, date_last_played, play_count, rating_score, pending_match
+                                date_added, date_last_played, play_count, rating_score, yt_match_pending
                             )
                             VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, 1, 0, 0)
                             """,
@@ -207,7 +207,7 @@ class VideoOperations:
                             """
                             INSERT INTO video_ratings (
                                 yt_video_id, ha_title, yt_title, rating,
-                                date_added, play_count, rating_score, pending_match
+                                date_added, play_count, rating_score, yt_match_pending
                             )
                             VALUES (?, 'Unknown', 'Unknown', ?, ?, 1, ?, 0)
                             """,
@@ -240,7 +240,7 @@ class VideoOperations:
         query = """
             SELECT * FROM video_ratings
             WHERE ha_title = ?
-              AND pending_match = 0
+              AND yt_match_pending = 0
               AND (
                     (ha_duration IS NOT NULL AND ha_duration = ?)
                  OR (ha_duration IS NULL AND yt_duration IS NOT NULL AND yt_duration = ?)
@@ -267,7 +267,7 @@ class VideoOperations:
             cur = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE ha_content_hash = ? AND pending_match = 0
+                WHERE ha_content_hash = ? AND yt_match_pending = 0
                 ORDER BY date_last_played DESC, date_added DESC
                 LIMIT 1
                 """,
@@ -297,7 +297,7 @@ class VideoOperations:
         # Single query with OR condition combining both lookup strategies
         query = """
             SELECT * FROM video_ratings
-            WHERE pending_match = 0
+            WHERE yt_match_pending = 0
               AND (
                   ha_content_hash = ?
                   OR (
@@ -334,7 +334,7 @@ class VideoOperations:
         """
         query = """
             SELECT * FROM video_ratings
-            WHERE pending_match = 1
+            WHERE yt_match_pending = 1
         """
         params = []
 
@@ -375,9 +375,9 @@ class VideoOperations:
                             yt_recording_date = ?,
                             yt_duration = ?,
                             yt_url = ?,
-                            pending_match = 0,
+                            yt_match_pending = 0,
                             pending_reason = NULL
-                        WHERE ha_content_id = ? AND pending_match = 1
+                        WHERE ha_content_id = ? AND yt_match_pending = 1
                         """,
                         (
                             youtube_data.get('yt_video_id'),
@@ -405,7 +405,7 @@ class VideoOperations:
     def mark_pending_not_found(self, ha_content_id: str) -> None:
         """
         Mark pending video as not found (no YouTube match exists).
-        Updates pending_reason to 'not_found' but keeps pending_match=1.
+        Updates pending_reason to 'not_found' but keeps yt_match_pending=1.
 
         Args:
             ha_content_id: The placeholder ID (ha_hash:*)
@@ -417,7 +417,7 @@ class VideoOperations:
                         """
                         UPDATE video_ratings
                         SET pending_reason = 'not_found'
-                        WHERE ha_content_id = ? AND pending_match = 1
+                        WHERE ha_content_id = ? AND yt_match_pending = 1
                         """,
                         (ha_content_id,)
                     )

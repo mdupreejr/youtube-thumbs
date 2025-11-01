@@ -43,14 +43,18 @@ class DatabaseConnection:
             date_last_played TIMESTAMP,
             play_count INTEGER DEFAULT 1,
             rating_score INTEGER DEFAULT 0,
-            pending_match INTEGER DEFAULT 0,
             pending_reason TEXT,
             source TEXT DEFAULT 'ha_live',
-            yt_rating_pending TEXT,
-            yt_rating_requested_at TIMESTAMP,
-            yt_rating_attempts INTEGER DEFAULT 0,
-            yt_rating_last_attempt TIMESTAMP,
-            yt_rating_last_error TEXT
+            yt_match_pending INTEGER DEFAULT 1,
+            yt_match_requested_at TIMESTAMP,
+            yt_match_attempts INTEGER DEFAULT 0,
+            yt_match_last_attempt TIMESTAMP,
+            yt_match_last_error TEXT,
+            rating_queue_pending TEXT,
+            rating_queue_requested_at TIMESTAMP,
+            rating_queue_attempts INTEGER DEFAULT 0,
+            rating_queue_last_attempt TIMESTAMP,
+            rating_queue_last_error TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
@@ -58,10 +62,14 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
     """
 
-    # PENDING_RATINGS_SCHEMA removed in v1.50.0
-    # Pending ratings are now stored in video_ratings table columns:
-    # - yt_rating_pending, yt_rating_requested_at, yt_rating_attempts,
-    # - yt_rating_last_attempt, yt_rating_last_error
+    # v1.58.0: Separated matching status from rating queue
+    # YouTube matching status tracked in: yt_match_* columns
+    # - yt_match_pending (1=pending match, 0=matched)
+    # - yt_match_requested_at, yt_match_attempts, yt_match_last_attempt, yt_match_last_error
+    # Rating queue (for quota blocking) tracked in: rating_queue_* columns
+    # - rating_queue_pending (TEXT: 'like'/'dislike' or NULL)
+    # - rating_queue_requested_at, rating_queue_attempts, rating_queue_last_attempt, rating_queue_last_error
+    # Removed redundant pending_match column
 
     IMPORT_HISTORY_SCHEMA = """
         CREATE TABLE IF NOT EXISTS import_history (
@@ -173,6 +181,9 @@ class DatabaseConnection:
 
                     # v1.50.0 Migration: Consolidate pending_ratings into video_ratings
                     self._migrate_to_unified_schema()
+
+                    # v1.58.0 Migration: Rename yt_rating_* to yt_match_* and remove pending_match
+                    self._migrate_to_match_columns()
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -338,6 +349,71 @@ class DatabaseConnection:
             logger.info("Created index on ha_content_id column")
 
         logger.info("Completed v1.50.0 database schema migration")
+
+    def _migrate_to_match_columns(self) -> None:
+        """
+        v1.58.0 Migration: Separate matching status from rating queue
+        1. Create yt_match_* columns for YouTube matching status
+        2. Create rating_queue_* columns for like/dislike queue
+        3. Migrate pending_match → yt_match_pending (0=matched, 1=pending)
+        4. Migrate yt_rating_* → rating_queue_* (rating queue data)
+        5. Leave old columns for backwards compatibility
+        """
+        columns = self._table_columns('video_ratings')
+
+        # Check if migration already completed
+        if 'yt_match_pending' in columns and 'rating_queue_pending' in columns:
+            return
+
+        logger.info("Starting v1.58.0 database schema migration (separate matching from rating queue)")
+
+        with self._conn:
+            # Add new match status columns
+            self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
+            self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
+            self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
+
+            # Add new rating queue columns
+            self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
+            self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
+            self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
+            self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
+
+            # Migrate matching status from pending_match
+            if 'pending_match' in columns:
+                self._conn.execute(
+                    """
+                    UPDATE video_ratings
+                    SET yt_match_pending = COALESCE(pending_match, 1)
+                    WHERE yt_match_pending IS NULL
+                    """
+                )
+                logger.info("Migrated pending_match → yt_match_pending")
+
+            # Migrate rating queue from yt_rating_*
+            if 'yt_rating_pending' in columns:
+                self._conn.execute(
+                    """
+                    UPDATE video_ratings
+                    SET rating_queue_pending = yt_rating_pending,
+                        rating_queue_requested_at = yt_rating_requested_at,
+                        rating_queue_attempts = COALESCE(yt_rating_attempts, 0),
+                        rating_queue_last_attempt = yt_rating_last_attempt,
+                        rating_queue_last_error = yt_rating_last_error
+                    WHERE rating_queue_pending IS NULL AND yt_rating_pending IS NOT NULL
+                    """
+                )
+                logger.info("Migrated yt_rating_* → rating_queue_*")
+
+            # Note: SQLite doesn't support DROP COLUMN easily before version 3.35.0
+            # We'll leave the old columns in place but stop using them
+            logger.warning("Old columns (yt_rating_*, pending_match) left in place for backwards compatibility")
+            logger.warning("These columns are no longer used and can be manually dropped if needed")
+
+        logger.info("Completed v1.58.0 database schema migration")
 
     def _normalize_existing_timestamps(self) -> None:
         """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""

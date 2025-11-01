@@ -63,7 +63,7 @@ class PendingOperations:
             'yt_duration': None,
             'yt_url': None,
             'rating': 'none',
-            'pending_match': 1,
+            'yt_match_pending': 1,
             'pending_reason': reason,
             'source': 'ha_live',
         }
@@ -72,8 +72,8 @@ class PendingOperations:
 
     def enqueue_rating(self, yt_video_id: str, rating: str) -> None:
         """
-        v1.50.0: Queue a rating by setting columns in video_ratings table.
-        Replaces insertion into pending_ratings table.
+        v1.58.0: Queue a rating using rating_queue_* columns.
+        Used when YouTube API quota is blocked.
         """
         timestamp = self._timestamp('')
         with self._lock:
@@ -82,11 +82,11 @@ class PendingOperations:
                     self._conn.execute(
                         """
                         UPDATE video_ratings
-                        SET yt_rating_pending = ?,
-                            yt_rating_requested_at = ?,
-                            yt_rating_attempts = 0,
-                            yt_rating_last_error = NULL,
-                            yt_rating_last_attempt = NULL
+                        SET rating_queue_pending = ?,
+                            rating_queue_requested_at = ?,
+                            rating_queue_attempts = 0,
+                            rating_queue_last_error = NULL,
+                            rating_queue_last_attempt = NULL
                         WHERE yt_video_id = ?
                         """,
                         (rating, timestamp, yt_video_id),
@@ -101,20 +101,20 @@ class PendingOperations:
 
     def list_pending_ratings(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        v1.50.0: Query pending ratings from video_ratings table columns.
-        Returns videos where yt_rating_pending IS NOT NULL.
+        v1.58.0: Query pending ratings from rating_queue_* columns.
+        Returns videos where rating_queue_pending IS NOT NULL.
         """
         with self._lock:
             cur = self._conn.execute(
                 """
                 SELECT yt_video_id,
-                       yt_rating_pending as rating,
-                       yt_rating_requested_at as requested_at,
-                       yt_rating_attempts as attempts,
-                       yt_rating_last_error as last_error
+                       rating_queue_pending as rating,
+                       rating_queue_requested_at as requested_at,
+                       rating_queue_attempts as attempts,
+                       rating_queue_last_error as last_error
                 FROM video_ratings
-                WHERE yt_rating_pending IS NOT NULL
-                ORDER BY yt_rating_requested_at ASC
+                WHERE rating_queue_pending IS NOT NULL
+                ORDER BY rating_queue_requested_at ASC
                 LIMIT ?
                 """,
                 (limit,),
@@ -124,8 +124,8 @@ class PendingOperations:
 
     def mark_pending_rating(self, yt_video_id: str, success: bool, error: Optional[str] = None) -> None:
         """
-        v1.50.0: Clear or update pending rating columns in video_ratings table.
-        On success: NULL out all yt_rating_* columns
+        v1.58.0: Clear or update rating queue columns in video_ratings table.
+        On success: NULL out all rating_queue_* columns
         On failure: Increment attempts, record error
         """
         with self._lock:
@@ -136,11 +136,11 @@ class PendingOperations:
                         self._conn.execute(
                             """
                             UPDATE video_ratings
-                            SET yt_rating_pending = NULL,
-                                yt_rating_requested_at = NULL,
-                                yt_rating_attempts = 0,
-                                yt_rating_last_error = NULL,
-                                yt_rating_last_attempt = NULL
+                            SET rating_queue_pending = NULL,
+                                rating_queue_requested_at = NULL,
+                                rating_queue_attempts = 0,
+                                rating_queue_last_error = NULL,
+                                rating_queue_last_attempt = NULL
                             WHERE yt_video_id = ?
                             """,
                             (yt_video_id,)
@@ -150,9 +150,9 @@ class PendingOperations:
                         self._conn.execute(
                             """
                             UPDATE video_ratings
-                            SET yt_rating_attempts = yt_rating_attempts + 1,
-                                yt_rating_last_error = ?,
-                                yt_rating_last_attempt = ?
+                            SET rating_queue_attempts = rating_queue_attempts + 1,
+                                rating_queue_last_error = ?,
+                                rating_queue_last_attempt = ?
                             WHERE yt_video_id = ?
                             """,
                             (error, self._timestamp(''), yt_video_id),
