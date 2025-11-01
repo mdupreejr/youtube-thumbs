@@ -369,8 +369,130 @@ def serve_static(filename):
 
 @app.route('/')
 def index() -> str:
-    """Render the test interface page."""
-    return render_template('index.html')
+    """
+    Server-side rendered main page with connection tests and bulk rating.
+    All processing done on server, no client-side JavaScript required.
+    """
+    try:
+        # Get current tab from query parameter (default: tests)
+        current_tab = request.args.get('tab', 'tests')
+        if current_tab not in ['tests', 'rating']:
+            current_tab = 'tests'
+
+        # Initialize template data
+        template_data = {
+            'current_tab': current_tab,
+            'ha_test': {'success': False, 'message': 'Not tested'},
+            'yt_test': {'success': False, 'message': 'Not tested'},
+            'db_test': {'success': False, 'message': 'Not tested'},
+            'songs': [],
+            'current_page': 1,
+            'total_pages': 0,
+            'total_unrated': 0
+        }
+
+        # Run connection tests if on tests tab
+        if current_tab == 'tests':
+            # Test Home Assistant
+            ha_success, ha_message = check_home_assistant_api(ha_api)
+            template_data['ha_test'] = {'success': ha_success, 'message': ha_message}
+
+            # Test YouTube API
+            yt_api = get_youtube_api()
+            yt_success, yt_message = check_youtube_api(yt_api)
+            template_data['yt_test'] = {'success': yt_success, 'message': yt_message}
+
+            # Test Database
+            db_success, db_message = check_database(db)
+            template_data['db_test'] = {'success': db_success, 'message': db_message}
+
+        # Get unrated songs if on rating tab
+        elif current_tab == 'rating':
+            try:
+                page = int(request.args.get('page', 1))
+                if page < 1:
+                    page = 1
+            except (ValueError, TypeError):
+                page = 1
+
+            result = db.get_unrated_videos(page=page, limit=50)
+
+            # Format songs for template
+            formatted_songs = []
+            for song in result['songs']:
+                title = (song.get('ha_title') or song.get('yt_title') or 'Unknown').strip() or 'Unknown'
+                artist = (song.get('ha_artist') or song.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+
+                # Format duration if available
+                duration_str = ''
+                if song.get('duration'):
+                    duration = int(song['duration'])
+                    minutes = duration // 60
+                    seconds = duration % 60
+                    duration_str = f"{minutes}:{seconds:02d}"
+
+                formatted_songs.append({
+                    'id': song['yt_video_id'],
+                    'title': title,
+                    'artist': artist,
+                    'duration': duration_str
+                })
+
+            template_data['songs'] = formatted_songs
+            template_data['current_page'] = result['page']
+            template_data['total_pages'] = result['total_pages']
+            template_data['total_unrated'] = result['total_unrated']
+
+        return render_template('index_server.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering index page: {e}")
+        logger.error(traceback.format_exc())
+        return f"<h1>Error loading page</h1><p>{str(e)}</p>", 500
+
+@app.route('/rate-song', methods=['POST'])
+def rate_song_form() -> Response:
+    """
+    Handle bulk rating form submissions from server-side rendered page.
+    Processes the rating and redirects back to the rating tab.
+    """
+    from flask import redirect, url_for
+    try:
+        song_id = request.form.get('song_id')
+        rating = request.form.get('rating')
+        page = request.form.get('page', '1')
+
+        if not song_id or not rating:
+            logger.error("Missing song_id or rating in form submission")
+            return redirect(url_for('index', tab='rating', page=page))
+
+        if rating not in ['like', 'dislike', 'skip']:
+            logger.error(f"Invalid rating value: {rating}")
+            return redirect(url_for('index', tab='rating', page=page))
+
+        # Skip ratings don't actually rate, just move to next
+        if rating != 'skip':
+            # Use existing rate_song_direct function
+            response = rate_song_direct(song_id, rating)
+            # Check if rating was successful (response is tuple of (Response, status_code))
+            if isinstance(response, tuple):
+                response_obj, status_code = response
+            else:
+                response_obj = response
+                status_code = 200
+
+            if status_code != 200:
+                logger.warning(f"Rating failed for {song_id}: status {status_code}")
+
+        # Redirect back to rating tab with same page
+        return redirect(url_for('index', tab='rating', page=page))
+
+    except Exception as e:
+        logger.error(f"Error processing rating form: {e}")
+        logger.error(traceback.format_exc())
+        # Redirect back even on error
+        page = request.form.get('page', '1')
+        return redirect(url_for('index', tab='rating', page=page))
 
 @app.route('/test/youtube')
 def test_youtube() -> Response:
