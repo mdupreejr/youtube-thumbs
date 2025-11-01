@@ -232,81 +232,99 @@ class DatabaseConnection:
 
             logger.info("Migrating api_usage table to new hourly schema")
 
-            # Create temporary table with aggregated hourly data
-            self._conn.execute("""
-                CREATE TABLE IF NOT EXISTS api_usage_new (
-                    date TEXT PRIMARY KEY,
-                    hour_00 INTEGER DEFAULT 0,
-                    hour_01 INTEGER DEFAULT 0,
-                    hour_02 INTEGER DEFAULT 0,
-                    hour_03 INTEGER DEFAULT 0,
-                    hour_04 INTEGER DEFAULT 0,
-                    hour_05 INTEGER DEFAULT 0,
-                    hour_06 INTEGER DEFAULT 0,
-                    hour_07 INTEGER DEFAULT 0,
-                    hour_08 INTEGER DEFAULT 0,
-                    hour_09 INTEGER DEFAULT 0,
-                    hour_10 INTEGER DEFAULT 0,
-                    hour_11 INTEGER DEFAULT 0,
-                    hour_12 INTEGER DEFAULT 0,
-                    hour_13 INTEGER DEFAULT 0,
-                    hour_14 INTEGER DEFAULT 0,
-                    hour_15 INTEGER DEFAULT 0,
-                    hour_16 INTEGER DEFAULT 0,
-                    hour_17 INTEGER DEFAULT 0,
-                    hour_18 INTEGER DEFAULT 0,
-                    hour_19 INTEGER DEFAULT 0,
-                    hour_20 INTEGER DEFAULT 0,
-                    hour_21 INTEGER DEFAULT 0,
-                    hour_22 INTEGER DEFAULT 0,
-                    hour_23 INTEGER DEFAULT 0
-                )
-            """)
+            # Start transaction for migration
+            self._conn.execute("BEGIN TRANSACTION")
 
-            # Migrate data: aggregate by date and hour
-            # Get all distinct dates
-            cursor = self._conn.execute("SELECT DISTINCT date FROM api_usage ORDER BY date")
-            dates = [row[0] for row in cursor.fetchall()]
+            try:
+                # Create temporary table with aggregated hourly data
+                self._conn.execute("""
+                    CREATE TABLE IF NOT EXISTS api_usage_new (
+                        date TEXT PRIMARY KEY,
+                        hour_00 INTEGER DEFAULT 0,
+                        hour_01 INTEGER DEFAULT 0,
+                        hour_02 INTEGER DEFAULT 0,
+                        hour_03 INTEGER DEFAULT 0,
+                        hour_04 INTEGER DEFAULT 0,
+                        hour_05 INTEGER DEFAULT 0,
+                        hour_06 INTEGER DEFAULT 0,
+                        hour_07 INTEGER DEFAULT 0,
+                        hour_08 INTEGER DEFAULT 0,
+                        hour_09 INTEGER DEFAULT 0,
+                        hour_10 INTEGER DEFAULT 0,
+                        hour_11 INTEGER DEFAULT 0,
+                        hour_12 INTEGER DEFAULT 0,
+                        hour_13 INTEGER DEFAULT 0,
+                        hour_14 INTEGER DEFAULT 0,
+                        hour_15 INTEGER DEFAULT 0,
+                        hour_16 INTEGER DEFAULT 0,
+                        hour_17 INTEGER DEFAULT 0,
+                        hour_18 INTEGER DEFAULT 0,
+                        hour_19 INTEGER DEFAULT 0,
+                        hour_20 INTEGER DEFAULT 0,
+                        hour_21 INTEGER DEFAULT 0,
+                        hour_22 INTEGER DEFAULT 0,
+                        hour_23 INTEGER DEFAULT 0
+                    )
+                """)
 
-            for date in dates:
-                # For each date, count calls per hour
-                hourly_counts = {}
-                for hour in range(24):
-                    hour_str = f"{hour:02d}"
+                # Migrate data: aggregate by date and hour using a single query per date
+                # Get all distinct dates
+                cursor = self._conn.execute("SELECT DISTINCT date FROM api_usage ORDER BY date")
+                dates = [row[0] for row in cursor.fetchall()]
+
+                for date in dates:
+                    # Use aggregated query to get all hourly counts at once
                     cursor = self._conn.execute(
                         """
-                        SELECT COUNT(*)
+                        SELECT strftime('%H', timestamp) as hour, COUNT(*) as count
                         FROM api_usage
-                        WHERE date = ? AND strftime('%H', timestamp) = ?
+                        WHERE date = ?
+                        GROUP BY hour
                         """,
-                        (date, hour_str)
+                        (date,)
                     )
-                    count = cursor.fetchone()[0]
-                    hourly_counts[f"hour_{hour_str}"] = count
 
-                # Insert aggregated data into new table
-                columns_str = "date, " + ", ".join([f"hour_{h:02d}" for h in range(24)])
-                values_str = "?, " + ", ".join(["?" for _ in range(24)])
-                values = [date] + [hourly_counts[f"hour_{h:02d}"] for h in range(24)]
+                    # Build hourly counts dictionary from query results
+                    hourly_counts = {f"hour_{int(row[0]):02d}": row[1] for row in cursor.fetchall()}
 
-                self._conn.execute(
-                    f"INSERT INTO api_usage_new ({columns_str}) VALUES ({values_str})",
-                    values
-                )
+                    # Fill in zeros for missing hours
+                    for h in range(24):
+                        if f"hour_{h:02d}" not in hourly_counts:
+                            hourly_counts[f"hour_{h:02d}"] = 0
 
-            # Drop old table and rename new one
-            self._conn.execute("DROP TABLE api_usage")
-            self._conn.execute("ALTER TABLE api_usage_new RENAME TO api_usage")
+                    # Insert aggregated data into new table
+                    columns_str = "date, " + ", ".join([f"hour_{h:02d}" for h in range(24)])
+                    values_str = "?, " + ", ".join(["?" for _ in range(24)])
+                    values = [date] + [hourly_counts[f"hour_{h:02d}"] for h in range(24)]
 
-            logger.info(f"Successfully migrated {len(dates)} days of API usage data to hourly schema")
+                    self._conn.execute(
+                        f"INSERT INTO api_usage_new ({columns_str}) VALUES ({values_str})",
+                        values
+                    )
+
+                # Drop old table and rename new one
+                self._conn.execute("DROP TABLE api_usage")
+                self._conn.execute("ALTER TABLE api_usage_new RENAME TO api_usage")
+
+                # Commit the transaction
+                self._conn.execute("COMMIT")
+
+                logger.info(f"Successfully migrated {len(dates)} days of API usage data to hourly schema")
+
+            except Exception as exc:
+                # Rollback on any error
+                self._conn.execute("ROLLBACK")
+                logger.error(f"Failed to migrate api_usage table: {exc}")
+                # Clean up temporary table
+                try:
+                    self._conn.execute("DROP TABLE IF EXISTS api_usage_new")
+                except sqlite3.DatabaseError:
+                    # Ignore errors during cleanup; table may not exist
+                    pass
+                raise
 
         except sqlite3.DatabaseError as exc:
             logger.error(f"Failed to migrate api_usage table: {exc}")
-            # If migration fails, try to clean up
-            try:
-                self._conn.execute("DROP TABLE IF EXISTS api_usage_new")
-            except:
-                pass
             raise
 
     def _table_info(self, table: str) -> List[Dict[str, Any]]:

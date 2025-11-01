@@ -16,7 +16,7 @@ class APIUsageOperations:
 
     def record_api_call(
         self,
-        api_method: str = None,
+        api_method: str,
         success: bool = True,
         quota_cost: int = 1,
         error_message: str = None
@@ -35,6 +35,11 @@ class APIUsageOperations:
             now = datetime.utcnow()
             date_str = now.strftime('%Y-%m-%d')
             hour = now.hour
+
+            # Validate hour is within expected range
+            if not (0 <= hour <= 23):
+                raise ValueError(f"Invalid hour: {hour}")
+
             hour_col = f"hour_{hour:02d}"
 
             # Insert or update the row for today
