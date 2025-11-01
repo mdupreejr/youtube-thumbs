@@ -65,6 +65,78 @@ class VideoOperations:
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
         }
 
+        # Skip upsert if yt_video_id is None and ha_content_id is also None
+        # This prevents NOT NULL constraint errors for malformed data
+        if payload['yt_video_id'] is None and payload['ha_content_id'] is None:
+            logger.error(
+                "Cannot upsert video: both yt_video_id and ha_content_id are None | Title: '%s'",
+                ha_title
+            )
+            return
+
+        # For pending videos (yt_video_id is None), use ha_content_id to check for duplicates
+        if payload['yt_video_id'] is None:
+            # Check if a record with this ha_content_id already exists
+            with self._lock:
+                try:
+                    cursor = self._conn.execute(
+                        "SELECT id FROM video_ratings WHERE ha_content_id = ? LIMIT 1",
+                        (payload['ha_content_id'],)
+                    )
+                    existing = cursor.fetchone()
+
+                    with self._conn:
+                        if existing:
+                            # Update existing pending record
+                            self._conn.execute(
+                                """
+                                UPDATE video_ratings SET
+                                    ha_title=?, ha_artist=?, ha_app_name=?, ha_duration=?,
+                                    ha_content_hash=?, yt_match_pending=?, pending_reason=?,
+                                    source=?, yt_match_requested_at=?, yt_match_attempts=?,
+                                    yt_match_last_attempt=?, yt_match_last_error=?
+                                WHERE ha_content_id=?
+                                """,
+                                (
+                                    payload['ha_title'], payload['ha_artist'], payload['ha_app_name'],
+                                    payload['ha_duration'], payload['ha_content_hash'],
+                                    payload['yt_match_pending'], payload['pending_reason'],
+                                    payload['source'], payload['yt_match_requested_at'],
+                                    payload['yt_match_attempts'], payload['yt_match_last_attempt'],
+                                    payload['yt_match_last_error'], payload['ha_content_id']
+                                )
+                            )
+                        else:
+                            # Insert new pending record (without yt_video_id to avoid NOT NULL constraint)
+                            self._conn.execute(
+                                """
+                                INSERT INTO video_ratings (
+                                    ha_content_id, ha_title, ha_artist, ha_app_name, ha_duration,
+                                    rating, ha_content_hash, date_added, date_last_played,
+                                    play_count, rating_score, yt_match_pending, pending_reason, source,
+                                    yt_match_requested_at, yt_match_attempts, yt_match_last_attempt,
+                                    yt_match_last_error
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    payload['ha_content_id'], payload['ha_title'], payload['ha_artist'],
+                                    payload['ha_app_name'], payload['ha_duration'], payload['rating'],
+                                    payload['ha_content_hash'], payload['date_added'], payload['date_added'],
+                                    payload['yt_match_pending'], payload['pending_reason'],
+                                    payload['source'], payload['yt_match_requested_at'],
+                                    payload['yt_match_attempts'], payload['yt_match_last_attempt'],
+                                    payload['yt_match_last_error']
+                                )
+                            )
+                except sqlite3.DatabaseError as exc:
+                    log_and_suppress(
+                        exc,
+                        f"Failed to upsert pending video (ha_content_id: {payload.get('ha_content_id', 'unknown')})",
+                        level="error"
+                    )
+            return
+
+        # Normal upsert for videos with yt_video_id
         upsert_sql = """
         INSERT INTO video_ratings (
             yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name, yt_title, yt_channel, yt_channel_id,
