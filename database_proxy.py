@@ -3,10 +3,33 @@ Database proxy module for forwarding requests to sqlite_web.
 Handles ingress path rewriting and custom CSS injection.
 """
 import os
+import re
 import traceback
 import requests
 from flask import request, Response
 from logger import logger
+
+
+def sanitize_ingress_path(path):
+    """
+    Sanitize ingress path to prevent XSS and HTML injection.
+
+    Args:
+        path: The ingress path from HTTP headers
+
+    Returns:
+        Sanitized path or empty string if invalid
+    """
+    if not path:
+        return ''
+
+    # Only allow alphanumeric, hyphens, underscores, and forward slashes
+    # This prevents XSS via script tags or HTML injection
+    if not re.match(r'^/[a-zA-Z0-9/_-]*$', path):
+        logger.warning(f"Invalid ingress path rejected: {path}")
+        return ''
+
+    return path
 
 
 def create_database_proxy_handler():
@@ -57,13 +80,22 @@ def create_database_proxy_handler():
                 # Rewrite links for ingress compatibility
                 # sqlite_web generates links like href="/ratings.db/table"
                 # We need to rewrite them to include the ingress prefix
-                if request.environ.get('HTTP_X_INGRESS_PATH'):
-                    ingress_path = request.environ.get('HTTP_X_INGRESS_PATH')
-                    # Rewrite hrefs to include /database prefix and ingress path
-                    content = content.replace(b'href="/', f'href="{ingress_path}/database/'.encode())
-                    content = content.replace(b"href='/", f"href='{ingress_path}/database/".encode())
-                    content = content.replace(b'action="/', f'action="{ingress_path}/database/'.encode())
-                    content = content.replace(b"action='/", f"action='{ingress_path}/database/".encode())
+                raw_ingress_path = request.environ.get('HTTP_X_INGRESS_PATH')
+                if raw_ingress_path:
+                    # SECURITY: Sanitize ingress path to prevent XSS/HTML injection
+                    ingress_path = sanitize_ingress_path(raw_ingress_path)
+                    if ingress_path:  # Only rewrite if we have a valid sanitized path
+                        # Rewrite hrefs to include /database prefix and ingress path
+                        content = content.replace(b'href="/', f'href="{ingress_path}/database/'.encode())
+                        content = content.replace(b"href='/", f"href='{ingress_path}/database/".encode())
+                        content = content.replace(b'action="/', f'action="{ingress_path}/database/'.encode())
+                        content = content.replace(b"action='/", f"action='{ingress_path}/database/".encode())
+                    else:
+                        # Invalid ingress path, use fallback
+                        content = content.replace(b'href="/', b'href="/database/')
+                        content = content.replace(b"href='/", b"href='/database/")
+                        content = content.replace(b'action="/', b'action="/database/')
+                        content = content.replace(b"action='/", b"action='/database/")
                 else:
                     # Not through ingress, just add /database prefix
                     content = content.replace(b'href="/', b'href="/database/')

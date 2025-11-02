@@ -2,10 +2,12 @@ import atexit
 from flask import Flask, jsonify, Response, render_template, request, send_from_directory
 from typing import Tuple, Optional, Dict, Any
 import os
+import re
 import time
 import traceback
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import safe_join
 from logger import logger, user_action_logger, rating_logger
 from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
@@ -63,29 +65,56 @@ def handle_exception(e):
     logger.error(f"Unhandled exception on {request.path}: {e}")
     logger.error(traceback.format_exc())
 
+    # Check if debug mode is enabled (set via environment variable)
+    debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
+
     # Check if this is an API route - return JSON
     if request.path.startswith('/api/') or request.path.startswith('/test/') or request.path.startswith('/health') or request.path.startswith('/metrics'):
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'type': type(e).__name__
-        }), 500
+        if debug_mode:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'type': type(e).__name__,
+                'traceback': traceback.format_exc()
+            }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Internal server error'
+            }), 500
 
-    # For regular pages, return HTML with error details
-    html = f"""
-    <html>
-    <head><title>Error</title></head>
-    <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
-        <h1 style="color: #f44336;">Error: {type(e).__name__}</h1>
-        <p><strong>Message:</strong> {str(e)}</p>
-        <h2>Traceback:</h2>
-        <pre style="background: white; padding: 15px; border: 1px solid #ccc; overflow: auto;">
+    # For regular pages, return HTML
+    if debug_mode:
+        # SECURITY: Only show detailed errors in debug mode
+        html = f"""
+        <html>
+        <head><title>Error</title></head>
+        <body style="font-family: monospace; padding: 20px; background: #f5f5f5;">
+            <h1 style="color: #f44336;">Error: {type(e).__name__}</h1>
+            <p><strong>Message:</strong> {str(e)}</p>
+            <h2>Traceback:</h2>
+            <pre style="background: white; padding: 15px; border: 1px solid #ccc; overflow: auto;">
 {traceback.format_exc()}
-        </pre>
-    </body>
-    </html>
-    """
-    return html, 500
+            </pre>
+        </body>
+        </html>
+        """
+        return html, 500
+    else:
+        # SECURITY: Generic error message in production
+        html = """
+        <html>
+        <head><title>Error</title></head>
+        <body style="font-family: sans-serif; padding: 40px; background: #f5f7fa; text-align: center;">
+            <h1 style="color: #1e293b;">An error occurred</h1>
+            <p style="color: #64748b;">The server encountered an internal error. Please try again later.</p>
+            <p style="color: #64748b; font-size: 0.9em; margin-top: 20px;">
+                <a href="/" style="color: #2563eb;">Return to Home</a>
+            </p>
+        </body>
+        </html>
+        """
+        return html, 500
 
 db = get_database()
 
@@ -399,7 +428,19 @@ def serve_static(filename):
     Flask's default static serving doesn't respect ingress paths properly.
     """
     try:
+        # SECURITY: Prevent path traversal attacks
+        if '..' in filename or filename.startswith('/'):
+            logger.warning(f"Path traversal attempt blocked: {filename} from {request.remote_addr}")
+            return "Invalid filename", 400
+
         static_dir = os.path.join(app.root_path, 'static')
+
+        # Validate the resolved path is within static directory
+        safe_path = safe_join(static_dir, filename)
+        if not safe_path or not safe_path.startswith(static_dir):
+            logger.warning(f"Path escape attempt blocked: {filename} from {request.remote_addr}")
+            return "Invalid path", 400
+
         logger.debug(f"Serving static file: {filename} from {static_dir}")
         response = send_from_directory(static_dir, filename)
         # Add cache headers for static files
@@ -407,11 +448,11 @@ def serve_static(filename):
         return response
     except FileNotFoundError:
         logger.error(f"Static file not found: {filename} in {static_dir}")
-        return f"File not found: {filename}", 404
+        return "File not found", 404
     except Exception as e:
         logger.error(f"Error serving static file {filename}: {e}")
         logger.error(traceback.format_exc())
-        return f"Error serving file: {str(e)}", 500
+        return "Error serving file", 500
 
 @app.route('/')
 def index() -> str:
@@ -514,6 +555,11 @@ def rate_song_form() -> Response:
 
         if not song_id or not rating:
             logger.error("Missing song_id or rating in form submission")
+            return redirect(url_for('index', tab='rating', page=page))
+
+        # SECURITY: Validate video ID format (YouTube IDs are 11 chars: alphanumeric, - and _)
+        if not re.match(r'^[A-Za-z0-9_-]{11}$', song_id):
+            logger.warning(f"Invalid video ID format: {song_id} from {request.remote_addr}")
             return redirect(url_for('index', tab='rating', page=page))
 
         if rating not in ['like', 'dislike', 'skip']:
@@ -644,6 +690,16 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
     Used for bulk rating interface.
     """
     try:
+        # SECURITY: Validate video ID format (YouTube IDs are 11 chars: alphanumeric, - and _)
+        if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
+            logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {request.remote_addr}")
+            return jsonify({'success': False, 'error': 'Invalid video ID format'}), 400
+
+        # Validate rating type
+        if rating_type not in ['like', 'dislike']:
+            logger.warning(f"Invalid rating type: {rating_type} from {request.remote_addr}")
+            return jsonify({'success': False, 'error': 'Invalid rating type'}), 400
+
         # Get video info from database
         video_data = db.get_video(video_id)
         if not video_data:
@@ -1147,10 +1203,15 @@ def data_viewer() -> str:
         # Get ingress path for proper link generation
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
-        # Get query parameters
-        page = int(request.args.get('page', 1))
-        if page < 1:
+        # Get query parameters with validation
+        try:
+            page = int(request.args.get('page', 1))
+            if page < 1 or page > 1000000:  # Reasonable upper bound
+                page = 1
+        except (ValueError, OverflowError):
+            logger.warning(f"Invalid page parameter: {request.args.get('page')} from {request.remote_addr}")
             page = 1
+
         limit = 50  # Videos per page
 
         sort_by = request.args.get('sort', 'date_last_played')
@@ -1159,22 +1220,7 @@ def data_viewer() -> str:
         # Get selected columns from checkboxes or query string (default to key columns)
         default_columns = ['yt_video_id', 'ha_title', 'ha_artist', 'rating', 'play_count', 'date_last_played']
 
-        # Try to get from checkboxes first (getlist for multiple values)
-        selected_columns = request.args.getlist('column')
-
-        # If no checkboxes, try the columns parameter (for pagination links)
-        if not selected_columns:
-            columns_param = request.args.get('columns', ','.join(default_columns))
-            selected_columns = [c.strip() for c in columns_param.split(',') if c.strip()]
-
-        # Ensure at least one column is selected
-        if not selected_columns:
-            selected_columns = default_columns
-
-        # Create columns param for pagination links
-        columns_param = ','.join(selected_columns)
-
-        # Define all available columns with friendly names
+        # Define all available columns with friendly names (BEFORE validation)
         all_columns = {
             'yt_video_id': 'Video ID',
             'ha_title': 'Title (HA)',
@@ -1198,12 +1244,40 @@ def data_viewer() -> str:
             'pending_reason': 'Pending Reason'
         }
 
-        # Ensure valid sort column
+        # Try to get from checkboxes first (getlist for multiple values)
+        selected_columns = request.args.getlist('column')
+
+        # If no checkboxes, try the columns parameter (for pagination links)
+        if not selected_columns:
+            columns_param = request.args.get('columns', ','.join(default_columns))
+            selected_columns = [c.strip() for c in columns_param.split(',') if c.strip()]
+
+        # SECURITY: Validate ALL selected columns against whitelist to prevent SQL injection
+        validated_columns = []
+        for col in selected_columns:
+            if col in all_columns:
+                validated_columns.append(col)
+            else:
+                logger.warning(f"Attempted to select invalid column: {col} from {request.remote_addr}")
+
+        # Use validated columns or fallback to defaults
+        if not validated_columns:
+            validated_columns = default_columns
+
+        selected_columns = validated_columns
+
+        # Create columns param for pagination links
+        columns_param = ','.join(selected_columns)
+
+        # Ensure valid sort column (SQL injection protection)
         if sort_by not in all_columns:
+            logger.warning(f"Invalid sort column attempted: {sort_by} from {request.remote_addr}")
             sort_by = 'date_last_played'
 
-        # Ensure valid sort order
+        # Ensure valid sort order (SQL injection protection)
+        sort_order = sort_order.upper()
         if sort_order not in ['ASC', 'DESC']:
+            logger.warning(f"Invalid sort order attempted: {sort_order} from {request.remote_addr}")
             sort_order = 'DESC'
 
         # Build SQL query with selected columns
