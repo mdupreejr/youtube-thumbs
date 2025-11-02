@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Database Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        .nav-links {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9em;
+            padding: 8px 15px;
+            border-radius: 6px;
+            background: #f0f4ff;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .controls h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .column-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .column-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .column-option input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .column-option label {
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #333;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .sort-controls select {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9em;
+            cursor: pointer;
+            background: white;
+        }
+
+        .sort-controls select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .apply-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: transform 0.2s;
+        }
+
+        .apply-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        thead th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            white-space: nowrap;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.15s;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9ff;
+        }
+
+        tbody td {
+            padding: 10px;
+            vertical-align: top;
+        }
+
+        tbody td a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        tbody td a:hover {
+            text-decoration: underline;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .info-text {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .section-divider {
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, transparent);
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Database Viewer</h1>
+            <div class="subtitle">Browse and filter your video ratings database</div>
+            <div class="nav-links">
+                <a href="{{ ingress_path }}/">← Back to Home</a>
+                <a href="{{ ingress_path }}/stats">📈 Statistics</a>
+                <a href="{{ ingress_path }}/database">🗄️ SQLite Web</a>
+            </div>
+        </header>
+
+        <div class="card">
+            <form method="GET" action="{{ ingress_path }}/data">
+                <div class="controls">
+                    <h3>🎛️ Column Selection</h3>
+                    <p class="info-text">Select which columns to display in the table:</p>
+                    <div class="column-selector">
+                        {% for col_key, col_name in all_columns.items() %}
+                        <div class="column-option">
+                            <input type="checkbox"
+                                   id="col_{{ col_key }}"
+                                   name="column"
+                                   value="{{ col_key }}"
+                                   {% if col_key in selected_columns %}checked{% endif %}>
+                            <label for="col_{{ col_key }}">{{ col_name }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <hr class="section-divider">
+
+                    <h3>🔀 Sorting</h3>
+                    <div class="sort-controls">
+                        <label for="sort">Sort by:</label>
+                        <select name="sort" id="sort">
+                            {% for col_key, col_name in all_columns.items() %}
+                            <option value="{{ col_key }}" {% if sort_by == col_key %}selected{% endif %}>
+                                {{ col_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+
+                        <label for="order">Order:</label>
+                        <select name="order" id="order">
+                            <option value="DESC" {% if sort_order == 'DESC' %}selected{% endif %}>Descending</option>
+                            <option value="ASC" {% if sort_order == 'ASC' %}selected{% endif %}>Ascending</option>
+                        </select>
+
+                        <button type="submit" class="apply-btn">Apply Filters</button>
+                    </div>
+                </div>
+            </form>
+
+            <p class="info-text">Showing {{ rows|length }} of {{ total_count }} records (Page {{ page }} of {{ total_pages }})</p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for col in selected_columns %}
+                            <th>{{ all_columns[col] }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            {% for col in selected_columns %}
+                            <td>
+                                {% if row.get(col + '_link') %}
+                                    <a href="{{ row[col] }}" target="_blank">{{ row[col] }}</a>
+                                {% else %}
+                                    {{ row[col] }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="{{ ingress_path }}/data?page={{ page - 1 }}&sort={{ sort_by }}&order={{ sort_order }}&columns={{ columns_param }}" style="text-decoration: none;">
+                        <button type="button">← Previous</button>
+                    </a>
+                {% else %}
+                    <button type="button" disabled>← Previous</button>
+                {% endif %}
+
+                <span style="color: white; font-weight: 600; background: rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 6px;">
+                    Page {{ page }} of {{ total_pages }}
+                </span>
+
+                {% if page < total_pages %}
+                    <a href="{{ ingress_path }}/data?page={{ page + 1 }}&sort={{ sort_by }}&order={{ sort_order }}&columns={{ columns_param }}" style="text-decoration: none;">
+                        <button type="button">Next →</button>
+                    </a>
+                {% else %}
+                    <button type="button" disabled>Next →</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1137,6 +1137,154 @@ def stats_page() -> str:
         return f"<h1>Error loading statistics</h1><p>{str(e)}</p>", 500
 
 
+@app.route('/data')
+def data_viewer() -> str:
+    """
+    Server-side rendered database viewer with column selection and sorting.
+    All processing done on server, no client-side JavaScript required.
+    """
+    try:
+        # Get ingress path for proper link generation
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
+        # Get query parameters
+        page = int(request.args.get('page', 1))
+        if page < 1:
+            page = 1
+        limit = 50  # Videos per page
+
+        sort_by = request.args.get('sort', 'date_last_played')
+        sort_order = request.args.get('order', 'DESC')
+
+        # Get selected columns from checkboxes or query string (default to key columns)
+        default_columns = ['yt_video_id', 'ha_title', 'ha_artist', 'rating', 'play_count', 'date_last_played']
+
+        # Try to get from checkboxes first (getlist for multiple values)
+        selected_columns = request.args.getlist('column')
+
+        # If no checkboxes, try the columns parameter (for pagination links)
+        if not selected_columns:
+            columns_param = request.args.get('columns', ','.join(default_columns))
+            selected_columns = [c.strip() for c in columns_param.split(',') if c.strip()]
+
+        # Ensure at least one column is selected
+        if not selected_columns:
+            selected_columns = default_columns
+
+        # Create columns param for pagination links
+        columns_param = ','.join(selected_columns)
+
+        # Define all available columns with friendly names
+        all_columns = {
+            'yt_video_id': 'Video ID',
+            'ha_title': 'Title (HA)',
+            'ha_artist': 'Artist (HA)',
+            'ha_app_name': 'App Name',
+            'yt_title': 'Title (YT)',
+            'yt_channel': 'Channel',
+            'yt_url': 'YouTube URL',
+            'rating': 'Rating',
+            'play_count': 'Play Count',
+            'date_added': 'Date Added',
+            'date_last_played': 'Last Played',
+            'rating_score': 'Rating Score',
+            'source': 'Source',
+            'yt_match_pending': 'Pending',
+            'yt_match_attempts': 'Match Attempts',
+            'ha_duration': 'Duration (HA)',
+            'yt_duration': 'Duration (YT)',
+            'yt_published_at': 'Published',
+            'yt_category_id': 'Category',
+            'pending_reason': 'Pending Reason'
+        }
+
+        # Ensure valid sort column
+        if sort_by not in all_columns:
+            sort_by = 'date_last_played'
+
+        # Ensure valid sort order
+        if sort_order not in ['ASC', 'DESC']:
+            sort_order = 'DESC'
+
+        # Build SQL query with selected columns
+        select_clause = ', '.join(selected_columns)
+
+        # Get total count
+        count_query = "SELECT COUNT(*) as count FROM video_ratings"
+        total_count = db._conn.execute(count_query).fetchone()['count']
+
+        # Calculate pagination
+        total_pages = (total_count + limit - 1) // limit
+        page = max(1, min(page, total_pages if total_pages > 0 else 1))
+        offset = (page - 1) * limit
+
+        # Get data
+        data_query = f"""
+            SELECT {select_clause}
+            FROM video_ratings
+            ORDER BY {sort_by} {sort_order}
+            LIMIT ? OFFSET ?
+        """
+        cursor = db._conn.execute(data_query, (limit, offset))
+        rows = cursor.fetchall()
+
+        # Format rows for template
+        formatted_rows = []
+        for row in rows:
+            formatted_row = {}
+            for col in selected_columns:
+                value = row[col]
+                # Format specific column types
+                if col == 'rating':
+                    if value == 'like':
+                        formatted_row[col] = '👍 Like'
+                    elif value == 'dislike':
+                        formatted_row[col] = '👎 Dislike'
+                    else:
+                        formatted_row[col] = '➖ None'
+                elif col in ['date_added', 'date_last_played', 'yt_published_at']:
+                    if value:
+                        try:
+                            dt = datetime.fromisoformat(value.replace(' ', 'T'))
+                            formatted_row[col] = dt.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            formatted_row[col] = value
+                    else:
+                        formatted_row[col] = '-'
+                elif col == 'yt_match_pending':
+                    formatted_row[col] = '✓' if value == 1 else '✗'
+                elif col == 'yt_url' and value:
+                    # Make URL clickable
+                    formatted_row[col] = value
+                    formatted_row[col + '_link'] = True
+                elif value is None:
+                    formatted_row[col] = '-'
+                else:
+                    formatted_row[col] = value
+            formatted_rows.append(formatted_row)
+
+        # Prepare template data
+        template_data = {
+            'ingress_path': ingress_path,
+            'rows': formatted_rows,
+            'selected_columns': selected_columns,
+            'all_columns': all_columns,
+            'sort_by': sort_by,
+            'sort_order': sort_order,
+            'page': page,
+            'total_pages': total_pages,
+            'total_count': total_count,
+            'columns_param': columns_param
+        }
+
+        return render_template('data_viewer.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering data viewer: {e}")
+        logger.error(traceback.format_exc())
+        return f"<h1>Error loading database viewer</h1><p>{str(e)}</p>", 500
+
+
 # Database proxy routes - delegates to database_proxy module
 # Allow all HTTP methods (GET, POST, etc.) for sqlite_web functionality like exports
 app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
