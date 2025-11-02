@@ -1263,6 +1263,29 @@ def data_viewer() -> str:
                     formatted_row[col] = value
             formatted_rows.append(formatted_row)
 
+        # Generate page numbers for pagination
+        page_numbers = []
+        if total_pages <= 10:
+            # Show all pages if 10 or fewer
+            page_numbers = list(range(1, total_pages + 1))
+        else:
+            # Show first, last, and pages around current
+            page_numbers = [1]
+
+            start = max(2, page - 2)
+            end = min(total_pages - 1, page + 2)
+
+            if start > 2:
+                page_numbers.append('...')
+
+            for p in range(start, end + 1):
+                page_numbers.append(p)
+
+            if end < total_pages - 1:
+                page_numbers.append('...')
+
+            page_numbers.append(total_pages)
+
         # Prepare template data
         template_data = {
             'ingress_path': ingress_path,
@@ -1274,7 +1297,8 @@ def data_viewer() -> str:
             'page': page,
             'total_pages': total_pages,
             'total_count': total_count,
-            'columns_param': columns_param
+            'columns_param': columns_param,
+            'page_numbers': page_numbers
         }
 
         return render_template('data_viewer.html', **template_data)
