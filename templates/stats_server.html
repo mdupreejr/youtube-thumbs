@@ -14,36 +14,71 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f7fa;
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
+            margin: 0;
         }
 
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: 100%;
+            margin: 0;
         }
 
         header {
             background: white;
-            padding: 30px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            border-left: 2px solid #2563eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         h1 {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 2em;
+            color: #1e293b;
+            font-size: 0.95em;
+            font-weight: 600;
+            margin: 0;
         }
 
-        .subtitle {
-            color: #666;
-            margin-top: 5px;
-            font-size: 0.9em;
+        .nav-links {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links a {
+            color: #475569;
+            text-decoration: none;
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 3px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .nav-links a.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
         }
 
         .metrics-grid {
@@ -55,42 +90,45 @@
 
         .metric-card {
             background: white;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             text-align: center;
         }
 
         .metric-value {
-            font-size: 2.5em;
+            font-size: 1.75em;
             font-weight: 700;
-            color: #667eea;
-            margin: 10px 0;
+            color: #2563eb;
+            margin: 8px 0;
         }
 
         .metric-label {
-            color: #666;
+            color: #64748b;
             font-weight: 500;
+            font-size: 0.85em;
         }
 
         .card {
             background: white;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
         }
 
         .card h2 {
-            color: #333;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #667eea;
+            color: #1e293b;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 1em;
+            font-weight: 600;
         }
 
         .list-item {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -101,7 +139,7 @@
         }
 
         .list-item:hover {
-            background: #f9f9f9;
+            background: #f8fafc;
         }
 
         .item-info {
@@ -110,39 +148,42 @@
 
         .item-title {
             font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
+            color: #1e293b;
+            margin-bottom: 4px;
+            font-size: 0.85em;
         }
 
         .item-meta {
-            font-size: 0.9em;
-            color: #666;
+            font-size: 0.75em;
+            color: #64748b;
         }
 
         .item-stat {
             font-weight: 600;
-            color: #667eea;
+            color: #2563eb;
+            font-size: 0.9em;
         }
 
         .bar-container {
-            background: #eee;
-            height: 30px;
-            border-radius: 15px;
+            background: #f1f5f9;
+            height: 24px;
+            border-radius: 4px;
             overflow: hidden;
-            margin: 10px 0;
+            margin: 8px 0;
             position: relative;
         }
 
         .bar {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: #2563eb;
             height: 100%;
-            border-radius: 15px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            padding-right: 10px;
+            padding-right: 8px;
             color: white;
-            font-weight: 600;
+            font-weight: 500;
+            font-size: 0.75em;
             transition: width 0.3s ease;
         }
 
@@ -188,15 +229,17 @@
 </head>
 <body>
     <div class="container">
-        <a href="{{ ingress_path }}/" class="back-link">← Back to Home</a>
-
         <header>
-            <h1>📊 Statistics & Analytics</h1>
-            <div class="subtitle">Server-side rendered • Auto-refreshes every 5 minutes</div>
-            <div class="timestamp">Generated: {{ generated_at }}</div>
-            <div class="subtitle" style="margin-top: 10px;">
-                <a href="{{ ingress_path }}/data" style="color: #667eea; text-decoration: none;">🗂️ View Database</a>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats" class="active">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                </div>
             </div>
+            <div style="font-size: 0.65em; color: #64748b;">Auto-refresh: 5min</div>
         </header>
 
         <!-- Summary Metrics -->

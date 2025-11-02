@@ -26,34 +26,34 @@
 
         header {
             background: white;
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 10px;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-bottom: 8px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            border-left: 3px solid #2563eb;
+            border-left: 2px solid #2563eb;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
         }
 
         .header-left {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 10px;
         }
 
         h1 {
             color: #1e293b;
-            font-size: 1.1em;
+            font-size: 0.95em;
             font-weight: 600;
             margin: 0;
         }
 
         .nav-links {
             display: flex;
-            gap: 6px;
+            gap: 4px;
             flex-wrap: wrap;
         }
 
@@ -61,11 +61,17 @@
             color: #475569;
             text-decoration: none;
             font-size: 0.7em;
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 3px 8px;
+            border-radius: 3px;
             background: #f1f5f9;
             border: 1px solid #e2e8f0;
             transition: all 0.2s;
+        }
+
+        .nav-links a.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
         }
 
         .nav-links a:hover {
@@ -339,11 +345,12 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <h1>📊 Database Viewer</h1>
+                <h1>YouTube Thumbs Rating</h1>
                 <div class="nav-links">
-                    <a href="{{ ingress_path }}/">← Home</a>
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats">Stats</a>
-                    <a href="{{ ingress_path }}/database">SQLite</a>
+                    <a href="{{ ingress_path }}/data" class="active">Database</a>
                 </div>
             </div>
             <form method="GET" action="{{ ingress_path }}/data" style="margin: 0;">
