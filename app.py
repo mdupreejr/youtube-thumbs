@@ -491,7 +491,7 @@ def index() -> str:
             template_data['songs'] = formatted_songs
             template_data['current_page'] = result['page']
             template_data['total_pages'] = result['total_pages']
-            template_data['total_unrated'] = result['total_unrated']
+            template_data['total_unrated'] = result['total_count']
 
         return render_template('index_server.html', **template_data)
 
