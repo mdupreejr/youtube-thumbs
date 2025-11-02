@@ -1283,8 +1283,8 @@ def data_viewer() -> str:
         # Build SQL query with selected columns
         select_clause = ', '.join(selected_columns)
 
-        # Get total count
-        count_query = "SELECT COUNT(*) as count FROM video_ratings"
+        # Get total count of distinct video IDs
+        count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
         total_count = db._conn.execute(count_query).fetchone()['count']
 
         # Calculate pagination
@@ -1292,10 +1292,16 @@ def data_viewer() -> str:
         page = max(1, min(page, total_pages if total_pages > 0 else 1))
         offset = (page - 1) * limit
 
-        # Get data
+        # Get data with DISTINCT to avoid showing duplicate videos
+        # Group by yt_video_id and take the most recently played version if duplicates exist
         data_query = f"""
             SELECT {select_clause}
             FROM video_ratings
+            WHERE rowid IN (
+                SELECT MAX(rowid)
+                FROM video_ratings
+                GROUP BY yt_video_id
+            )
             ORDER BY {sort_by} {sort_order}
             LIMIT ? OFFSET ?
         """

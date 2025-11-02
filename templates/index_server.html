@@ -305,6 +305,7 @@
                     <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if current_tab == 'rating' else '' }}">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats">Stats</a>
                     <a href="{{ ingress_path }}/data">Database</a>
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
                 </div>
             </div>
         </header>
@@ -361,7 +362,7 @@
                         <div class="song-title">{{ song.title }}</div>
                         <div class="song-meta">{{ song.artist }} {% if song.duration %}• {{ song.duration }}{% endif %}</div>
                     </div>
-                    <form method="POST" action="/rate-song" style="display: inline;">
+                    <form method="POST" action="{{ ingress_path }}/rate-song" style="display: inline;">
                         <input type="hidden" name="song_id" value="{{ song.id }}">
                         <input type="hidden" name="page" value="{{ current_page }}">
                         <div class="rating-buttons">
