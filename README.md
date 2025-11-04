@@ -98,7 +98,7 @@ Configure in the addon **Configuration** tab:
 | `history_poll_interval` | 60 | Seconds between HA polls (10-300) |
 | `force_quota_unlock` | false | Clear quota block on startup |
 | `pending_video_retry_enabled` | true | Auto-retry pending videos after quota recovery |
-| `pending_video_retry_batch_size` | 50 | Max pending videos to retry per recovery (1-500) |
+| `pending_video_retry_batch_size` | 1 | Max pending videos to retry per recovery (1-500) |
 
 ## API Endpoints
 
@@ -416,7 +416,18 @@ def get_content_hash(title, duration, artist=None):
 - "Song Name  " / "Song Name" (trailing space)
 - "Title - Artist" / "Title - artist" (case difference)
 
-### Pending Video Retry Workflow (v1.51.0)
+### Pending Video Retry Workflow
+
+For complete documentation, see [RETRY_SYSTEM.md](RETRY_SYSTEM.md)
+
+#### Manual Retry (v1.72.0+)
+
+1. **Stats Page Button**: Click "🔄 Retry 1 Video" on stats page
+2. **Rate Limiting**: 30-second cooldown between clicks
+3. **Processing**: Processes 1 pending video per click
+4. **Results**: Shows detailed statistics for 5 seconds
+
+#### Automatic Retry (v1.51.0+)
 
 1. **Quota Exhaustion**: New song plays, quota exceeded
    - Create video_ratings entry with `pending_match = 1`
@@ -424,12 +435,13 @@ def get_content_hash(title, duration, artist=None):
    - Set `pending_reason = 'quota_exceeded'`
    - Set `yt_video_id = NULL`
 
-2. **Quota Recovery Detection**: QuotaProber runs every hour
+2. **Quota Recovery Detection**: QuotaProber checks every 5 minutes
    - Probes YouTube API with test search
    - If successful, clears quota guard
 
 3. **Automatic Retry**: QuotaProber calls `_retry_pending_videos()`
-   - Queries: `SELECT * FROM video_ratings WHERE pending_match = 1 AND pending_reason = 'quota_exceeded' LIMIT 50`
+   - Queries: `SELECT * FROM video_ratings WHERE pending_match = 1 AND pending_reason = 'quota_exceeded' LIMIT 1`
+   - Processes 1 video per recovery cycle (v1.72.4)
    - For each pending video:
      - Search YouTube with ha_title + ha_duration + ha_artist
      - **If found**: Update with YouTube data, set `pending_match = 0`, populate `yt_video_id`
@@ -444,7 +456,12 @@ def get_content_hash(title, duration, artist=None):
 
 **Configuration**:
 - `pending_video_retry_enabled` (default: true) - Enable/disable automatic retry
-- `pending_video_retry_batch_size` (default: 50) - Max videos per retry to prevent re-exhausting quota
+- `pending_video_retry_batch_size` (default: 1) - Max videos per retry to prevent re-exhausting quota
+
+**Monitoring**:
+- View activity in Logs → Quota Prober tab
+- Event categories: probe, retry, success, error, recovery
+- Summary statistics: probes, recoveries, retries, resolved
 
 ## Troubleshooting
 
@@ -475,6 +492,50 @@ def get_content_hash(title, duration, artist=None):
 **Check Logs**: Settings → Add-ons → YouTube Thumbs Rating → Log tab
 
 ## Recent Updates
+
+### v1.72.4 - Reduce Retry Rate to 1 Video at a Time
+- **Safety Improvement:** Changed retry batch sizes to prevent quota exhaustion
+- Manual retry button now processes 1 video instead of 5
+- Automatic QuotaProber processes 1 video per recovery cycle instead of 50
+- Updated delay logging from DEBUG to INFO for better visibility
+- Changed delays between videos from 10s to 60s
+- Default config `pending_video_retry_batch_size` changed from 50 to 1
+- See [RETRY_SYSTEM.md](RETRY_SYSTEM.md) for complete documentation
+
+### v1.72.3 - Improve Retry Button Feedback
+- **UX Improvement:** Better visibility for retry results
+- Increased status message display time from 2 seconds to 5 seconds
+- Page only reloads if videos were successfully resolved
+- Failed retry messages stay visible so user can read full results
+
+### v1.72.2 - Fix Stats Page AttributeError
+- **Bug Fix:** Fixed stats page crash when accessing pending video statistics
+- Added `get_pending_summary()` method delegation to Database class
+- Method was present in StatsOperations but not exposed on Database interface
+
+### v1.72.1 - Add QuotaProber Logs Tab
+- **New Feature:** Dedicated logs tab for QuotaProber system monitoring
+- Added 4th tab to logs viewer showing automatic retry activity
+- Event categorization: probe, retry, success, error, recovery with color coding
+- Summary statistics: probe attempts, recoveries, retry batches, videos resolved
+- Filters by period, event type, and log level
+
+### v1.72.0 - Manual Pending Video Retry
+- **New Feature:** Manual retry button on stats page
+- Process pending videos 5 at a time (now 1 in v1.72.4)
+- Added `/api/pending/retry` endpoint with rate limiting
+- Added pending video statistics display (quota exceeded, not found, search failed, total)
+- 30-second cooldown between manual retry attempts
+
+### v1.71.2 - Compact Bulk Rating Layout
+- **UX Improvement:** Bulk rating interface now uses single-line layout
+- Song title, artist, and duration on left; rating buttons on right
+- More compact and easier to scan through unrated songs
+
+### v1.71.1 - Fix Datetime JSON Serialization
+- **Bug Fix:** Fixed stats caching errors for recent_activity, top_rated, most_played
+- Added DateTimeEncoder class to handle datetime serialization
+- SQLite datetime objects now properly converted to ISO format strings
 
 ### v1.51.2 - Database Migration NOT NULL Constraint Fix
 - **Bug Fix:** Fixed "NOT NULL constraint failed: video_ratings.yt_video_id" error
