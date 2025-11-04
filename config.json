@@ -1,6 +1,6 @@
 {
   "name": "YouTube Thumbs Rating",
-  "version": "1.72.1",
+  "version": "1.72.2",
   "slug": "youtube_thumbs",
   "description": "Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant",
   "url": "https://github.com/mdupreejr/youtube-thumbs",

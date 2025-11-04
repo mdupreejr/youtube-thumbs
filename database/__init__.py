@@ -331,6 +331,9 @@ class Database:
     def get_unrated_videos(self, page: int = 1, limit: int = 50) -> Dict[str, Any]:
         return self._stats_ops.get_unrated_videos(page, limit)
 
+    def get_pending_summary(self) -> Dict[str, Any]:
+        return self._stats_ops.get_pending_summary()
+
     # API Usage Operations
     def record_api_call(self, api_method: str, success: bool = True, quota_cost: int = 1, error_message: str = None) -> None:
         """Record a YouTube API call for usage tracking."""
