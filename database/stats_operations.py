@@ -792,7 +792,7 @@ class StatsOperations:
             # Get unrated songs, sorted by play count (most played first)
             cursor = self._conn.execute(
                 """
-                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url
+                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url, ha_duration, yt_duration
                 FROM video_ratings
                 WHERE rating = 'none' AND yt_match_pending = 0
                 ORDER BY play_count DESC, date_last_played DESC
@@ -802,19 +802,10 @@ class StatsOperations:
             )
             songs = cursor.fetchall()
 
-        # Format results
+        # Return raw database columns for app.py to format
         songs_list = []
         for song in songs:
-            # Build YouTube URL if not stored
-            yt_url = song['yt_url'] or f"https://www.youtube.com/watch?v={song['yt_video_id']}"
-
-            songs_list.append({
-                'id': song['yt_video_id'],
-                'title': song['yt_title'] or song['ha_title'] or 'Unknown',
-                'artist': song['ha_artist'] or song['yt_channel'] or 'Unknown',
-                'play_count': song['play_count'] or 0,
-                'url': yt_url
-            })
+            songs_list.append(dict(song))
 
         # Note: page is now clamped to valid range above
         total_pages = (total_count + limit - 1) // limit
