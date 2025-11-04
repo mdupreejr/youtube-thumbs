@@ -222,6 +222,27 @@
             top: 0;
             white-space: nowrap;
             background: #f8fafc;
+            position: relative;
+        }
+
+        thead th .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 1;
+        }
+
+        thead th .resize-handle:hover {
+            background: #2563eb;
+            opacity: 0.3;
+        }
+
+        thead th.resizing {
+            border-right: 2px solid #2563eb;
         }
 
         thead th a {
@@ -388,13 +409,14 @@
                     <thead>
                         <tr>
                             {% for col in selected_columns %}
-                            <th>
+                            <th data-column="{{ col }}">
                                 <a href="{{ ingress_path }}/data?sort={{ col }}&order={% if sort_by == col and sort_order == 'DESC' %}ASC{% else %}DESC{% endif %}&columns={{ columns_param }}">
                                     {{ all_columns[col] }}
                                     {% if sort_by == col %}
                                         <span class="sort-indicator">{{ '▼' if sort_order == 'DESC' else '▲' }}</span>
                                     {% endif %}
                                 </a>
+                                <div class="resize-handle"></div>
                             </th>
                             {% endfor %}
                         </tr>
@@ -443,5 +465,108 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Column resizing functionality
+        (function() {
+            const storageKey = 'db_viewer_column_widths';
+            let currentHandle = null;
+            let currentColumn = null;
+            let startX = 0;
+            let startWidth = 0;
+
+            // Load saved column widths from localStorage
+            function loadColumnWidths() {
+                try {
+                    const saved = localStorage.getItem(storageKey);
+                    if (saved) {
+                        const widths = JSON.parse(saved);
+                        Object.keys(widths).forEach(colKey => {
+                            const th = document.querySelector(`th[data-column="${colKey}"]`);
+                            if (th) {
+                                th.style.width = widths[colKey] + 'px';
+                                th.style.minWidth = widths[colKey] + 'px';
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error loading column widths:', e);
+                }
+            }
+
+            // Save column widths to localStorage
+            function saveColumnWidths() {
+                try {
+                    const widths = {};
+                    document.querySelectorAll('th[data-column]').forEach(th => {
+                        const colKey = th.getAttribute('data-column');
+                        if (colKey) {
+                            widths[colKey] = th.offsetWidth;
+                        }
+                    });
+                    localStorage.setItem(storageKey, JSON.stringify(widths));
+                } catch (e) {
+                    console.error('Error saving column widths:', e);
+                }
+            }
+
+            // Handle mouse down on resize handle
+            function onMouseDown(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                currentHandle = e.target;
+                currentColumn = currentHandle.parentElement;
+                startX = e.pageX;
+                startWidth = currentColumn.offsetWidth;
+
+                currentColumn.classList.add('resizing');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            }
+
+            // Handle mouse move during resize
+            function onMouseMove(e) {
+                if (!currentColumn) return;
+
+                const diff = e.pageX - startX;
+                const newWidth = Math.max(50, startWidth + diff); // Minimum 50px
+
+                currentColumn.style.width = newWidth + 'px';
+                currentColumn.style.minWidth = newWidth + 'px';
+            }
+
+            // Handle mouse up after resize
+            function onMouseUp(e) {
+                if (currentColumn) {
+                    currentColumn.classList.remove('resizing');
+                    saveColumnWidths();
+                }
+
+                currentHandle = null;
+                currentColumn = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            // Initialize resize handles
+            function initResizeHandles() {
+                const handles = document.querySelectorAll('.resize-handle');
+                handles.forEach(handle => {
+                    handle.addEventListener('mousedown', onMouseDown);
+                });
+            }
+
+            // Initialize on page load
+            loadColumnWidths();
+            initResizeHandles();
+        })();
+    </script>
 </body>
 </html>
