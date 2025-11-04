@@ -414,10 +414,20 @@
                     statusMsg.textContent = data.message;
                     statusMsg.style.color = '#10b981';
 
-                    // Reload page after 2 seconds to show updated counts
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
+                    // Only reload if something was resolved, otherwise let user read the message
+                    if (data.resolved > 0) {
+                        // Reload page after 5 seconds to show updated counts
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 5000);
+                    } else {
+                        // Re-enable button after 5 seconds if nothing resolved
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        }, 5000);
+                    }
                 } else {
                     statusMsg.textContent = data.error || 'Error processing request';
                     statusMsg.style.color = '#ef4444';
