@@ -103,9 +103,9 @@ class QuotaProber:
             return
 
         try:
-            # Get pending videos that failed due to quota
+            # Get pending videos that failed due to quota (1 at a time for safety)
             pending = self.db.get_pending_videos(
-                limit=self.retry_batch_size,
+                limit=1,
                 reason_filter='quota_exceeded'
             )
 
@@ -113,8 +113,8 @@ class QuotaProber:
                 logger.info("No pending videos to retry after quota recovery")
                 return
 
-            estimated_minutes = (len(pending) - 1) * 10 / 60  # 10 seconds between each, except first
-            logger.info("Found %d pending videos to retry after quota recovery (estimated time: %.1f minutes)",
+            estimated_minutes = (len(pending) - 1) * 60 / 60  # 60 seconds between each, except first
+            logger.info("Found %d pending video(s) to retry after quota recovery (estimated time: %.1f minutes)",
                        len(pending), estimated_minutes)
 
             success_count = 0
@@ -122,10 +122,10 @@ class QuotaProber:
             error_count = 0
 
             for idx, video in enumerate(pending):
-                # Rate limit: Add 10 second delay between retries (except first one)
+                # Rate limit: Add 60 second delay between retries (except first one)
                 if idx > 0:
-                    logger.debug("Waiting 10 seconds before next retry to avoid quota exhaustion...")
-                    time.sleep(10)
+                    logger.info("Waiting 60 seconds before next retry to avoid quota exhaustion...")
+                    time.sleep(60)
 
                 ha_content_id = video.get('ha_content_id')
                 ha_title = video.get('ha_title', 'Unknown')

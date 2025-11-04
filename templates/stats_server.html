@@ -367,7 +367,7 @@
                     cursor: pointer;
                     transition: background 0.2s;
                 " onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
-                    🔄 Retry 5 Videos
+                    🔄 Retry 1 Video
                 </button>
                 <span id="statusMsg" style="color: #64748b; font-size: 0.85em;"></span>
             </div>
@@ -405,7 +405,7 @@
             statusMsg.style.color = '#2563eb';
 
             try {
-                const response = await fetch('{{ ingress_path }}/api/pending/retry?batch_size=5', {
+                const response = await fetch('{{ ingress_path }}/api/pending/retry?batch_size=1', {
                     method: 'POST'
                 });
                 const data = await response.json();
