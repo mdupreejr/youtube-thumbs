@@ -25,6 +25,7 @@ from search_helpers import search_and_match_video_refactored
 from cache_helpers import find_cached_video_refactored
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
+from routes.logs_routes import bp as logs_bp, init_logs_routes
 
 app = Flask(__name__)
 
@@ -124,6 +125,10 @@ set_youtube_api_database(db)
 # Initialize and register data API blueprint
 init_data_api_routes(db)
 app.register_blueprint(data_api_bp)
+
+# Initialize and register logs blueprint
+init_logs_routes(db)
+app.register_blueprint(logs_bp)
 
 
 def format_media_info(title: str, artist: str) -> str:

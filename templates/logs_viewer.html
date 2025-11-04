@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Logs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 10px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0;
+        }
+
+        header {
+            background: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            border-left: 2px solid #2563eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h1 {
+            color: #1e293b;
+            font-size: 0.95em;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links a {
+            color: #475569;
+            text-decoration: none;
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 3px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+
+        .nav-links a.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .nav-links a:hover {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+
+        .tab-navigation {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 6px;
+        }
+
+        .tab-button {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 4px 4px 0 0;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.8em;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .tab-button:hover {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .tab-button.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 4px;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-group label {
+            font-size: 0.75em;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .filter-group select {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 3px;
+            font-size: 0.75em;
+            background: white;
+            color: #334155;
+            cursor: pointer;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .apply-btn {
+            padding: 4px 12px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.75em;
+            transition: background 0.2s;
+        }
+
+        .apply-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .info-text {
+            color: #64748b;
+            font-size: 0.75em;
+            margin-bottom: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75em;
+        }
+
+        thead {
+            background: #f8fafc;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        thead th {
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #475569;
+            white-space: nowrap;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e5e7eb;
+            transition: background-color 0.1s;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        tbody tr:nth-child(odd) {
+            background-color: white;
+        }
+
+        tbody tr:hover {
+            background-color: #e0f2fe !important;
+        }
+
+        tbody td {
+            padding: 8px 10px;
+            vertical-align: top;
+            color: #334155;
+        }
+
+        tbody td a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        tbody td a:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .badge-like {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-dislike {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-count {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .time-ago {
+            color: #64748b;
+            font-size: 0.9em;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            color: #2563eb;
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 0 5px;
+            transition: transform 0.2s;
+        }
+
+        .expand-btn:hover {
+            color: #1d4ed8;
+        }
+
+        .expand-btn.expanded {
+            transform: rotate(90deg);
+        }
+
+        .match-details {
+            display: none;
+            padding: 15px;
+            background: #f8fafc;
+            border-left: 3px solid #2563eb;
+            margin: 5px 0;
+        }
+
+        .match-details.expanded {
+            display: block;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .detail-section {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .detail-section h4 {
+            color: #1e293b;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 0.85em;
+        }
+
+        .detail-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            color: #334155;
+        }
+
+        .quality-good {
+            color: #059669;
+            font-weight: 500;
+        }
+
+        .quality-fair {
+            color: #d97706;
+            font-weight: 500;
+        }
+
+        .error-message {
+            font-family: 'Courier New', monospace;
+            background: #f1f5f9;
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            word-break: break-word;
+        }
+
+        .error-full {
+            display: none;
+        }
+
+        .error-full.expanded {
+            display: block;
+        }
+
+        .show-more {
+            color: #2563eb;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 0.85em;
+        }
+
+        .show-more:hover {
+            color: #1d4ed8;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .pagination a, .pagination button {
+            padding: 5px 10px;
+            border: 1px solid #d1d5db;
+            background: white;
+            color: #475569;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.75em;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .pagination a:hover, .pagination button:hover:not(:disabled) {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: #f9fafb;
+        }
+
+        .pagination .current-page {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+            font-weight: 600;
+        }
+
+        .pagination .ellipsis {
+            border: none;
+            background: none;
+            cursor: default;
+            color: #94a3b8;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    <a href="{{ ingress_path }}/logs" class="active">Logs</a>
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+        </header>
+
+        <div class="card">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button {{ 'active' if current_tab == 'rated' else '' }}">
+                    Rated Songs
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button {{ 'active' if current_tab == 'matches' else '' }}">
+                    Matches
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button {{ 'active' if current_tab == 'errors' else '' }}">
+                    Errors
+                </a>
+            </div>
+
+            <!-- Rated Songs Tab -->
+            {% if current_tab == 'rated' %}
+            <form method="GET" action="{{ ingress_path }}/logs">
+                <input type="hidden" name="tab" value="rated">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="period">Time Period:</label>
+                        <select name="period" id="period">
+                            <option value="hour" {{ 'selected' if period_filter == 'hour' else '' }}>Last Hour</option>
+                            <option value="day" {{ 'selected' if period_filter == 'day' else '' }}>Last Day</option>
+                            <option value="week" {{ 'selected' if period_filter == 'week' else '' }}>Last Week</option>
+                            <option value="month" {{ 'selected' if period_filter == 'month' else '' }}>Last Month</option>
+                            <option value="all" {{ 'selected' if period_filter == 'all' else '' }}>All Time</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="rating">Rating Type:</label>
+                        <select name="rating" id="rating">
+                            <option value="all" {{ 'selected' if rating_filter == 'all' else '' }}>All</option>
+                            <option value="like" {{ 'selected' if rating_filter == 'like' else '' }}>Likes</option>
+                            <option value="dislike" {{ 'selected' if rating_filter == 'dislike' else '' }}>Dislikes</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="apply-btn">Apply</button>
+                </div>
+            </form>
+
+            <p class="info-text">
+                {{ total_count }} rated songs • Page {{ page }}/{{ total_pages }}
+            </p>
+
+            {% if songs %}
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Song</th>
+                            <th>Artist</th>
+                            <th>Rating</th>
+                            <th>Plays</th>
+                            <th>Video ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for song in songs %}
+                        <tr>
+                            <td><span class="time-ago">{{ song.time_ago }}</span></td>
+                            <td>{{ song.title }}</td>
+                            <td>{{ song.artist }}</td>
+                            <td>
+                                {% if song.rating == 'like' %}
+                                    <span class="badge badge-like">👍 Like</span>
+                                {% elif song.rating == 'dislike' %}
+                                    <span class="badge badge-dislike">👎 Dislike</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge badge-count">{{ song.play_count }}</span></td>
+                            <td>
+                                <a href="https://youtube.com/watch?v={{ song.yt_video_id }}" target="_blank">{{ song.yt_video_id }}</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <h3>No rated songs found</h3>
+                <p>Try adjusting your filters</p>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Matches Tab -->
+            {% if current_tab == 'matches' %}
+            <form method="GET" action="{{ ingress_path }}/logs">
+                <input type="hidden" name="tab" value="matches">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="period">Time Period:</label>
+                        <select name="period" id="period">
+                            <option value="hour" {{ 'selected' if period_filter == 'hour' else '' }}>Last Hour</option>
+                            <option value="day" {{ 'selected' if period_filter == 'day' else '' }}>Last Day</option>
+                            <option value="week" {{ 'selected' if period_filter == 'week' else '' }}>Last Week</option>
+                            <option value="month" {{ 'selected' if period_filter == 'month' else '' }}>Last Month</option>
+                            <option value="all" {{ 'selected' if period_filter == 'all' else '' }}>All Time</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="apply-btn">Apply</button>
+                </div>
+            </form>
+
+            <p class="info-text">
+                {{ total_count }} matches • Page {{ page }}/{{ total_pages }}
+            </p>
+
+            {% if matches %}
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;"></th>
+                            <th>Time</th>
+                            <th>HA Song</th>
+                            <th>Matched To (YouTube)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for match in matches %}
+                        <tr>
+                            <td>
+                                <button class="expand-btn" onclick="toggleMatch('{{ match.yt_video_id }}')">▶</button>
+                            </td>
+                            <td><span class="time-ago">{{ match.time_ago }}</span></td>
+                            <td>{{ match.ha_title }} <em style="color: #64748b;">by {{ match.ha_artist }}</em></td>
+                            <td>{{ match.yt_title }} <em style="color: #64748b;">by {{ match.yt_channel }}</em></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4" style="padding: 0;">
+                                <div class="match-details" id="match-{{ match.yt_video_id }}">
+                                    <div class="detail-grid">
+                                        <div class="detail-section">
+                                            <h4>🏠 Home Assistant Info</h4>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Title:</span>
+                                                <span class="detail-value">{{ match.ha_title }}</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Artist:</span>
+                                                <span class="detail-value">{{ match.ha_artist }}</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Duration:</span>
+                                                <span class="detail-value">{{ match.ha_duration }}s</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="detail-section">
+                                            <h4>▶️ YouTube Match</h4>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Title:</span>
+                                                <span class="detail-value">{{ match.yt_title }}</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Channel:</span>
+                                                <span class="detail-value">{{ match.yt_channel }}</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Duration:</span>
+                                                <span class="detail-value">{{ match.yt_duration }}s</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Video ID:</span>
+                                                <span class="detail-value">
+                                                    <a href="https://youtube.com/watch?v={{ match.yt_video_id }}" target="_blank">{{ match.yt_video_id }}</a>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="detail-section">
+                                            <h4>✨ Match Quality</h4>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Duration Diff:</span>
+                                                <span class="detail-value {{ 'quality-good' if match.match_quality == 'good' else 'quality-fair' }}">
+                                                    {% if match.duration_diff > 0 %}+{% endif %}{{ match.duration_diff }}s
+                                                    {% if match.match_quality == 'good' %}✓{% endif %}
+                                                </span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Attempts:</span>
+                                                <span class="detail-value">{{ match.match_attempts }}</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Popularity:</span>
+                                                <span class="detail-value">{{ match.play_count }} plays</span>
+                                            </div>
+                                            <div class="detail-row">
+                                                <span class="detail-label">Matched:</span>
+                                                <span class="detail-value">{{ match.timestamp }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <h3>No matches found</h3>
+                <p>Try adjusting your filters</p>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Errors Tab -->
+            {% if current_tab == 'errors' %}
+            <form method="GET" action="{{ ingress_path }}/logs">
+                <input type="hidden" name="tab" value="errors">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="period">Time Period:</label>
+                        <select name="period" id="period">
+                            <option value="hour" {{ 'selected' if period_filter == 'hour' else '' }}>Last Hour</option>
+                            <option value="day" {{ 'selected' if period_filter == 'day' else '' }}>Last Day</option>
+                            <option value="week" {{ 'selected' if period_filter == 'week' else '' }}>Last Week</option>
+                            <option value="month" {{ 'selected' if period_filter == 'month' else '' }}>Last Month</option>
+                            <option value="all" {{ 'selected' if period_filter == 'all' else '' }}>All Time</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="level">Level:</label>
+                        <select name="level" id="level">
+                            <option value="all" {{ 'selected' if level_filter == 'all' else '' }}>All</option>
+                            <option value="ERROR" {{ 'selected' if level_filter == 'ERROR' else '' }}>ERROR</option>
+                            <option value="WARNING" {{ 'selected' if level_filter == 'WARNING' else '' }}>WARNING</option>
+                            <option value="INFO" {{ 'selected' if level_filter == 'INFO' else '' }}>INFO</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="apply-btn">Apply</button>
+                </div>
+            </form>
+
+            {% if log_error %}
+            <div style="padding: 10px; background: #fee2e2; color: #991b1b; border-radius: 4px; margin-bottom: 10px;">
+                {{ log_error }}
+            </div>
+            {% endif %}
+
+            <p class="info-text">
+                {{ total_count }} errors • Page {{ page }}/{{ total_pages }}
+            </p>
+
+            {% if errors %}
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Level</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for error in errors %}
+                        <tr>
+                            <td><span class="time-ago">{{ error.time_ago }}</span></td>
+                            <td>
+                                <span class="badge badge-{{ error.level|lower }}">{{ error.level }}</span>
+                            </td>
+                            <td>
+                                <div class="error-message">
+                                    <div class="error-short">{{ error.display_message }}</div>
+                                    {% if error.truncated %}
+                                    <div class="error-full" id="error-{{ loop.index }}">{{ error.message }}</div>
+                                    <span class="show-more" onclick="toggleError({{ loop.index }})">Show more</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">✓</div>
+                <h3>No errors found</h3>
+                <p>System is running smoothly!</p>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Pagination -->
+            {% if total_pages > 0 %}
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="{{ ingress_path }}/logs?tab={{ current_tab }}&page={{ page - 1 }}&period={{ period_filter }}{% if current_tab == 'rated' %}&rating={{ rating_filter }}{% endif %}{% if current_tab == 'errors' %}&level={{ level_filter }}{% endif %}">← Prev</a>
+                {% else %}
+                    <button disabled>← Prev</button>
+                {% endif %}
+
+                {% for page_num in page_numbers %}
+                    {% if page_num == '...' %}
+                        <span class="ellipsis">...</span>
+                    {% elif page_num == page %}
+                        <span class="current-page">{{ page_num }}</span>
+                    {% else %}
+                        <a href="{{ ingress_path }}/logs?tab={{ current_tab }}&page={{ page_num }}&period={{ period_filter }}{% if current_tab == 'rated' %}&rating={{ rating_filter }}{% endif %}{% if current_tab == 'errors' %}&level={{ level_filter }}{% endif %}">{{ page_num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages %}
+                    <a href="{{ ingress_path }}/logs?tab={{ current_tab }}&page={{ page + 1 }}&period={{ period_filter }}{% if current_tab == 'rated' %}&rating={{ rating_filter }}{% endif %}{% if current_tab == 'errors' %}&level={{ level_filter }}{% endif %}">Next →</a>
+                {% else %}
+                    <button disabled>Next →</button>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Toggle match details accordion
+        function toggleMatch(videoId) {
+            const detailsDiv = document.getElementById('match-' + videoId);
+            const button = event.target;
+
+            if (detailsDiv.classList.contains('expanded')) {
+                detailsDiv.classList.remove('expanded');
+                button.classList.remove('expanded');
+            } else {
+                detailsDiv.classList.add('expanded');
+                button.classList.add('expanded');
+            }
+        }
+
+        // Toggle error message full text
+        function toggleError(index) {
+            const fullDiv = document.getElementById('error-' + index);
+            const button = event.target;
+
+            if (fullDiv.classList.contains('expanded')) {
+                fullDiv.classList.remove('expanded');
+                button.textContent = 'Show more';
+            } else {
+                fullDiv.classList.add('expanded');
+                button.textContent = 'Show less';
+            }
+        }
+    </script>
+</body>
+</html>

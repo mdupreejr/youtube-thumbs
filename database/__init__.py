@@ -14,6 +14,7 @@ from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
 from .search_cache_operations import SearchCacheOperations
+from .logs_operations import LogsOperations
 from video_helpers import get_content_hash
 from error_handler import validate_environment_variable
 
@@ -41,6 +42,7 @@ class Database:
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
         self._search_cache_ops = SearchCacheOperations(self._conn, self._lock)
+        self._logs_ops = LogsOperations(self._conn, self._lock)
 
         # Not found cache configuration (previously in NotFoundOperations)
         # Default to 7 days (168 hours) to prevent wasting quota on failed searches
@@ -379,6 +381,19 @@ class Database:
     def get_search_cache_stats(self) -> Dict[str, int]:
         """Get search cache statistics."""
         return self._search_cache_ops.get_stats()
+
+    # Logs Operations
+    def get_rated_songs(self, page: int = 1, limit: int = 50, period: str = 'all', rating_filter: str = 'all') -> Dict[str, Any]:
+        """Get paginated list of rated songs with filters."""
+        return self._logs_ops.get_rated_songs(page, limit, period, rating_filter)
+
+    def get_match_history(self, page: int = 1, limit: int = 50, period: str = 'all') -> Dict[str, Any]:
+        """Get paginated list of YouTube matches."""
+        return self._logs_ops.get_match_history(page, limit, period)
+
+    def get_match_details(self, yt_video_id: str) -> Dict[str, Any]:
+        """Get full match details for a single video."""
+        return self._logs_ops.get_match_details(yt_video_id)
 
 
 # Singleton instance management
