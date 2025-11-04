@@ -816,3 +816,41 @@ class StatsOperations:
             'total_pages': total_pages,
             'total_count': total_count
         }
+
+    def get_pending_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of pending videos grouped by reason.
+
+        Returns:
+            Dict with counts by reason and total pending count
+        """
+        with self._lock:
+            # Get total pending count
+            cursor = self._conn.execute(
+                "SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 1"
+            )
+            total_pending = cursor.fetchone()['count']
+
+            # Get breakdown by reason
+            cursor = self._conn.execute(
+                """
+                SELECT
+                    pending_reason,
+                    COUNT(*) as count
+                FROM video_ratings
+                WHERE yt_match_pending = 1
+                GROUP BY pending_reason
+                """
+            )
+            by_reason = {}
+            for row in cursor.fetchall():
+                reason = row['pending_reason'] or 'unknown'
+                by_reason[reason] = row['count']
+
+        return {
+            'total': total_pending,
+            'quota_exceeded': by_reason.get('quota_exceeded', 0),
+            'not_found': by_reason.get('not_found', 0),
+            'search_failed': by_reason.get('search_failed', 0),
+            'unknown': by_reason.get('unknown', 0)
+        }

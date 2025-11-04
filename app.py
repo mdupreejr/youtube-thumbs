@@ -1116,6 +1116,7 @@ def stats_page() -> str:
         most_played = db.get_most_played(10)
         top_channels = db.get_top_channels(10)
         recent = db.get_recent_activity(15)
+        pending_summary = db.get_pending_summary()
 
         # Calculate rating percentages (ensure integers to avoid type errors)
         liked = int(summary.get('liked', 0) or 0)
@@ -1185,6 +1186,7 @@ def stats_page() -> str:
             'most_played': formatted_most_played,
             'top_channels': top_channels,
             'recent_activity': recent_activity,
+            'pending_summary': pending_summary,
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 

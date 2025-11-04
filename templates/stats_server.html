@@ -329,6 +329,50 @@
             {% endif %}
         </div>
 
+        <!-- Pending Videos -->
+        <div class="card">
+            <h2>Pending Videos</h2>
+            <p style="color: #64748b; font-size: 0.85em; margin-bottom: 15px;">
+                Videos that couldn't be matched to YouTube due to API quota or search failures. Retry to attempt matching again.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                <div style="background: #f8fafc; padding: 10px; border-radius: 4px; border-left: 3px solid #f59e0b;">
+                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 4px;">Quota Exceeded</div>
+                    <div style="font-size: 1.5em; font-weight: 700; color: #1e293b;">{{ pending_summary.quota_exceeded }}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 4px; border-left: 3px solid #6b7280;">
+                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 4px;">Not Found</div>
+                    <div style="font-size: 1.5em; font-weight: 700; color: #1e293b;">{{ pending_summary.not_found }}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 4px; border-left: 3px solid #ef4444;">
+                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 4px;">Search Failed</div>
+                    <div style="font-size: 1.5em; font-weight: 700; color: #1e293b;">{{ pending_summary.search_failed }}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 4px; border-left: 3px solid #94a3b8;">
+                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 4px;">Total Pending</div>
+                    <div style="font-size: 1.5em; font-weight: 700; color: #1e293b;">{{ pending_summary.total }}</div>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="retryBtn" onclick="retryPending()" style="
+                    background: #2563eb;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: 500;
+                    font-size: 0.85em;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+                    🔄 Retry 5 Videos
+                </button>
+                <span id="statusMsg" style="color: #64748b; font-size: 0.85em;"></span>
+            </div>
+        </div>
+
         <!-- Recent Activity -->
         <div class="card">
             <h2>Recent Activity</h2>
@@ -347,5 +391,58 @@
             {% endif %}
         </div>
     </div>
+
+    <script>
+        async function retryPending() {
+            const btn = document.getElementById('retryBtn');
+            const statusMsg = document.getElementById('statusMsg');
+
+            // Disable button
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+            statusMsg.textContent = 'Processing...';
+            statusMsg.style.color = '#2563eb';
+
+            try {
+                const response = await fetch('{{ ingress_path }}/api/pending/retry?batch_size=5', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    statusMsg.textContent = data.message;
+                    statusMsg.style.color = '#10b981';
+
+                    // Reload page after 2 seconds to show updated counts
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    statusMsg.textContent = data.error || 'Error processing request';
+                    statusMsg.style.color = '#ef4444';
+
+                    // Re-enable button after error
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        btn.style.cursor = 'pointer';
+                        statusMsg.textContent = '';
+                    }, 3000);
+                }
+            } catch (error) {
+                statusMsg.textContent = 'Network error - please try again';
+                statusMsg.style.color = '#ef4444';
+
+                // Re-enable button after error
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    statusMsg.textContent = '';
+                }, 3000);
+            }
+        }
+    </script>
 </body>
 </html>

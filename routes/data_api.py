@@ -387,3 +387,124 @@ def get_pending_status() -> Response:
     except Exception as e:
         logger.error(f"Error getting pending status: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve pending video status'}), 500
+
+
+@bp.route('/pending/retry', methods=['POST'])
+def retry_pending_videos() -> Response:
+    """
+    Manually trigger retry of pending videos with quota_exceeded reason.
+    Processes videos in batches to avoid overwhelming the YouTube API.
+    """
+    import time
+    from search_helpers import search_and_match_video_refactored
+    from cache_helpers import find_cached_video_refactored
+    from quota_guard import get_quota_guard
+
+    try:
+        # Get batch size from request (default: 5, max: 50)
+        batch_size = int(request.args.get('batch_size', 5))
+        batch_size = max(1, min(batch_size, 50))
+
+        # Rate limiting check - use simple time-based check
+        # In production, consider using Redis or similar for distributed rate limiting
+        import os
+        last_retry_file = '/tmp/youtube_thumbs_last_retry.txt'
+        if os.path.exists(last_retry_file):
+            with open(last_retry_file, 'r') as f:
+                last_retry = float(f.read().strip())
+                if time.time() - last_retry < 30:  # 30 second cooldown
+                    return jsonify({
+                        'success': False,
+                        'error': 'Please wait 30 seconds between retry attempts'
+                    }), 429
+
+        # Update last retry timestamp
+        with open(last_retry_file, 'w') as f:
+            f.write(str(time.time()))
+
+        # Get pending videos with quota_exceeded reason
+        pending_videos = db.get_pending_videos(limit=batch_size, reason_filter='quota_exceeded')
+
+        if not pending_videos:
+            return jsonify({
+                'success': True,
+                'processed': 0,
+                'resolved': 0,
+                'failed': 0,
+                'not_found': 0,
+                'message': 'No pending videos with quota_exceeded reason found'
+            })
+
+        # Check quota status
+        quota_guard = get_quota_guard()
+        quota_blocked = quota_guard.is_blocked() if quota_guard else False
+
+        if quota_blocked:
+            logger.warning("Manual retry attempted while quota is blocked")
+
+        # Process each video
+        resolved = 0
+        failed = 0
+        not_found = 0
+
+        for video in pending_videos:
+            try:
+                ha_title = video.get('ha_title', 'Unknown')
+                ha_artist = video.get('ha_artist', 'Unknown')
+                ha_content_id = video.get('ha_content_id')
+
+                logger.info(f"Manual retry: Processing '{ha_title}' by {ha_artist}")
+
+                # Try cache first
+                cached_video = find_cached_video_refactored(ha_title, ha_artist)
+                if cached_video:
+                    db.resolve_pending_video(ha_content_id, cached_video)
+                    resolved += 1
+                    logger.info(f"Resolved from cache: {ha_title}")
+                    continue
+
+                # Search YouTube
+                result = search_and_match_video_refactored(ha_title, ha_artist)
+
+                if result and result.get('video'):
+                    # Found and matched
+                    db.resolve_pending_video(ha_content_id, result['video'])
+                    resolved += 1
+                    logger.info(f"Resolved from YouTube: {ha_title}")
+                elif result and result.get('reason') == 'not_found':
+                    # Not found
+                    db.mark_pending_not_found(ha_content_id)
+                    not_found += 1
+                    logger.info(f"Not found: {ha_title}")
+                else:
+                    # Search failed
+                    failed += 1
+                    logger.warning(f"Search failed: {ha_title}")
+
+                # Delay between requests to avoid hammering API
+                time.sleep(2)
+
+            except Exception as e:
+                logger.error(f"Error processing pending video: {e}")
+                failed += 1
+
+        processed = len(pending_videos)
+        message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
+
+        return jsonify({
+            'success': True,
+            'processed': processed,
+            'resolved': resolved,
+            'failed': failed,
+            'not_found': not_found,
+            'quota_blocked': quota_blocked,
+            'message': message
+        })
+
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid batch_size parameter'}), 400
+    except Exception as e:
+        logger.error(f"Error in manual pending video retry: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': 'Failed to retry pending videos'}), 500
