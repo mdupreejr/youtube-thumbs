@@ -6,8 +6,18 @@ NO client-side JavaScript processing required.
 import json
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, Any, Optional
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects."""
+
+    def default(self, obj):
+        """Convert datetime objects to ISO format strings."""
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class StatsCacheOperations:
@@ -75,7 +85,7 @@ class StatsCacheOperations:
         with self._lock:
             generated_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
             expires_at = (datetime.utcnow() + timedelta(seconds=ttl_seconds)).strftime('%Y-%m-%d %H:%M:%S')
-            cache_data = json.dumps(data)
+            cache_data = json.dumps(data, cls=DateTimeEncoder)
 
             self._conn.execute(
                 """
