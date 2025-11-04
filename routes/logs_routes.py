@@ -144,6 +144,172 @@ def parse_error_log(
     }
 
 
+def categorize_quota_prober_event(message: str) -> str:
+    """
+    Categorize QuotaProber log event by message content.
+
+    Args:
+        message: Log message text
+
+    Returns:
+        Event category: 'probe', 'retry', 'success', 'error', 'recovery', 'other'
+    """
+    message_lower = message.lower()
+
+    if 'time to check' in message_lower or 'quota prober:' in message_lower:
+        return 'probe'
+    elif 'retrying match' in message_lower or 'pending videos to retry' in message_lower or 'found' in message_lower and 'pending' in message_lower:
+        return 'retry'
+    elif 'successfully matched' in message_lower or '✓' in message:
+        return 'success'
+    elif 'no match found' in message_lower or 'failed' in message_lower or '✗' in message or 'error' in message_lower:
+        return 'error'
+    elif 'quota restored' in message_lower:
+        return 'recovery'
+    else:
+        return 'other'
+
+
+def parse_quota_prober_log(
+    time_filter: str = 'all',
+    event_filter: str = 'all',
+    level_filter: str = 'all',
+    page: int = 1,
+    limit: int = 50
+) -> Dict[str, Any]:
+    """
+    Parse main log file for QuotaProber-related entries and return paginated results.
+
+    Args:
+        time_filter: Time period ('hour', 'day', 'week', 'month', 'all')
+        event_filter: Event type ('probes', 'retries', 'successes', 'errors', 'recoveries', 'all')
+        level_filter: Log level ('ERROR', 'WARNING', 'INFO', 'DEBUG', 'all')
+        page: Page number (1-indexed)
+        limit: Number of entries per page
+
+    Returns:
+        Dictionary with logs list, pagination info, statistics, and total count
+    """
+    log_path = '/config/youtube_thumbs/youtube_thumbs.log'
+
+    # Check if log file exists
+    if not os.path.exists(log_path):
+        return {
+            'logs': [],
+            'page': 1,
+            'total_pages': 0,
+            'total_count': 0,
+            'stats': {'probes': 0, 'recoveries': 0, 'retries': 0, 'resolved': 0}
+        }
+
+    # Determine time cutoff
+    cutoff = None
+    if time_filter != 'all':
+        now = datetime.now()
+        if time_filter == 'hour':
+            cutoff = now - timedelta(hours=1)
+        elif time_filter == 'day':
+            cutoff = now - timedelta(days=1)
+        elif time_filter == 'week':
+            cutoff = now - timedelta(weeks=1)
+        elif time_filter == 'month':
+            cutoff = now - timedelta(days=30)
+
+    # Read and parse log file
+    logs = []
+    stats = {'probes': 0, 'recoveries': 0, 'retries': 0, 'resolved': 0}
+
+    try:
+        # Read last 2000 lines (same as error log)
+        with open(log_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()[-2000:]
+
+        # Parse each line
+        log_pattern = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \| (\w+) \| (.+)$')
+
+        for line in lines:
+            match = log_pattern.match(line.strip())
+            if not match:
+                continue
+
+            timestamp_str, level, message = match.groups()
+
+            # Filter by QuotaProber keywords
+            message_lower = message.lower()
+            is_quota_prober = any(keyword in message_lower for keyword in [
+                'quota prober',
+                'quota restored',
+                'pending videos to retry',
+                'retrying match for',
+                'successfully matched',
+                'no match found'
+            ])
+
+            if not is_quota_prober:
+                continue
+
+            # Filter by log level
+            if level_filter != 'all' and level != level_filter:
+                continue
+
+            # Parse timestamp
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+            except:
+                continue
+
+            # Filter by time period
+            if cutoff and timestamp < cutoff:
+                continue
+
+            # Categorize event
+            event_type = categorize_quota_prober_event(message)
+
+            # Filter by event type
+            if event_filter != 'all' and event_type != event_filter:
+                continue
+
+            # Update statistics
+            if 'time to check' in message_lower:
+                stats['probes'] += 1
+            elif 'quota restored' in message_lower:
+                stats['recoveries'] += 1
+            elif 'found' in message_lower and 'pending videos to retry' in message_lower:
+                stats['retries'] += 1
+            elif 'successfully matched' in message_lower or '✓' in message:
+                stats['resolved'] += 1
+
+            # Add to results
+            logs.append({
+                'timestamp': timestamp_str,
+                'timestamp_relative': format_relative_time(timestamp_str),
+                'level': level,
+                'message': message,
+                'event_type': event_type
+            })
+
+    except Exception as e:
+        logger.error(f"Error parsing quota prober log: {e}")
+
+    # Reverse to show newest first
+    logs.reverse()
+
+    # Pagination
+    total_count = len(logs)
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
+    page = max(1, min(page, total_pages if total_pages > 0 else 1))
+    start = (page - 1) * limit
+    end = start + limit
+
+    return {
+        'logs': logs[start:end],
+        'page': page,
+        'total_pages': total_pages,
+        'total_count': total_count,
+        'stats': stats
+    }
+
+
 def format_relative_time(timestamp_str: str) -> str:
     """
     Format timestamp as relative time (e.g., "2h ago", "yesterday").
@@ -184,7 +350,7 @@ def logs_viewer():
     try:
         # Get query parameters
         current_tab = request.args.get('tab', 'rated')
-        if current_tab not in ['rated', 'matches', 'errors']:
+        if current_tab not in ['rated', 'matches', 'errors', 'quota_prober']:
             current_tab = 'rated'
 
         try:
@@ -324,6 +490,54 @@ def logs_viewer():
                 'total_count': result.get('total_count', 0),
                 'total_pages': result.get('total_pages', 0),
                 'log_error': result.get('error')
+            })
+
+        elif current_tab == 'quota_prober':
+            # Get quota prober specific filters
+            event_filter = request.args.get('event', 'all')
+            if event_filter not in ['probe', 'retry', 'success', 'error', 'recovery', 'all']:
+                event_filter = 'all'
+
+            level_filter = request.args.get('level', 'all')
+            if level_filter not in ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'all']:
+                level_filter = 'all'
+
+            # Parse quota prober logs
+            result = parse_quota_prober_log(
+                time_filter=period_filter,
+                event_filter=event_filter,
+                level_filter=level_filter,
+                page=page,
+                limit=50
+            )
+
+            # Format logs for template
+            formatted_logs = []
+            for log in result['logs']:
+                message = log['message']
+                truncated = len(message) > 200
+                if truncated:
+                    display_message = message[:200] + '...'
+                else:
+                    display_message = message
+
+                formatted_logs.append({
+                    'timestamp': log['timestamp'],
+                    'time_ago': log['timestamp_relative'],
+                    'level': log['level'],
+                    'event_type': log['event_type'],
+                    'message': message,
+                    'display_message': display_message,
+                    'truncated': truncated
+                })
+
+            template_data.update({
+                'event_filter': event_filter,
+                'level_filter': level_filter,
+                'quota_prober_logs': formatted_logs,
+                'quota_prober_stats': result.get('stats', {}),
+                'total_count': result.get('total_count', 0),
+                'total_pages': result.get('total_pages', 0)
             })
 
         # Generate page numbers for pagination

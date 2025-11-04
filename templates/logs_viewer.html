@@ -473,6 +473,9 @@
                 <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button {{ 'active' if current_tab == 'errors' else '' }}">
                     Errors
                 </a>
+                <a href="{{ ingress_path }}/logs?tab=quota_prober" class="tab-button {{ 'active' if current_tab == 'quota_prober' else '' }}">
+                    Quota Prober
+                </a>
             </div>
 
             <!-- Rated Songs Tab -->
@@ -779,6 +782,134 @@
                 {% endif %}
             </div>
             {% endif %}
+
+            <!-- Quota Prober Tab -->
+            {% if current_tab == 'quota_prober' %}
+            <form method="GET" action="{{ ingress_path }}/logs">
+                <input type="hidden" name="tab" value="quota_prober">
+                <input type="hidden" name="page" value="1">
+
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Time Period</label>
+                        <select name="period" onchange="this.form.submit()">
+                            <option value="hour" {{ 'selected' if period_filter == 'hour' else '' }}>Last Hour</option>
+                            <option value="day" {{ 'selected' if period_filter == 'day' else '' }}>Last 24 Hours</option>
+                            <option value="week" {{ 'selected' if period_filter == 'week' else '' }}>Last Week</option>
+                            <option value="month" {{ 'selected' if period_filter == 'month' else '' }}>Last Month</option>
+                            <option value="all" {{ 'selected' if period_filter == 'all' else '' }}>All Time</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Event Type</label>
+                        <select name="event" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if event_filter == 'all' else '' }}>All Events</option>
+                            <option value="probe" {{ 'selected' if event_filter == 'probe' else '' }}>Probes</option>
+                            <option value="retry" {{ 'selected' if event_filter == 'retry' else '' }}>Retries</option>
+                            <option value="success" {{ 'selected' if event_filter == 'success' else '' }}>Successes</option>
+                            <option value="error" {{ 'selected' if event_filter == 'error' else '' }}>Errors</option>
+                            <option value="recovery" {{ 'selected' if event_filter == 'recovery' else '' }}>Recoveries</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Log Level</label>
+                        <select name="level" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if level_filter == 'all' else '' }}>All Levels</option>
+                            <option value="INFO" {{ 'selected' if level_filter == 'INFO' else '' }}>INFO</option>
+                            <option value="WARNING" {{ 'selected' if level_filter == 'WARNING' else '' }}>WARNING</option>
+                            <option value="ERROR" {{ 'selected' if level_filter == 'ERROR' else '' }}>ERROR</option>
+                            <option value="DEBUG" {{ 'selected' if level_filter == 'DEBUG' else '' }}>DEBUG</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Summary Statistics -->
+            {% if quota_prober_stats %}
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 15px 0; padding: 10px; background: #f8fafc; border-radius: 4px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 0.7em; color: #64748b; margin-bottom: 4px;">Probe Attempts</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: #2563eb;">{{ quota_prober_stats.probes }}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.7em; color: #64748b; margin-bottom: 4px;">Recoveries</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: #8b5cf6;">{{ quota_prober_stats.recoveries }}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.7em; color: #64748b; margin-bottom: 4px;">Retry Batches</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: #f59e0b;">{{ quota_prober_stats.retries }}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.7em; color: #64748b; margin-bottom: 4px;">Videos Resolved</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: #10b981;">{{ quota_prober_stats.resolved }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="color: #64748b; font-size: 0.8em; margin-bottom: 10px;">
+                Showing {{ quota_prober_logs|length }} of {{ total_count }} logs
+            </div>
+
+            <!-- Quota Prober Logs List -->
+            {% if quota_prober_logs %}
+                {% for log in quota_prober_logs %}
+                <div class="log-entry" style="border-left: 3px solid {% if log.event_type == 'probe' %}#2563eb{% elif log.event_type == 'retry' %}#f59e0b{% elif log.event_type == 'success' %}#10b981{% elif log.event_type == 'error' %}#ef4444{% elif log.event_type == 'recovery' %}#8b5cf6{% else %}#94a3b8{% endif %};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1em;">{% if log.event_type == 'probe' %}🔍{% elif log.event_type == 'retry' %}🔄{% elif log.event_type == 'success' %}✅{% elif log.event_type == 'error' %}❌{% elif log.event_type == 'recovery' %}🎉{% else %}📝{% endif %}</span>
+                            <span class="log-level {{ log.level.lower() }}">{{ log.level }}</span>
+                            <span style="font-size: 0.75em; color: #64748b;">{{ log.time_ago }}</span>
+                        </div>
+                        <span style="font-size: 0.7em; color: #94a3b8;">{{ log.timestamp }}</span>
+                    </div>
+
+                    <div class="log-message">
+                        <div class="log-text">{{ log.display_message }}</div>
+                        {% if log.truncated %}
+                        <div id="quota-log-{{ loop.index }}" class="log-full">
+                            {{ log.message }}
+                        </div>
+                        <button class="show-more-btn" onclick="toggleQuotaLog({{ loop.index }})">Show more</button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="text-align: center; padding: 40px; color: #64748b;">
+                    <div style="font-size: 2em; margin-bottom: 10px;">🔍</div>
+                    <div style="font-size: 0.9em;">No quota prober logs found for the selected filters</div>
+                </div>
+            {% endif %}
+
+            <!-- Pagination -->
+            {% if total_pages > 0 %}
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="{{ ingress_path }}/logs?tab=quota_prober&page={{ page - 1 }}&period={{ period_filter }}&event={{ event_filter }}&level={{ level_filter }}">← Previous</a>
+                {% else %}
+                    <button disabled>← Previous</button>
+                {% endif %}
+
+                {% for page_num in page_numbers %}
+                    {% if page_num == '...' %}
+                        <span style="padding: 0 5px; color: #94a3b8;">...</span>
+                    {% elif page_num == page %}
+                        <span style="padding: 5px 10px; background: #2563eb; color: white; border-radius: 4px; font-weight: 600;">{{ page_num }}</span>
+                    {% else %}
+                        <a href="{{ ingress_path }}/logs?tab=quota_prober&page={{ page_num }}&period={{ period_filter }}&event={{ event_filter }}&level={{ level_filter }}">{{ page_num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages %}
+                    <a href="{{ ingress_path }}/logs?tab=quota_prober&page={{ page + 1 }}&period={{ period_filter }}&event={{ event_filter }}&level={{ level_filter }}">Next →</a>
+                {% else %}
+                    <button disabled>Next →</button>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
         </div>
     </div>
 
@@ -800,6 +931,20 @@
         // Toggle error message full text
         function toggleError(index) {
             const fullDiv = document.getElementById('error-' + index);
+            const button = event.target;
+
+            if (fullDiv.classList.contains('expanded')) {
+                fullDiv.classList.remove('expanded');
+                button.textContent = 'Show more';
+            } else {
+                fullDiv.classList.add('expanded');
+                button.textContent = 'Show less';
+            }
+        }
+
+        // Toggle quota prober log message full text
+        function toggleQuotaLog(index) {
+            const fullDiv = document.getElementById('quota-log-' + index);
             const button = event.target;
 
             if (fullDiv.classList.contains('expanded')) {
