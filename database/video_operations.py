@@ -447,49 +447,73 @@ class VideoOperations:
     def resolve_pending_video(self, ha_content_id: str, youtube_data: Dict[str, Any]) -> None:
         """
         Update pending video with YouTube data and mark as resolved.
+        If the yt_video_id already exists (duplicate), removes the pending entry instead.
 
         Args:
             ha_content_id: The placeholder ID (ha_hash:*)
             youtube_data: YouTube video data to populate
         """
+        yt_video_id = youtube_data.get('yt_video_id')
+
         with self._lock:
             try:
-                with self._conn:
-                    self._conn.execute(
-                        """
-                        UPDATE video_ratings
-                        SET yt_video_id = ?,
-                            yt_title = ?,
-                            yt_channel = ?,
-                            yt_channel_id = ?,
-                            yt_description = ?,
-                            yt_published_at = ?,
-                            yt_category_id = ?,
-                            yt_live_broadcast = ?,
-                            yt_location = ?,
-                            yt_recording_date = ?,
-                            yt_duration = ?,
-                            yt_url = ?,
-                            yt_match_pending = 0,
-                            pending_reason = NULL
-                        WHERE ha_content_id = ? AND yt_match_pending = 1
-                        """,
-                        (
-                            youtube_data.get('yt_video_id'),
-                            youtube_data.get('title'),
-                            youtube_data.get('channel'),
-                            youtube_data.get('channel_id'),
-                            youtube_data.get('description'),
-                            self._timestamp(youtube_data.get('published_at')),
-                            youtube_data.get('category_id'),
-                            youtube_data.get('live_broadcast'),
-                            youtube_data.get('location'),
-                            self._timestamp(youtube_data.get('recording_date')),
-                            youtube_data.get('duration'),
-                            youtube_data.get('url'),
-                            ha_content_id
+                # Check if this yt_video_id already exists
+                cursor = self._conn.execute(
+                    "SELECT COUNT(*) as count FROM video_ratings WHERE yt_video_id = ?",
+                    (yt_video_id,)
+                )
+                existing_count = cursor.fetchone()['count']
+
+                if existing_count > 0:
+                    # Video already exists - this pending entry is a duplicate
+                    # Delete it instead of trying to update (which would violate UNIQUE constraint)
+                    with self._conn:
+                        self._conn.execute(
+                            "DELETE FROM video_ratings WHERE ha_content_id = ? AND yt_match_pending = 1",
+                            (ha_content_id,)
                         )
+                    from logger import logger
+                    logger.info(
+                        f"Removed duplicate pending entry {ha_content_id} - video {yt_video_id} already exists"
                     )
+                else:
+                    # Normal case - update the pending entry with YouTube data
+                    with self._conn:
+                        self._conn.execute(
+                            """
+                            UPDATE video_ratings
+                            SET yt_video_id = ?,
+                                yt_title = ?,
+                                yt_channel = ?,
+                                yt_channel_id = ?,
+                                yt_description = ?,
+                                yt_published_at = ?,
+                                yt_category_id = ?,
+                                yt_live_broadcast = ?,
+                                yt_location = ?,
+                                yt_recording_date = ?,
+                                yt_duration = ?,
+                                yt_url = ?,
+                                yt_match_pending = 0,
+                                pending_reason = NULL
+                            WHERE ha_content_id = ? AND yt_match_pending = 1
+                            """,
+                            (
+                                yt_video_id,
+                                youtube_data.get('title'),
+                                youtube_data.get('channel'),
+                                youtube_data.get('channel_id'),
+                                youtube_data.get('description'),
+                                self._timestamp(youtube_data.get('published_at')),
+                                youtube_data.get('category_id'),
+                                youtube_data.get('live_broadcast'),
+                                youtube_data.get('location'),
+                                self._timestamp(youtube_data.get('recording_date')),
+                                youtube_data.get('duration'),
+                                youtube_data.get('url'),
+                                ha_content_id
+                            )
+                        )
             except sqlite3.DatabaseError as exc:
                 log_and_suppress(
                     exc,
