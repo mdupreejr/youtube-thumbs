@@ -259,24 +259,23 @@ def check_database(db) -> Tuple[bool, str]:
             logger.info("  No recent plays recorded")
 
         # Build comprehensive status message
-        pending_str = f"{pending_videos} pending"
+        pending_str = f"{pending_videos} unmatched"
         if pending_videos > 0 and pending_reasons:
             # Add most common pending reason
             top_reason = max(pending_reasons.items(), key=lambda x: x[1])
             reason_label = top_reason[0] or 'unknown'
             if len(pending_reasons) == 1:
-                pending_str = f"{pending_videos} pending ({reason_label})"
+                pending_str = f"{pending_videos} unmatched ({reason_label})"
             else:
-                pending_str = f"{pending_videos} pending ({top_reason[1]} {reason_label}, {len(pending_reasons)-1} other)"
+                pending_str = f"{pending_videos} unmatched ({top_reason[1]} {reason_label}, {len(pending_reasons)-1} other)"
 
         status_parts = [
-            f"{total_videos} total ({matched_videos} matched, {pending_str})",
+            f"Videos: {total_videos} total, {matched_videos} matched, {pending_str}",
             f"Ratings: {liked_videos}👍 {disliked_videos}👎 {unrated_videos}⭐",
-            f"{total_plays:,} plays",
-            f"{unique_channels} channels"
+            f"Activity: {total_plays:,} plays across {unique_channels} channels"
         ]
         if pending_ratings > 0:
-            status_parts.append(f"{pending_ratings} pending sync")
+            status_parts.append(f"Sync Queue: {pending_ratings} rating{'s' if pending_ratings != 1 else ''} waiting to sync")
 
         return True, "DB OK:<br>" + "<br>".join(status_parts)
 
