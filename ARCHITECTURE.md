@@ -36,7 +36,7 @@ If no cache match found:
 2. **Search YouTube**: Query YouTube Data API with cleaned title
 3. **Filter by duration**: Only consider results where YouTube duration matches HA duration ± 1 second
 4. **Select best match**: First result with exact duration match
-5. **Store in database**: Save video metadata, mark as matched (`pending_match = 0`)
+5. **Store in database**: Save video metadata, mark as matched (`yt_match_pending = 0`)
 
 **Search Hit**: Video matched and cached for future plays.
 
@@ -44,7 +44,7 @@ If no cache match found:
 
 If YouTube quota is exhausted during search:
 
-1. **Store as pending**: Creates database entry with `pending_match = 1`
+1. **Store as pending**: Creates database entry with `yt_match_pending = 1`
 2. **Use placeholder ID**: `ha_content_id = ha_hash:abc123` (content hash)
 3. **Set pending_reason**: `quota_exceeded`
 4. **Skip YouTube calls**: All future searches delayed until quota recovers
@@ -93,7 +93,7 @@ Primary table storing all video metadata, play history, ratings, and pending sta
 - `date_last_played` (TIMESTAMP, INDEXED) - Most recent play timestamp
 
 **Pending Video Fields**:
-- `pending_match` (INTEGER) - Boolean flag (0=matched, 1=pending YouTube match)
+- `yt_match_pending` (INTEGER) - Boolean flag (0=matched, 1=pending YouTube match)
   - Set to 1 when quota exhausted during search
   - Set to 0 after successful YouTube match
 - `pending_reason` (TEXT) - Why video is pending
@@ -120,7 +120,7 @@ yt_video_id: "dQw4w9WgXcQ"
 ha_content_id: NULL
 ha_title: "Never Gonna Give You Up"
 yt_title: "Rick Astley - Never Gonna Give You Up (Official Video)"
-pending_match: 0
+yt_match_pending: 0
 pending_reason: NULL
 rating: "like"
 play_count: 5
@@ -130,7 +130,7 @@ yt_video_id: NULL
 ha_content_id: "ha_hash:a1b2c3d4e5f6"
 ha_title: "Some New Song"
 yt_title: NULL
-pending_match: 1
+yt_match_pending: 1
 pending_reason: "quota_exceeded"
 rating: "none"
 play_count: 1
@@ -140,7 +140,7 @@ yt_video_id: NULL
 ha_content_id: "ha_hash:x9y8z7w6v5u4"
 ha_title: "Obscure Local Recording"
 yt_title: NULL
-pending_match: 1
+yt_match_pending: 1
 pending_reason: "not_found"
 ```
 
@@ -200,6 +200,23 @@ Caches YouTube search results to avoid redundant API calls.
 - Enables duration-based lookups without new API calls
 - Automatically cleans expired entries
 
+### stats_cache (Statistics Cache)
+
+Caches pre-computed statistics for improved performance.
+
+**Fields**:
+- `cache_key` (TEXT, PRIMARY KEY) - Cache entry identifier (e.g., 'stats_page')
+- `data` (TEXT) - JSON-encoded cached data
+- `created_at` (TIMESTAMP) - When cache entry was created
+- `expires_at` (TIMESTAMP) - When cache entry expires
+
+**Behavior**:
+- Stores expensive statistics calculations (e.g., main stats page data)
+- Default 5-minute TTL for stats page
+- Reduces database queries for frequently accessed stats
+- Automatically invalidated on startup
+- JSON-serialized Python objects for flexible data storage
+
 ## Content Hash Algorithm
 
 The content hash enables fuzzy matching despite formatting differences:
@@ -231,19 +248,19 @@ def get_content_hash(title, duration, artist=None):
 
 A video in the database can be in one of these states:
 
-1. **✓ Matched** (`pending_match = 0`, `yt_video_id` populated)
+1. **✓ Matched** (`yt_match_pending = 0`, `yt_video_id` populated)
    - Successfully found on YouTube
    - All YouTube metadata populated
    - Can be rated, played, tracked
    - Shows in all statistics
 
-2. **⏳ Pending - Quota Exceeded** (`pending_match = 1`, `pending_reason = 'quota_exceeded'`)
+2. **⏳ Pending - Quota Exceeded** (`yt_match_pending = 1`, `pending_reason = 'quota_exceeded'`)
    - Quota was exhausted when attempting to match
    - Only Home Assistant data available (no YouTube metadata)
    - Will be retried automatically after quota recovery
    - Shows in startup check as "pending (quota_exceeded)"
 
-3. **✗ Pending - Not Found** (`pending_match = 1`, `pending_reason = 'not_found'`)
+3. **✗ Pending - Not Found** (`yt_match_pending = 1`, `pending_reason = 'not_found'`)
    - Searched YouTube but no match found
    - Marked by retry mechanism after failed search
    - Won't be retried again (no YouTube video exists)
@@ -347,7 +364,7 @@ QuotaProber **only runs** when:
    - Triggers `_retry_pending_videos()`
 
 4. **Retry batch processing**
-   - Queries: `SELECT * FROM video_ratings WHERE pending_match = 1 AND pending_reason = 'quota_exceeded' LIMIT 1`
+   - Queries: `SELECT * FROM video_ratings WHERE yt_match_pending = 1 AND pending_reason = 'quota_exceeded' LIMIT 1`
    - Processes **1 video per recovery cycle**
    - Logs: "Found 1 pending video(s) to retry after quota recovery"
 
