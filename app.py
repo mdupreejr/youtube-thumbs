@@ -20,10 +20,10 @@ from quota_guard import quota_guard
 from quota_prober import QuotaProber
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
-from constants import FALSE_VALUES
+from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
 from video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
-from search_helpers import search_and_match_video_refactored
+from search_helpers import search_and_match_video
 from cache_helpers import find_cached_video_refactored
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
@@ -355,7 +355,7 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
     Processes up to batch_size pending ratings, using batch API calls where possible.
     """
     # Validate batch size (YouTube API supports max 50 IDs per videos.list call)
-    batch_size = max(1, min(batch_size, 50))
+    batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
 
     should_skip, _ = quota_guard.check_quota_or_skip("sync pending ratings")
     if should_skip:
@@ -414,9 +414,9 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
 # Wrapper functions for compatibility with HistoryTracker dependency injection
 # These could be refactored to pass the actual modules instead
 def _search_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict]:
-    """Wrapper for search_helpers.search_and_match_video_refactored."""
+    """Wrapper for search_helpers.search_and_match_video."""
     yt_api = get_youtube_api()
-    return search_and_match_video_refactored(ha_media, yt_api, db)
+    return search_and_match_video(ha_media, yt_api, db)
 
 
 def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:

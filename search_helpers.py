@@ -137,7 +137,7 @@ def record_failed_search(
     db.record_not_found(title, None, duration, title)
 
 
-def search_and_match_video_refactored(
+def search_and_match_video(
     ha_media: Dict[str, Any],
     yt_api,
     db

@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Optional
 from logger import logger
 from quota_guard import quota_guard
 from video_helpers import prepare_video_upsert, is_youtube_content
+from constants import MEDIA_INACTIVITY_TIMEOUT
 
 
 MediaDict = Dict[str, Any]
@@ -39,7 +40,7 @@ class HistoryTracker:
         self._last_status_log = 0
         self._consecutive_failures = 0
         self.max_consecutive_failures = 10
-        self._inactivity_timeout = 3600  # Clear tracking after 1 hour of no media
+        self._inactivity_timeout = MEDIA_INACTIVITY_TIMEOUT  # Clear tracking after 1 hour of no media
 
     def start(self) -> None:
         if not self.enabled:

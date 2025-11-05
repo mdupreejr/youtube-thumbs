@@ -12,6 +12,7 @@ from logger import logger
 from quota_guard import quota_guard
 from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
+from constants import YOUTUBE_DURATION_OFFSET
 
 # Global database instance for API usage tracking (injected from app.py)
 _db = None
@@ -60,7 +61,7 @@ class YouTubeAPI:
     def authenticate(self) -> None:
         """Authenticate with YouTube API using OAuth2."""
         creds = None
-        token_file = 'token.json'  # nosec B105 - filename not password
+        token_file = 'token.json'  # nosec B105 - filename, not password
 
         # SECURITY: Migrate from pickle to JSON for credential storage
         # Check for legacy pickle file and migrate if found
@@ -279,7 +280,7 @@ class YouTubeAPI:
         # Check duration matching if expected_duration is provided
         if expected_duration is not None and duration is not None:
             # YouTube always reports exactly 1 second more than HA
-            expected_youtube_duration = expected_duration + 1
+            expected_youtube_duration = expected_duration + YOUTUBE_DURATION_OFFSET
             if duration != expected_youtube_duration:
                 return None  # Skip videos that don't match duration
             logger.debug(
@@ -415,7 +416,7 @@ class YouTubeAPI:
             if not candidates and expected_duration:
                 logger.error(
                     f"No exact duration matches found: HA='{title}' ({expected_duration}s) | "
-                    f"Expected YouTube duration: {expected_duration + 1}s | "
+                    f"Expected YouTube duration: {expected_duration + YOUTUBE_DURATION_OFFSET}s | "
                     f"Searched {len(details.get('items', []))} videos"
                 )
                 return None

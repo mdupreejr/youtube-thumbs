@@ -617,10 +617,20 @@ class StatsOperations:
             ]
             sort_by = filters.get('sort_by', 'date_added')
             if sort_by not in allowed_sort_columns:
+                from logger import logger
+                logger.warning(
+                    "Invalid sort_by value detected: '%s' (possible attack attempt)",
+                    sort_by
+                )
                 sort_by = 'date_added'  # Default to safe value if invalid
 
             sort_order = filters.get('sort_order', 'desc').upper()
             if sort_order not in ['ASC', 'DESC']:
+                from logger import logger
+                logger.warning(
+                    "Invalid sort_order value detected: '%s' (possible attack attempt)",
+                    sort_order
+                )
                 sort_order = 'DESC'
 
             # Get total count

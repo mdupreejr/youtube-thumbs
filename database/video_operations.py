@@ -65,8 +65,14 @@ class VideoOperations:
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
         }
 
-        # Skip upsert if yt_video_id is None and ha_content_id is also None
-        # This prevents NOT NULL constraint errors for malformed data
+        # Skip upsert if ha_title is None (NOT NULL constraint in schema)
+        # Also require at least one identifier (yt_video_id or ha_content_id)
+        if not payload['ha_title']:
+            logger.error(
+                "Cannot upsert video: ha_title is required (NOT NULL constraint)"
+            )
+            return
+
         if payload['yt_video_id'] is None and payload['ha_content_id'] is None:
             logger.error(
                 "Cannot upsert video: both yt_video_id and ha_content_id are None | Title: '%s'",

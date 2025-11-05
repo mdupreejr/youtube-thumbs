@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, Response
 from logger import logger
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
+from constants import MAX_BATCH_SIZE
 
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
@@ -393,14 +394,14 @@ def retry_pending_videos() -> Response:
     Processes videos in batches to avoid overwhelming the YouTube API.
     """
     import time
-    from search_helpers import search_and_match_video_refactored
+    from search_helpers import search_and_match_video
     from cache_helpers import find_cached_video_refactored
     from quota_guard import get_quota_guard
 
     try:
         # Get batch size from request (default: 5, max: 50)
         batch_size = int(request.args.get('batch_size', 5))
-        batch_size = max(1, min(batch_size, 50))
+        batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
 
         # Rate limiting check - use simple time-based check
         # In production, consider using Redis or similar for distributed rate limiting
@@ -463,7 +464,7 @@ def retry_pending_videos() -> Response:
                     continue
 
                 # Search YouTube
-                result = search_and_match_video_refactored(ha_title, ha_artist)
+                result = search_and_match_video(ha_title, ha_artist)
 
                 if result and result.get('video'):
                     # Found and matched
