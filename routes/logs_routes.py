@@ -329,8 +329,9 @@ def _handle_rated_tab(page, period_filter):
         title = get_video_title(song)
         artist = get_video_artist(song)
 
-        # Format relative time
-        time_ago = format_relative_time(song.get('date_last_played', ''))
+        # Format relative time - use date_last_played, fallback to date_added
+        timestamp = song.get('date_last_played') or song.get('date_added')
+        time_ago = format_relative_time(timestamp) if timestamp else 'unknown'
 
         formatted_songs.append({
             'yt_video_id': song.get('yt_video_id'),
@@ -339,7 +340,7 @@ def _handle_rated_tab(page, period_filter):
             'rating': song.get('rating'),
             'play_count': song.get('play_count', 0),
             'time_ago': time_ago,
-            'timestamp': song.get('date_last_played'),
+            'timestamp': timestamp,
             'source': song.get('source', 'unknown')
         })
 
