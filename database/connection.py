@@ -144,12 +144,14 @@ class DatabaseConnection:
 
     def _configure(self) -> None:
         """Set SQLite pragmas for durability and concurrency."""
-        try:
-            self._conn.execute("PRAGMA journal_mode=WAL;")
-            self._conn.execute("PRAGMA synchronous=NORMAL;")
-            self._conn.execute("PRAGMA busy_timeout=5000;")
-        except sqlite3.DatabaseError as exc:
-            logger.error(f"Failed to configure SQLite database: {exc}")
+        # SECURITY: Use lock for all database operations to prevent race conditions
+        with self._lock:
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL;")
+                self._conn.execute("PRAGMA synchronous=NORMAL;")
+                self._conn.execute("PRAGMA busy_timeout=5000;")
+            except sqlite3.DatabaseError as exc:
+                logger.error(f"Failed to configure SQLite database: {exc}")
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not exist."""

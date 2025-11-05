@@ -1,11 +1,11 @@
 import json
 import os
-import pickle
 import re
 import traceback
 from typing import Optional, List, Dict, Any, Tuple
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import logger
@@ -60,12 +60,31 @@ class YouTubeAPI:
     def authenticate(self) -> None:
         """Authenticate with YouTube API using OAuth2."""
         creds = None
+        token_file = 'token.json'
 
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
-                # Safe to use pickle here: loading locally generated OAuth tokens only
-                # nosec B301 - pickle is safe for trusted local credential files
-                creds = pickle.load(token)
+        # SECURITY: Migrate from pickle to JSON for credential storage
+        # Check for legacy pickle file and migrate if found
+        legacy_pickle = 'token.pickle'
+        if os.path.exists(legacy_pickle) and not os.path.exists(token_file):
+            logger.warning("Found legacy token.pickle file. Please re-authenticate to use JSON storage.")
+            logger.warning("Removing legacy token.pickle for security")
+            try:
+                os.remove(legacy_pickle)
+            except OSError as e:
+                logger.error(f"Failed to remove legacy token.pickle: {e}")
+
+        # Load credentials from JSON file
+        if os.path.exists(token_file):
+            try:
+                with open(token_file, 'r') as f:
+                    token_data = json.load(f)
+                creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
+                logger.info("Loaded YouTube API credentials from JSON")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"Failed to load credentials from {token_file}: {e}")
+                logger.warning("Removing corrupted token file")
+                os.remove(token_file)
+                creds = None
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -83,9 +102,10 @@ class YouTubeAPI:
                 )
                 creds = flow.run_local_server(port=0)
 
-            with open('token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
-            logger.info("YouTube API credentials saved")
+            # Save credentials as JSON (secure, no arbitrary code execution risk)
+            with open(token_file, 'w') as f:
+                f.write(creds.to_json())
+            logger.info("YouTube API credentials saved to JSON")
 
         self.youtube = build('youtube', 'v3', credentials=creds)
         logger.info("YouTube API authenticated successfully")

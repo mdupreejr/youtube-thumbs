@@ -526,18 +526,32 @@ def serve_static(filename):
     Flask's default static serving doesn't respect ingress paths properly.
     """
     try:
-        # SECURITY: Prevent path traversal attacks
-        if '..' in filename or filename.startswith('/'):
+        # SECURITY: Prevent path traversal attacks using safe_join and realpath
+        static_dir = os.path.join(app.root_path, 'static')
+
+        # Use safe_join to construct path (handles .. and absolute paths)
+        safe_path = safe_join(static_dir, filename)
+        if not safe_path:
             logger.warning(f"Path traversal attempt blocked: {filename} from {request.remote_addr}")
             return "Invalid filename", 400
 
-        static_dir = os.path.join(app.root_path, 'static')
+        # Verify resolved path is within static directory using realpath
+        # This prevents symlink attacks and ensures canonical path verification
+        try:
+            real_static = os.path.realpath(static_dir)
+            real_requested = os.path.realpath(safe_path)
 
-        # Validate the resolved path is within static directory
-        safe_path = safe_join(static_dir, filename)
-        if not safe_path or not safe_path.startswith(static_dir):
-            logger.warning(f"Path escape attempt blocked: {filename} from {request.remote_addr}")
+            if not real_requested.startswith(real_static + os.sep):
+                logger.warning(f"Path escape attempt blocked: {filename} from {request.remote_addr}")
+                return "Invalid path", 400
+        except (OSError, ValueError) as e:
+            logger.warning(f"Path resolution failed for {filename}: {e}")
             return "Invalid path", 400
+
+        # Verify file exists before serving
+        if not os.path.isfile(safe_path):
+            logger.error(f"Static file not found: {filename} in {static_dir}")
+            return "File not found", 404
 
         logger.debug(f"Serving static file: {filename} from {static_dir}")
         response = send_from_directory(static_dir, filename)
@@ -794,18 +808,19 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
     Used for bulk rating interface.
     """
     try:
-        # SECURITY: Validate video ID format
+        # SECURITY: Validate all inputs before expensive operations
+        # 1. Validate rating type first (cheapest check)
+        if rating_type not in ['like', 'dislike']:
+            logger.warning(f"Invalid rating type: {rating_type} from {request.remote_addr}")
+            return error_response('Invalid rating type')
+
+        # 2. Validate video ID format (more expensive regex check)
         is_valid, error = validate_youtube_video_id(video_id)
         if not is_valid:
             logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {request.remote_addr}")
             return error
 
-        # Validate rating type
-        if rating_type not in ['like', 'dislike']:
-            logger.warning(f"Invalid rating type: {rating_type} from {request.remote_addr}")
-            return error_response('Invalid rating type')
-
-        # Get video info from database
+        # 3. Only after all validation: perform expensive database lookup
         video_data = db.get_video(video_id)
         if not video_data:
             return error_response('Video not found in database', 404)
@@ -1365,8 +1380,10 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
     """
     Build and execute data query with pagination.
 
-    SECURITY NOTE: Column names MUST be pre-validated against whitelist
-    before calling this function. This function adds quoting as defense-in-depth.
+    SECURITY: Uses triple-layer protection against SQL injection:
+    1. Input validation against whitelist (caller responsibility)
+    2. Assertions to catch programming errors
+    3. Explicit SQL identifier construction (no f-strings with user data)
 
     Args:
         db: Database instance
@@ -1383,17 +1400,33 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
     Always use the returned page value, not the input page value.
     """
     # SECURITY: Defense-in-depth validation (assert to catch programming errors)
-    assert all(col in DATA_VIEWER_COLUMNS for col in selected_columns), \
-        f"Invalid columns passed to _build_data_query: {selected_columns}"
-    assert sort_by in DATA_VIEWER_COLUMNS, \
-        f"Invalid sort_by passed to _build_data_query: {sort_by}"
-    assert sort_order in ['ASC', 'DESC'], \
-        f"Invalid sort_order passed to _build_data_query: {sort_order}"
+    if not all(col in DATA_VIEWER_COLUMNS for col in selected_columns):
+        logger.error(f"SECURITY: Invalid columns in query: {selected_columns}")
+        raise ValueError(f"Invalid columns passed to _build_data_query")
 
-    # SECURITY: Quote column identifiers for defense-in-depth against SQL injection
-    quoted_columns = [f'"{col}"' for col in selected_columns]
+    if sort_by not in DATA_VIEWER_COLUMNS:
+        logger.error(f"SECURITY: Invalid sort column: {sort_by}")
+        raise ValueError(f"Invalid sort_by passed to _build_data_query")
+
+    if sort_order not in ('ASC', 'DESC'):
+        logger.error(f"SECURITY: Invalid sort order: {sort_order}")
+        raise ValueError(f"Invalid sort_order passed to _build_data_query")
+
+    # SECURITY: Build SQL with explicit string concatenation (safer than f-strings)
+    # Use double quotes for SQL identifiers (standard SQL)
+    quoted_columns = []
+    for col in selected_columns:
+        # Verify again and quote
+        if col in DATA_VIEWER_COLUMNS:
+            # Replace any quotes in column name (defense in depth)
+            safe_col = col.replace('"', '""')
+            quoted_columns.append('"' + safe_col + '"')
+
     select_clause = ', '.join(quoted_columns)
-    quoted_sort_by = f'"{sort_by}"'
+
+    # Quote sort column with same escaping
+    safe_sort = sort_by.replace('"', '""')
+    quoted_sort_by = '"' + safe_sort + '"'
 
     # Get total count of distinct video IDs
     count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
@@ -1404,19 +1437,20 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
     page = max(1, min(page, total_pages if total_pages > 0 else 1))
     offset = (page - 1) * limit
 
-    # Get data with DISTINCT to avoid showing duplicate videos
-    # Group by yt_video_id and take the most recently played version if duplicates exist
-    data_query = f"""
-        SELECT {select_clause}
-        FROM video_ratings
-        WHERE rowid IN (
-            SELECT MAX(rowid)
-            FROM video_ratings
-            GROUP BY yt_video_id
-        )
-        ORDER BY {quoted_sort_by} {sort_order}
-        LIMIT ? OFFSET ?
-    """
+    # SECURITY: Build query with parameterized LIMIT/OFFSET
+    # Use explicit string building to avoid f-string injection risks
+    data_query = (
+        "SELECT " + select_clause + " "
+        "FROM video_ratings "
+        "WHERE rowid IN ("
+        "  SELECT MAX(rowid) "
+        "  FROM video_ratings "
+        "  GROUP BY yt_video_id"
+        ") "
+        "ORDER BY " + quoted_sort_by + " " + sort_order + " "
+        "LIMIT ? OFFSET ?"
+    )
+
     cursor = db._conn.execute(data_query, (limit, offset))
     rows = cursor.fetchall()
 
