@@ -100,18 +100,30 @@ def find_or_search_video(
         # Check if quota is blocked
         should_skip, _ = quota_guard.check_quota_or_skip("locate video for rating", rating_type)
         if should_skip:
-            guard_status = quota_guard.status()
-            cooldown_msg = guard_status.get('message')
-            logger.error(
-                "Cannot locate cached video while quota is blocked; rejecting %s request",
-                rating_type,
+            # Can't search now due to quota, but we can queue this media for later matching
+            # This allows the user to rate songs even when quota is exhausted
+            from database import get_database
+            db = get_database()
+
+            # Add to pending videos so it can be matched when quota is restored
+            db.upsert_pending_media(ha_media, reason='quota_exceeded')
+
+            title = ha_media.get('title', 'Unknown')
+            artist = ha_media.get('artist', 'Unknown')
+            media_info = format_media_info_func(title, artist)
+
+            logger.info(
+                "Quota blocked - cannot search for video now. Added to pending: %s",
+                media_info
             )
+            rating_logger.info(f"{rating_type.upper()} | PENDING | {media_info} | Quota blocked, queued for later matching")
+
             error_response = (
                 jsonify({
                     "success": False,
-                    "error": cooldown_msg,
-                    "cooldown_until": guard_status.get('blocked_until'),
-                    "cooldown_seconds_remaining": guard_status.get('remaining_seconds', 0),
+                    "error": "Quota exceeded - video will be matched and rated when quota is restored",
+                    "queued_for_matching": True,
+                    "pending_reason": "quota_exceeded"
                 }),
                 503,
             )

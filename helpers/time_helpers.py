@@ -3,7 +3,7 @@ Time formatting helper utilities.
 
 Provides reusable time formatting functions for consistent display across the application.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union
 
 
@@ -68,14 +68,14 @@ def format_relative_time(timestamp_input: Union[str, datetime]) -> str:
         if isinstance(timestamp_input, str):
             timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
 
-        # Use datetime.now() for naive datetimes (no timezone), utcnow() for aware datetimes
-        # This handles both local timestamps (from logs) and UTC timestamps (from database)
+        # Normalize both timestamps to UTC for comparison
+        # SQLite stores timestamps as strings without timezone, treat them as UTC
         if timestamp.tzinfo is None:
-            # Naive datetime - assume local time
-            now = datetime.now()
-        else:
-            # Aware datetime - use UTC
-            now = datetime.utcnow()
+            # Naive datetime from SQLite - assume UTC
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        # Get current time in UTC
+        now = datetime.now(timezone.utc)
 
         delta = now - timestamp
 
