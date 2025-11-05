@@ -1,6 +1,6 @@
 import atexit
 from flask import Flask, jsonify, Response, render_template, request, send_from_directory
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import os
@@ -169,6 +169,12 @@ app.config['WTF_CSRF_SSL_STRICT'] = False
 
 # SECURITY: Enable CSRF protection for all POST/PUT/DELETE requests
 csrf = CSRFProtect(app)
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Handle CSRF validation errors with helpful message."""
+    logger.warning(f"CSRF validation failed: {e.description}")
+    return jsonify({'error': 'CSRF validation failed', 'message': e.description}), 400
 
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -1075,20 +1081,22 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 # ============================================================================
 
 @app.route('/thumbs_up', methods=['POST'])
+@csrf.exempt
 @require_rate_limit
 def thumbs_up() -> Tuple[Response, int]:
     """
     DEPRECATED: Legacy endpoint. Use /rate-song instead.
-    CSRF protection enabled - send X-CSRFToken header or csrf_token form field.
+    CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     return rate_video('like')
 
 @app.route('/thumbs_down', methods=['POST'])
+@csrf.exempt
 @require_rate_limit
 def thumbs_down() -> Tuple[Response, int]:
     """
     DEPRECATED: Legacy endpoint. Use /rate-song instead.
-    CSRF protection enabled - send X-CSRFToken header or csrf_token form field.
+    CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     return rate_video('dislike')
 

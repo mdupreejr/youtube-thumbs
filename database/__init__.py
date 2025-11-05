@@ -348,6 +348,37 @@ class Database:
         """Get hourly API usage for a specific day."""
         return self._api_usage_ops.get_hourly_usage(date_str)
 
+    def log_api_call_detailed(
+        self,
+        api_method: str,
+        operation_type: str = None,
+        query_params: str = None,
+        quota_cost: int = 1,
+        success: bool = True,
+        error_message: str = None,
+        results_count: int = None,
+        context: str = None
+    ) -> None:
+        """Log a detailed API call for analysis and debugging."""
+        return self._api_usage_ops.log_api_call_detailed(
+            api_method, operation_type, query_params, quota_cost,
+            success, error_message, results_count, context
+        )
+
+    def get_api_call_log(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        method_filter: str = None,
+        success_filter: bool = None
+    ) -> Dict[str, Any]:
+        """Get detailed API call logs with pagination."""
+        return self._api_usage_ops.get_api_call_log(limit, offset, method_filter, success_filter)
+
+    def get_api_call_summary(self, hours: int = 24) -> Dict[str, Any]:
+        """Get summary statistics of API calls for the last N hours."""
+        return self._api_usage_ops.get_api_call_summary(hours)
+
     # Stats Cache Operations
     def get_cached_stats(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached statistics."""
