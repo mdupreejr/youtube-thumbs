@@ -1224,6 +1224,169 @@ def stats_page() -> str:
         return f"<h1>Error loading statistics</h1><p>{str(e)}</p>", 500
 
 
+def _validate_data_viewer_params(request_args):
+    """
+    Validate and sanitize data viewer parameters.
+
+    Returns:
+        Tuple of (page, sort_by, sort_order, selected_columns, columns_param, all_columns)
+    """
+    # Get query parameters with validation
+    page, _ = validate_page_param(request_args)
+    if not page or page > 1000000:  # Reasonable upper bound
+        page = 1
+
+    sort_by = request_args.get('sort', 'date_last_played')
+    sort_order = request_args.get('order', 'DESC')
+
+    # Get selected columns from checkboxes or query string (default to key columns)
+    default_columns = ['yt_video_id', 'ha_title', 'ha_artist', 'rating', 'play_count', 'date_last_played']
+
+    # Define all available columns with friendly names
+    all_columns = {
+        'yt_video_id': 'Video ID',
+        'ha_title': 'Title (HA)',
+        'ha_artist': 'Artist (HA)',
+        'ha_app_name': 'App Name',
+        'yt_title': 'Title (YT)',
+        'yt_channel': 'Channel',
+        'yt_url': 'YouTube URL',
+        'rating': 'Rating',
+        'play_count': 'Play Count',
+        'date_added': 'Date Added',
+        'date_last_played': 'Last Played',
+        'rating_score': 'Rating Score',
+        'source': 'Source',
+        'yt_match_pending': 'Pending',
+        'yt_match_attempts': 'Match Attempts',
+        'ha_duration': 'Duration (HA)',
+        'yt_duration': 'Duration (YT)',
+        'yt_published_at': 'Published',
+        'yt_category_id': 'Category',
+        'pending_reason': 'Pending Reason'
+    }
+
+    # Try to get from checkboxes first (getlist for multiple values)
+    selected_columns = request_args.getlist('column')
+
+    # If no checkboxes, try the columns parameter (for pagination links)
+    if not selected_columns:
+        columns_param = request_args.get('columns', ','.join(default_columns))
+        selected_columns = [c.strip() for c in columns_param.split(',') if c.strip()]
+
+    # SECURITY: Validate ALL selected columns against whitelist to prevent SQL injection
+    validated_columns = []
+    for col in selected_columns:
+        if col in all_columns:
+            validated_columns.append(col)
+        else:
+            logger.warning(f"Attempted to select invalid column: {col} from {request.remote_addr}")
+
+    # Use validated columns or fallback to defaults
+    if not validated_columns:
+        validated_columns = default_columns
+
+    selected_columns = validated_columns
+
+    # Create columns param for pagination links
+    columns_param = ','.join(selected_columns)
+
+    # Ensure valid sort column (SQL injection protection)
+    if sort_by not in all_columns:
+        logger.warning(f"Invalid sort column attempted: {sort_by} from {request.remote_addr}")
+        sort_by = 'date_last_played'
+
+    # Ensure valid sort order (SQL injection protection)
+    sort_order = sort_order.upper()
+    if sort_order not in ['ASC', 'DESC']:
+        logger.warning(f"Invalid sort order attempted: {sort_order} from {request.remote_addr}")
+        sort_order = 'DESC'
+
+    return page, sort_by, sort_order, selected_columns, columns_param, all_columns
+
+
+def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=50):
+    """
+    Build and execute data query with pagination.
+
+    Returns:
+        Tuple of (rows, total_count, total_pages, adjusted_page)
+    """
+    # Build SQL query with selected columns
+    select_clause = ', '.join(selected_columns)
+
+    # Get total count of distinct video IDs
+    count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
+    total_count = db._conn.execute(count_query).fetchone()['count']
+
+    # Calculate pagination
+    total_pages = (total_count + limit - 1) // limit
+    page = max(1, min(page, total_pages if total_pages > 0 else 1))
+    offset = (page - 1) * limit
+
+    # Get data with DISTINCT to avoid showing duplicate videos
+    # Group by yt_video_id and take the most recently played version if duplicates exist
+    data_query = f"""
+        SELECT {select_clause}
+        FROM video_ratings
+        WHERE rowid IN (
+            SELECT MAX(rowid)
+            FROM video_ratings
+            GROUP BY yt_video_id
+        )
+        ORDER BY {sort_by} {sort_order}
+        LIMIT ? OFFSET ?
+    """
+    cursor = db._conn.execute(data_query, (limit, offset))
+    rows = cursor.fetchall()
+
+    return rows, total_count, total_pages, page
+
+
+def _format_data_rows(rows, selected_columns):
+    """
+    Format database rows for template display.
+
+    Returns:
+        List of formatted row dictionaries
+    """
+    formatted_rows = []
+    for row in rows:
+        formatted_row = {}
+        for col in selected_columns:
+            value = row[col]
+            # Format specific column types
+            if col == 'rating':
+                if value == 'like':
+                    formatted_row[col] = '👍 Like'
+                elif value == 'dislike':
+                    formatted_row[col] = '👎 Dislike'
+                else:
+                    formatted_row[col] = '➖ None'
+            elif col in ['date_added', 'date_last_played', 'yt_published_at']:
+                if value:
+                    try:
+                        dt = parse_timestamp(value)
+                        formatted_row[col] = dt.strftime('%Y-%m-%d %H:%M')
+                    except:
+                        formatted_row[col] = value
+                else:
+                    formatted_row[col] = '-'
+            elif col == 'yt_match_pending':
+                formatted_row[col] = '✓' if value == 1 else '✗'
+            elif col == 'yt_url' and value:
+                # Make URL clickable
+                formatted_row[col] = value
+                formatted_row[col + '_link'] = True
+            elif value is None:
+                formatted_row[col] = '-'
+            else:
+                formatted_row[col] = value
+        formatted_rows.append(formatted_row)
+
+    return formatted_rows
+
+
 @app.route('/data')
 def data_viewer() -> str:
     """
@@ -1234,141 +1397,17 @@ def data_viewer() -> str:
         # Get ingress path for proper link generation
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
-        # Get query parameters with validation
-        page, _ = validate_page_param(request.args)
-        if not page or page > 1000000:  # Reasonable upper bound
-            page = 1
+        # Validate and parse request parameters
+        page, sort_by, sort_order, selected_columns, columns_param, all_columns = \
+            _validate_data_viewer_params(request.args)
 
-        limit = 50  # Videos per page
+        # Build and execute query
+        rows, total_count, total_pages, page = _build_data_query(
+            db, selected_columns, sort_by, sort_order, page
+        )
 
-        sort_by = request.args.get('sort', 'date_last_played')
-        sort_order = request.args.get('order', 'DESC')
-
-        # Get selected columns from checkboxes or query string (default to key columns)
-        default_columns = ['yt_video_id', 'ha_title', 'ha_artist', 'rating', 'play_count', 'date_last_played']
-
-        # Define all available columns with friendly names (BEFORE validation)
-        all_columns = {
-            'yt_video_id': 'Video ID',
-            'ha_title': 'Title (HA)',
-            'ha_artist': 'Artist (HA)',
-            'ha_app_name': 'App Name',
-            'yt_title': 'Title (YT)',
-            'yt_channel': 'Channel',
-            'yt_url': 'YouTube URL',
-            'rating': 'Rating',
-            'play_count': 'Play Count',
-            'date_added': 'Date Added',
-            'date_last_played': 'Last Played',
-            'rating_score': 'Rating Score',
-            'source': 'Source',
-            'yt_match_pending': 'Pending',
-            'yt_match_attempts': 'Match Attempts',
-            'ha_duration': 'Duration (HA)',
-            'yt_duration': 'Duration (YT)',
-            'yt_published_at': 'Published',
-            'yt_category_id': 'Category',
-            'pending_reason': 'Pending Reason'
-        }
-
-        # Try to get from checkboxes first (getlist for multiple values)
-        selected_columns = request.args.getlist('column')
-
-        # If no checkboxes, try the columns parameter (for pagination links)
-        if not selected_columns:
-            columns_param = request.args.get('columns', ','.join(default_columns))
-            selected_columns = [c.strip() for c in columns_param.split(',') if c.strip()]
-
-        # SECURITY: Validate ALL selected columns against whitelist to prevent SQL injection
-        validated_columns = []
-        for col in selected_columns:
-            if col in all_columns:
-                validated_columns.append(col)
-            else:
-                logger.warning(f"Attempted to select invalid column: {col} from {request.remote_addr}")
-
-        # Use validated columns or fallback to defaults
-        if not validated_columns:
-            validated_columns = default_columns
-
-        selected_columns = validated_columns
-
-        # Create columns param for pagination links
-        columns_param = ','.join(selected_columns)
-
-        # Ensure valid sort column (SQL injection protection)
-        if sort_by not in all_columns:
-            logger.warning(f"Invalid sort column attempted: {sort_by} from {request.remote_addr}")
-            sort_by = 'date_last_played'
-
-        # Ensure valid sort order (SQL injection protection)
-        sort_order = sort_order.upper()
-        if sort_order not in ['ASC', 'DESC']:
-            logger.warning(f"Invalid sort order attempted: {sort_order} from {request.remote_addr}")
-            sort_order = 'DESC'
-
-        # Build SQL query with selected columns
-        select_clause = ', '.join(selected_columns)
-
-        # Get total count of distinct video IDs
-        count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
-        total_count = db._conn.execute(count_query).fetchone()['count']
-
-        # Calculate pagination
-        total_pages = (total_count + limit - 1) // limit
-        page = max(1, min(page, total_pages if total_pages > 0 else 1))
-        offset = (page - 1) * limit
-
-        # Get data with DISTINCT to avoid showing duplicate videos
-        # Group by yt_video_id and take the most recently played version if duplicates exist
-        data_query = f"""
-            SELECT {select_clause}
-            FROM video_ratings
-            WHERE rowid IN (
-                SELECT MAX(rowid)
-                FROM video_ratings
-                GROUP BY yt_video_id
-            )
-            ORDER BY {sort_by} {sort_order}
-            LIMIT ? OFFSET ?
-        """
-        cursor = db._conn.execute(data_query, (limit, offset))
-        rows = cursor.fetchall()
-
-        # Format rows for template
-        formatted_rows = []
-        for row in rows:
-            formatted_row = {}
-            for col in selected_columns:
-                value = row[col]
-                # Format specific column types
-                if col == 'rating':
-                    if value == 'like':
-                        formatted_row[col] = '👍 Like'
-                    elif value == 'dislike':
-                        formatted_row[col] = '👎 Dislike'
-                    else:
-                        formatted_row[col] = '➖ None'
-                elif col in ['date_added', 'date_last_played', 'yt_published_at']:
-                    if value:
-                        try:
-                            dt = parse_timestamp(value)
-                            formatted_row[col] = dt.strftime('%Y-%m-%d %H:%M')
-                        except:
-                            formatted_row[col] = value
-                    else:
-                        formatted_row[col] = '-'
-                elif col == 'yt_match_pending':
-                    formatted_row[col] = '✓' if value == 1 else '✗'
-                elif col == 'yt_url' and value:
-                    # Make URL clickable
-                    formatted_row[col] = value
-                    formatted_row[col + '_link'] = True
-                elif value is None:
-                    formatted_row[col] = '-'
-                else:
-                    formatted_row[col] = value
-            formatted_rows.append(formatted_row)
+        # Format rows for display
+        formatted_rows = _format_data_rows(rows, selected_columns)
 
         # Generate page numbers for pagination
         page_numbers = generate_page_numbers(page, total_pages)

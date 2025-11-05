@@ -314,6 +314,178 @@ def parse_quota_prober_log(
     }
 
 
+def _handle_rated_tab(page, period_filter):
+    """Handle rated songs tab."""
+    rating_filter = request.args.get('rating', 'all')
+    if rating_filter not in ['like', 'dislike', 'all']:
+        rating_filter = 'all'
+
+    result = _db.get_rated_songs(page, 50, period_filter, rating_filter)
+
+    # Format songs for template
+    formatted_songs = []
+    for song in result['songs']:
+        title = get_video_title(song)
+        artist = get_video_artist(song)
+
+        # Format relative time
+        time_ago = format_relative_time(song.get('date_last_played', ''))
+
+        formatted_songs.append({
+            'yt_video_id': song.get('yt_video_id'),
+            'title': title,
+            'artist': artist,
+            'rating': song.get('rating'),
+            'play_count': song.get('play_count', 0),
+            'time_ago': time_ago,
+            'timestamp': song.get('date_last_played'),
+            'source': song.get('source', 'unknown')
+        })
+
+    return {
+        'rating_filter': rating_filter,
+        'songs': formatted_songs,
+        'total_count': result['total_count'],
+        'total_pages': result['total_pages']
+    }
+
+
+def _handle_matches_tab(page, period_filter):
+    """Handle match history tab."""
+    result = _db.get_match_history(page, 50, period_filter)
+
+    # Format matches for template
+    formatted_matches = []
+    for match in result['matches']:
+        ha_title = (match.get('ha_title') or 'Unknown').strip() or 'Unknown'
+        ha_artist = (match.get('ha_artist') or 'Unknown').strip() or 'Unknown'
+        yt_title = (match.get('yt_title') or 'Unknown').strip() or 'Unknown'
+        yt_channel = (match.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+
+        # Calculate duration difference
+        ha_duration = match.get('ha_duration') or 0
+        yt_duration = match.get('yt_duration') or 0
+        duration_diff = yt_duration - ha_duration
+
+        # Determine match quality (good if duration diff <= 2 seconds)
+        match_quality = 'good' if abs(duration_diff) <= 2 else 'fair'
+
+        # Format relative time
+        time_ago = format_relative_time(match.get('date_added', ''))
+
+        formatted_matches.append({
+            'yt_video_id': match.get('yt_video_id'),
+            'ha_title': ha_title,
+            'ha_artist': ha_artist,
+            'ha_duration': ha_duration,
+            'yt_title': yt_title,
+            'yt_channel': yt_channel,
+            'yt_duration': yt_duration,
+            'duration_diff': duration_diff,
+            'match_quality': match_quality,
+            'match_attempts': match.get('yt_match_attempts', 0),
+            'play_count': match.get('play_count', 0),
+            'time_ago': time_ago,
+            'timestamp': match.get('date_added')
+        })
+
+    return {
+        'matches': formatted_matches,
+        'total_count': result['total_count'],
+        'total_pages': result['total_pages']
+    }
+
+
+def _handle_errors_tab(page, period_filter):
+    """Handle error logs tab."""
+    level_filter = request.args.get('level', 'all')
+    if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
+        level_filter = 'all'
+
+    result = parse_error_log(period_filter, level_filter, page, 50)
+
+    # Format errors for template
+    formatted_errors = []
+    for error in result.get('errors', []):
+        # Format relative time
+        time_ago = format_relative_time(error['timestamp'])
+
+        # Truncate long messages
+        message = error['message']
+        truncated = len(message) > 150
+        if truncated:
+            display_message = message[:150] + '...'
+        else:
+            display_message = message
+
+        formatted_errors.append({
+            'timestamp': error['timestamp'],
+            'time_ago': time_ago,
+            'level': error['level'],
+            'message': message,
+            'display_message': display_message,
+            'truncated': truncated
+        })
+
+    return {
+        'level_filter': level_filter,
+        'errors': formatted_errors,
+        'total_count': result.get('total_count', 0),
+        'total_pages': result.get('total_pages', 0),
+        'log_error': result.get('error')
+    }
+
+
+def _handle_quota_prober_tab(page, period_filter):
+    """Handle quota prober logs tab."""
+    # Get quota prober specific filters
+    event_filter = request.args.get('event', 'all')
+    if event_filter not in ['probe', 'retry', 'success', 'error', 'recovery', 'all']:
+        event_filter = 'all'
+
+    level_filter = request.args.get('level', 'all')
+    if level_filter not in ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'all']:
+        level_filter = 'all'
+
+    # Parse quota prober logs
+    result = parse_quota_prober_log(
+        time_filter=period_filter,
+        event_filter=event_filter,
+        level_filter=level_filter,
+        page=page,
+        limit=50
+    )
+
+    # Format logs for template
+    formatted_logs = []
+    for log in result['logs']:
+        message = log['message']
+        truncated = len(message) > 200
+        if truncated:
+            display_message = message[:200] + '...'
+        else:
+            display_message = message
+
+        formatted_logs.append({
+            'timestamp': log['timestamp'],
+            'time_ago': log['timestamp_relative'],
+            'level': log['level'],
+            'event_type': log['event_type'],
+            'message': message,
+            'display_message': display_message,
+            'truncated': truncated
+        })
+
+    return {
+        'event_filter': event_filter,
+        'level_filter': level_filter,
+        'quota_prober_logs': formatted_logs,
+        'quota_prober_stats': result.get('stats', {}),
+        'total_count': result.get('total_count', 0),
+        'total_pages': result.get('total_pages', 0)
+    }
+
+
 @bp.route('/logs')
 def logs_viewer():
     """
@@ -344,170 +516,15 @@ def logs_viewer():
             'period_filter': period_filter
         }
 
-        # Handle each tab
+        # Handle each tab with dedicated functions
         if current_tab == 'rated':
-            rating_filter = request.args.get('rating', 'all')
-            if rating_filter not in ['like', 'dislike', 'all']:
-                rating_filter = 'all'
-
-            result = _db.get_rated_songs(page, 50, period_filter, rating_filter)
-
-            # Format songs for template
-            formatted_songs = []
-            for song in result['songs']:
-                title = get_video_title(song)
-                artist = get_video_artist(song)
-
-                # Format relative time
-                time_ago = format_relative_time(song.get('date_last_played', ''))
-
-                formatted_songs.append({
-                    'yt_video_id': song.get('yt_video_id'),
-                    'title': title,
-                    'artist': artist,
-                    'rating': song.get('rating'),
-                    'play_count': song.get('play_count', 0),
-                    'time_ago': time_ago,
-                    'timestamp': song.get('date_last_played'),
-                    'source': song.get('source', 'unknown')
-                })
-
-            template_data.update({
-                'rating_filter': rating_filter,
-                'songs': formatted_songs,
-                'total_count': result['total_count'],
-                'total_pages': result['total_pages']
-            })
-
+            template_data.update(_handle_rated_tab(page, period_filter))
         elif current_tab == 'matches':
-            result = _db.get_match_history(page, 50, period_filter)
-
-            # Format matches for template
-            formatted_matches = []
-            for match in result['matches']:
-                ha_title = (match.get('ha_title') or 'Unknown').strip() or 'Unknown'
-                ha_artist = (match.get('ha_artist') or 'Unknown').strip() or 'Unknown'
-                yt_title = (match.get('yt_title') or 'Unknown').strip() or 'Unknown'
-                yt_channel = (match.get('yt_channel') or 'Unknown').strip() or 'Unknown'
-
-                # Calculate duration difference
-                ha_duration = match.get('ha_duration') or 0
-                yt_duration = match.get('yt_duration') or 0
-                duration_diff = yt_duration - ha_duration
-
-                # Determine match quality (good if duration diff <= 2 seconds)
-                match_quality = 'good' if abs(duration_diff) <= 2 else 'fair'
-
-                # Format relative time
-                time_ago = format_relative_time(match.get('date_added', ''))
-
-                formatted_matches.append({
-                    'yt_video_id': match.get('yt_video_id'),
-                    'ha_title': ha_title,
-                    'ha_artist': ha_artist,
-                    'ha_duration': ha_duration,
-                    'yt_title': yt_title,
-                    'yt_channel': yt_channel,
-                    'yt_duration': yt_duration,
-                    'duration_diff': duration_diff,
-                    'match_quality': match_quality,
-                    'match_attempts': match.get('yt_match_attempts', 0),
-                    'play_count': match.get('play_count', 0),
-                    'time_ago': time_ago,
-                    'timestamp': match.get('date_added')
-                })
-
-            template_data.update({
-                'matches': formatted_matches,
-                'total_count': result['total_count'],
-                'total_pages': result['total_pages']
-            })
-
+            template_data.update(_handle_matches_tab(page, period_filter))
         elif current_tab == 'errors':
-            level_filter = request.args.get('level', 'all')
-            if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
-                level_filter = 'all'
-
-            result = parse_error_log(period_filter, level_filter, page, 50)
-
-            # Format errors for template
-            formatted_errors = []
-            for error in result.get('errors', []):
-                # Format relative time
-                time_ago = format_relative_time(error['timestamp'])
-
-                # Truncate long messages
-                message = error['message']
-                truncated = len(message) > 150
-                if truncated:
-                    display_message = message[:150] + '...'
-                else:
-                    display_message = message
-
-                formatted_errors.append({
-                    'timestamp': error['timestamp'],
-                    'time_ago': time_ago,
-                    'level': error['level'],
-                    'message': message,
-                    'display_message': display_message,
-                    'truncated': truncated
-                })
-
-            template_data.update({
-                'level_filter': level_filter,
-                'errors': formatted_errors,
-                'total_count': result.get('total_count', 0),
-                'total_pages': result.get('total_pages', 0),
-                'log_error': result.get('error')
-            })
-
+            template_data.update(_handle_errors_tab(page, period_filter))
         elif current_tab == 'quota_prober':
-            # Get quota prober specific filters
-            event_filter = request.args.get('event', 'all')
-            if event_filter not in ['probe', 'retry', 'success', 'error', 'recovery', 'all']:
-                event_filter = 'all'
-
-            level_filter = request.args.get('level', 'all')
-            if level_filter not in ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'all']:
-                level_filter = 'all'
-
-            # Parse quota prober logs
-            result = parse_quota_prober_log(
-                time_filter=period_filter,
-                event_filter=event_filter,
-                level_filter=level_filter,
-                page=page,
-                limit=50
-            )
-
-            # Format logs for template
-            formatted_logs = []
-            for log in result['logs']:
-                message = log['message']
-                truncated = len(message) > 200
-                if truncated:
-                    display_message = message[:200] + '...'
-                else:
-                    display_message = message
-
-                formatted_logs.append({
-                    'timestamp': log['timestamp'],
-                    'time_ago': log['timestamp_relative'],
-                    'level': log['level'],
-                    'event_type': log['event_type'],
-                    'message': message,
-                    'display_message': display_message,
-                    'truncated': truncated
-                })
-
-            template_data.update({
-                'event_filter': event_filter,
-                'level_filter': level_filter,
-                'quota_prober_logs': formatted_logs,
-                'quota_prober_stats': result.get('stats', {}),
-                'total_count': result.get('total_count', 0),
-                'total_pages': result.get('total_pages', 0)
-            })
+            template_data.update(_handle_quota_prober_tab(page, period_filter))
 
         # Generate page numbers for pagination
         total_pages = template_data.get('total_pages', 0)
