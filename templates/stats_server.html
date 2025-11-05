@@ -358,10 +358,11 @@
                 {% for channel in top_channels %}
                 <div class="list-item">
                     <div class="item-info">
-                        <div class="item-title">{{ channel.yt_channel or 'Unknown' }}</div>
-                        <div class="item-meta">{{ channel.video_count }} videos</div>
+                        <div class="item-title">
+                            {{ channel.yt_channel or 'Unknown' }}
+                            <span class="item-meta">• {{ channel.video_count }} videos • {{ channel.total_plays }} plays</span>
+                        </div>
                     </div>
-                    <div class="item-stat">{{ channel.total_plays }} plays</div>
                 </div>
                 {% endfor %}
             {% else %}
