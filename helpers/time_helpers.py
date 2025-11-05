@@ -41,9 +41,17 @@ def format_relative_time(timestamp_str: str) -> str:
         >>> format_relative_time("2023-12-01T12:00:00")
         'Dec 01, 2023'
     """
+    # Handle empty or whitespace-only input
+    if not timestamp_str or not timestamp_str.strip():
+        return "unknown"
+
     try:
         timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
-        delta = datetime.now() - timestamp
+        delta = datetime.utcnow() - timestamp
+
+        # Handle future timestamps
+        if delta.total_seconds() < 0:
+            return timestamp.strftime('%b %d, %Y')
 
         if delta.days > 30:
             return timestamp.strftime('%b %d, %Y')
@@ -59,5 +67,5 @@ def format_relative_time(timestamp_str: str) -> str:
             return f"{minutes}m ago"
         else:
             return "just now"
-    except Exception:
-        return timestamp_str
+    except (ValueError, AttributeError, TypeError):
+        return "unknown"

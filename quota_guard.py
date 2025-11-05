@@ -277,8 +277,20 @@ class QuotaGuard:
                 return False
         """
         if self.is_blocked():
-            # Build descriptive message with operation and args
-            args_str = ", ".join(str(arg)[:50] for arg in args) if args else ""
+            # Build descriptive message with operation and args (sanitized)
+            def sanitize_arg(arg) -> str:
+                """Sanitize argument for logging to prevent sensitive data leakage."""
+                if isinstance(arg, (int, float, bool)):
+                    return str(arg)
+                elif isinstance(arg, str):
+                    # Truncate long strings but don't expose potential tokens/keys
+                    if len(arg) > 50:
+                        return f"{arg[:20]}...{arg[-10:]}"
+                    return arg
+                else:
+                    return f"<{type(arg).__name__}>"
+
+            args_str = ", ".join(sanitize_arg(arg) for arg in args) if args else ""
             if args_str:
                 logger.info(
                     "Quota cooldown active; skipping %s for %s: %s",

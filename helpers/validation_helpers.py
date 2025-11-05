@@ -4,7 +4,7 @@ Parameter validation helper utilities.
 Provides reusable validation logic to eliminate code duplication across routes.
 """
 from typing import Tuple, Optional
-from flask import jsonify, Response
+from flask import jsonify, Response, make_response
 
 
 def validate_limit_param(
@@ -56,8 +56,8 @@ def validate_limit_param(
         value = max(min_value, min(value, max_value))
         return value, None
     except (ValueError, TypeError):
-        error_response = jsonify({
+        error_response = make_response(jsonify({
             'success': False,
             'error': f'Invalid {param_name} parameter'
-        }), 400
+        }), 400)
         return None, error_response

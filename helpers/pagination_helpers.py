@@ -35,32 +35,39 @@ def generate_page_numbers(current_page: int, total_pages: int) -> List[Union[int
         >>> generate_page_numbers(50, 50)
         [1, '...', 48, 49, 50]
     """
-    page_numbers = []
+    # Validate inputs
+    if total_pages < 1:
+        return [1]
+
+    # Clamp current_page to valid range
+    current_page = max(1, min(current_page, total_pages))
 
     if total_pages <= 10:
         # Show all pages if 10 or fewer
-        page_numbers = list(range(1, total_pages + 1))
-    else:
-        # Show first, last, and pages around current
-        page_numbers = [1]
+        return list(range(1, total_pages + 1))
 
-        # Calculate range around current page
-        start = max(2, current_page - 2)
-        end = min(total_pages - 1, current_page + 2)
+    # For more than 10 pages, use smart pagination
+    # Use a set to collect unique page numbers, then sort and add ellipsis
+    pages = set()
 
-        # Add ellipsis before middle section if needed
-        if start > 2:
-            page_numbers.append('...')
+    # Always include first and last page
+    pages.add(1)
+    pages.add(total_pages)
 
-        # Add middle section (pages around current)
-        for p in range(start, end + 1):
-            page_numbers.append(p)
+    # Add pages around current page
+    start = max(1, current_page - 2)
+    end = min(total_pages, current_page + 2)
+    for p in range(start, end + 1):
+        pages.add(p)
 
-        # Add ellipsis after middle section if needed
-        if end < total_pages - 1:
-            page_numbers.append('...')
+    # Convert to sorted list
+    sorted_pages = sorted(pages)
 
-        # Always show last page
-        page_numbers.append(total_pages)
+    # Build result with ellipsis where there are gaps
+    result = []
+    for i, page in enumerate(sorted_pages):
+        if i > 0 and sorted_pages[i] - sorted_pages[i-1] > 1:
+            result.append('...')
+        result.append(page)
 
-    return page_numbers
+    return result
