@@ -708,7 +708,7 @@ def index() -> str:
 
             # Test YouTube API
             yt_api = get_youtube_api()
-            yt_success, yt_message = check_youtube_api(yt_api, quota_guard)
+            yt_success, yt_message = check_youtube_api(yt_api, quota_guard, db)
             template_data['yt_test'] = {'success': yt_success, 'message': yt_message}
 
             # Test Database

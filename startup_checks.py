@@ -65,7 +65,7 @@ def check_home_assistant_api(ha_api) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
+def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
     """Test YouTube API authentication and quota."""
     try:
         logger.info("=" * 60)
@@ -80,6 +80,22 @@ def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
             logger.error("✗ YouTube client not authenticated")
             return False, "Not authenticated"
 
+        # Get 24-hour API call count from database if available
+        api_calls_24h = 0
+        if db:
+            try:
+                from datetime import datetime, timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                usage = db.get_api_daily_usage(yesterday)
+                if usage:
+                    api_calls_24h = usage.get('total_calls', 0)
+                # Also get today's usage
+                today_usage = db.get_api_daily_usage()
+                if today_usage:
+                    api_calls_24h += today_usage.get('total_calls', 0)
+            except Exception as e:
+                logger.debug(f"Could not fetch API usage stats: {e}")
+
         # Check quota guard before making API call
         if quota_guard and quota_guard.is_blocked():
             logger.warning("⚠ YouTube API quota exceeded (cooldown active)")
@@ -88,7 +104,17 @@ def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
             cooldown_remaining = status.get('remaining_seconds', 0)
             hours = cooldown_remaining // 3600
             minutes = (cooldown_remaining % 3600) // 60
-            return False, f"Quota cooldown active ({hours}h {minutes}m remaining)"
+
+            # Get quota exceeded timestamp
+            state = quota_guard._load_state()
+            quota_exceeded_at = state.get('set_at', 'Unknown') if state else 'Unknown'
+
+            msg_parts = [
+                f"Quota cooldown active ({hours}h {minutes}m remaining)",
+                f"Quota exceeded at: {quota_exceeded_at}",
+                f"API calls (24h): {api_calls_24h}"
+            ]
+            return False, "<br>".join(msg_parts)
 
         # Try a simple API call to verify authentication
         logger.info("Testing YouTube API authentication...")
@@ -106,10 +132,18 @@ def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
             if 'items' in response:
                 logger.info("✓ YouTube API authenticated and working")
                 logger.info("  API calls available - quota OK")
-                return True, "API authenticated and working"
+                msg_parts = [
+                    "API authenticated and working",
+                    f"API calls (24h): {api_calls_24h}"
+                ]
+                return True, "<br>".join(msg_parts)
             else:
                 logger.warning("⚠ YouTube API returned unexpected response")
-                return True, "API authenticated but response unexpected"
+                msg_parts = [
+                    "API authenticated but response unexpected",
+                    f"API calls (24h): {api_calls_24h}"
+                ]
+                return True, "<br>".join(msg_parts)
 
         except Exception as api_error:
             error_str = str(api_error)
@@ -244,7 +278,7 @@ def check_database(db) -> Tuple[bool, str]:
         if pending_ratings > 0:
             status_parts.append(f"{pending_ratings} pending sync")
 
-        return True, "DB OK: " + " • ".join(status_parts)
+        return True, "DB OK:<br>" + "<br>".join(status_parts)
 
     except Exception as e:
         logger.error(f"✗ Database check failed: {str(e)}")
@@ -268,7 +302,7 @@ def run_startup_checks(ha_api, yt_api, db, quota_guard=None) -> bool:
     all_ok = all_ok and ha_ok
 
     # Check YouTube API
-    yt_ok, yt_msg = check_youtube_api(yt_api, quota_guard)
+    yt_ok, yt_msg = check_youtube_api(yt_api, quota_guard, db)
     results.append(("YouTube API", yt_ok, yt_msg))
     all_ok = all_ok and yt_ok
 
