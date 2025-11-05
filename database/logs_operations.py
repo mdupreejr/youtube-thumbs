@@ -71,6 +71,7 @@ class LogsOperations:
             Dictionary with songs list, pagination info, and total count
         """
         # Build WHERE clause
+        # Show all rated songs, including pending ones (they have rating queued)
         where_conditions = ["rating != 'none'"]
         params = []
 
@@ -109,17 +110,24 @@ class LogsOperations:
         offset = (page - 1) * limit
 
         with self._lock:
-            # Get rated songs
+            # Get rated songs (deduplicated by ha_title/ha_artist to show latest entry)
             # nosec B608 - where_clause built from hardcoded strings with parameterized values
             query = f"""
                 SELECT yt_video_id, ha_title, ha_artist, yt_title, yt_channel,
                        rating, date_last_played, play_count, source
                 FROM video_ratings
                 WHERE {where_clause}
+                  AND rowid IN (
+                      SELECT MAX(rowid)
+                      FROM video_ratings
+                      WHERE {where_clause}
+                      GROUP BY COALESCE(ha_title, 'unknown'), COALESCE(ha_artist, 'unknown')
+                  )
                 ORDER BY date_last_played DESC
                 LIMIT ? OFFSET ?
             """
-            cursor = self._conn.execute(query, params + [limit, offset])
+            # Double the params since where_clause is used twice
+            cursor = self._conn.execute(query, params + params + [limit, offset])
             songs = cursor.fetchall()
 
         # Convert to list of dicts
