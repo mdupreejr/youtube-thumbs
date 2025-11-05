@@ -125,6 +125,11 @@ app = Flask(__name__)
 # In production, this should be set via environment variable
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
+# CSRF Configuration
+# Disable SSL/referrer checks since we're behind Home Assistant ingress proxy
+# The CSRF token check is still enforced and provides sufficient protection
+app.config['WTF_CSRF_SSL_STRICT'] = False
+
 # SECURITY: Enable CSRF protection for all POST/PUT/DELETE requests
 csrf = CSRFProtect(app)
 
