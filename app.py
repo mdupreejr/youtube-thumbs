@@ -490,11 +490,11 @@ app.register_blueprint(rating_bp)
 
 # Apply CSRF exemption to API endpoints for external/programmatic calls
 # Legacy endpoints (backward compatibility with Home Assistant automations)
-csrf.exempt(rating_bp.view_functions['thumbs_up'])
-csrf.exempt(rating_bp.view_functions['thumbs_down'])
+csrf.exempt(app.view_functions['rating.thumbs_up'])
+csrf.exempt(app.view_functions['rating.thumbs_down'])
 # Bulk rating API endpoints (RESTful API for programmatic access)
-csrf.exempt(rating_bp.view_functions['rate_song_like'])
-csrf.exempt(rating_bp.view_functions['rate_song_dislike'])
+csrf.exempt(app.view_functions['rating.rate_song_like'])
+csrf.exempt(app.view_functions['rating.rate_song_dislike'])
 
 # Initialize and register system routes blueprint
 init_system_routes(
