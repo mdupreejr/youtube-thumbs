@@ -318,7 +318,8 @@ init_data_api_routes(db)
 app.register_blueprint(data_api_bp)
 
 # Exempt specific API endpoints from CSRF protection
-csrf.exempt(data_api_bp.view_functions['retry_pending_videos'])
+# After blueprint registration, view functions are in app.view_functions with namespaced names
+csrf.exempt(app.view_functions['data_api.retry_pending_videos'])
 
 # Initialize and register logs blueprint
 init_logs_routes(db)
