@@ -7,6 +7,7 @@ import re
 import time
 import traceback
 import secrets
+import json
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
@@ -1133,7 +1134,6 @@ def status() -> Response:
 
     if format_type == 'html':
         # Return formatted HTML view
-        import json
         json_str = json.dumps(response_data, indent=2, sort_keys=True)
         html = f"""
         <!DOCTYPE html>
@@ -1245,7 +1245,6 @@ def get_metrics() -> Response:
 
         if format_type == 'html':
             # Return formatted HTML view
-            import json
             json_str = json.dumps(response_data, indent=2, sort_keys=True)
             html = f"""
             <!DOCTYPE html>

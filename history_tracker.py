@@ -13,7 +13,19 @@ VideoLookup = Callable[[MediaDict], Optional[Dict[str, Any]]]
 
 
 class HistoryTracker:
-    """Background worker that snapshots Home Assistant playback history."""
+    """
+    Background worker that snapshots Home Assistant playback history.
+
+    Thread Safety:
+        This class is designed to run in a single background thread (daemon=True).
+        Instance variables (_active_media_key, _last_media_time, etc.) are only
+        accessed by the background thread, so no locking is required for these.
+
+        The database instance (self.db) handles its own thread-safe locking internally.
+
+        IMPORTANT: Do not create multiple HistoryTracker instances or threads that
+        access the same instance variables, as this would require additional synchronization.
+    """
 
     def __init__(
         self,
@@ -87,7 +99,10 @@ class HistoryTracker:
                 self._poll_once()
                 # Reset failure count on successful poll
                 self._consecutive_failures = 0
-            except Exception as exc:  # pragma: no cover - defensive logging
+            except Exception as exc:  # pragma: no cover
+                # Broad exception handling is intentional here - this is a daemon thread's
+                # main loop. If any exception propagates, the thread dies permanently.
+                # We catch all exceptions, log them, and allow recovery up to max_consecutive_failures.
                 self._consecutive_failures += 1
                 logger.error(
                     "History tracker encountered an error (failure %d/%d): %s",
