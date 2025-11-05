@@ -4,14 +4,15 @@ Time formatting helper utilities.
 Provides reusable time formatting functions for consistent display across the application.
 """
 from datetime import datetime
+from typing import Union
 
 
-def format_relative_time(timestamp_str: str) -> str:
+def format_relative_time(timestamp_input: Union[str, datetime]) -> str:
     """
     Format timestamp as relative time (e.g., "2h ago", "yesterday").
 
     Args:
-        timestamp_str: ISO format timestamp string
+        timestamp_input: ISO format timestamp string or datetime object
 
     Returns:
         Relative time string
@@ -40,13 +41,32 @@ def format_relative_time(timestamp_str: str) -> str:
         >>> # Older than 30 days (shows date)
         >>> format_relative_time("2023-12-01T12:00:00")
         'Dec 01, 2023'
+
+        >>> # Can also accept datetime objects
+        >>> format_relative_time(datetime(2024, 1, 15, 12, 0, 0))
+        'just now'
     """
-    # Handle empty or whitespace-only input
-    if not timestamp_str or not timestamp_str.strip():
+    # Handle None or empty input
+    if timestamp_input is None:
+        return "unknown"
+
+    # Handle string input
+    if isinstance(timestamp_input, str):
+        # Handle empty or whitespace-only strings
+        if not timestamp_input.strip():
+            return "unknown"
+        timestamp_str = timestamp_input
+    # Handle datetime objects
+    elif isinstance(timestamp_input, datetime):
+        timestamp = timestamp_input
+    else:
+        # Unexpected type
         return "unknown"
 
     try:
-        timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+        # Parse string to datetime if needed
+        if isinstance(timestamp_input, str):
+            timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
         delta = datetime.utcnow() - timestamp
 
         # Handle future timestamps
