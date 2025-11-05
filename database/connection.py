@@ -62,16 +62,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
     """
 
-    IMPORT_HISTORY_SCHEMA = """
-        CREATE TABLE IF NOT EXISTS import_history (
-            entry_id TEXT PRIMARY KEY,
-            source TEXT NOT NULL,
-            yt_video_id TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_import_history_yt_video_id ON import_history(yt_video_id);
-    """
-
     API_USAGE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS api_usage (
             date TEXT PRIMARY KEY,
@@ -177,7 +167,6 @@ class DatabaseConnection:
                 with self._conn:
                     # Create all tables
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
-                    self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.API_USAGE_SCHEMA)
                     self._conn.executescript(self.API_CALL_LOG_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)

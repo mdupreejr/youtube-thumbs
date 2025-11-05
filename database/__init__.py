@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any, List
 from .connection import DatabaseConnection, DEFAULT_DB_PATH
 from .video_operations import VideoOperations
 from .pending_operations import PendingOperations
-from .import_operations import ImportOperations
 from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
@@ -37,7 +36,6 @@ class Database:
         # Initialize operation modules
         self._video_ops = VideoOperations(self._connection)
         self._pending_ops = PendingOperations(self._connection, self._video_ops)
-        self._import_ops = ImportOperations(self._connection)
         self._stats_ops = StatsOperations(self._connection)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
@@ -111,13 +109,6 @@ class Database:
 
     def mark_pending_rating(self, yt_video_id, success, error=None):
         return self._pending_ops.mark_pending_rating(yt_video_id, success, error)
-
-    # Import operations
-    def import_entry_exists(self, entry_id):
-        return self._import_ops.import_entry_exists(entry_id)
-
-    def log_import_entry(self, entry_id, source, yt_video_id):
-        return self._import_ops.log_import_entry(entry_id, source, yt_video_id)
 
     # Not found cache operations (v1.64.0: consolidated into video_ratings table)
     def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:

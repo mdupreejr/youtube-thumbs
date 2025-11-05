@@ -18,7 +18,6 @@ from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
-from history_tracker import HistoryTracker
 from quota_guard import quota_guard
 from quota_prober import QuotaProber
 from stats_refresher import StatsRefresher
@@ -496,8 +495,7 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
             db.mark_pending_rating(video_id, False, str(exc))
             logger.error("Failed to sync pending rating for %s: %s", video_id, exc)
 
-# Wrapper functions for compatibility with HistoryTracker dependency injection
-# These could be refactored to pass the actual modules instead
+# Wrapper functions for compatibility with rating system and quota prober
 def _search_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict]:
     """Wrapper for search_helpers.search_and_match_video."""
     yt_api = get_youtube_api()
@@ -507,24 +505,6 @@ def _search_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict]:
 def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Wrapper for cache_helpers.find_cached_video."""
     return find_cached_video(db, ha_media)
-
-
-def _history_tracker_enabled() -> bool:
-    value = os.getenv('ENABLE_HISTORY_TRACKER', 'true')
-    return value.lower() not in FALSE_VALUES if isinstance(value, str) else True
-
-
-def _history_poll_interval() -> int:
-    raw_interval = os.getenv('HISTORY_POLL_INTERVAL', '60')
-    try:
-        interval = int(raw_interval)
-        return interval if interval > 0 else 60
-    except ValueError:
-        logger.warning(
-            "Invalid HISTORY_POLL_INTERVAL '%s'; using default 60 seconds",
-            raw_interval,
-        )
-        return 60
 
 
 def _pending_retry_enabled() -> bool:
@@ -543,21 +523,6 @@ def _pending_retry_batch_size() -> int:
             raw_size,
         )
         return 50
-
-
-logger.info("Initializing history tracker...")
-history_tracker = HistoryTracker(
-    ha_api=ha_api,
-    database=db,
-    find_cached_video=_cache_wrapper,
-    search_and_match_video=_search_wrapper,
-    poll_interval=_history_poll_interval(),
-    enabled=_history_tracker_enabled(),
-)
-logger.info("Starting history tracker...")
-history_tracker.start()
-atexit.register(history_tracker.stop)
-logger.info("History tracker started successfully")
 
 
 def _probe_youtube_api() -> bool:
