@@ -468,18 +468,51 @@
     </div>
 
     <script>
-        // Column resizing functionality
+        // Column resizing and state persistence functionality
         (function() {
-            const storageKey = 'db_viewer_column_widths';
+            const widthStorageKey = 'db_viewer_column_widths';
+            const columnsStorageKey = 'db_viewer_enabled_columns';
             let currentHandle = null;
             let currentColumn = null;
             let startX = 0;
             let startWidth = 0;
 
+            // Load saved column selection from localStorage
+            function loadColumnSelection() {
+                try {
+                    const saved = localStorage.getItem(columnsStorageKey);
+                    if (saved) {
+                        const enabledColumns = JSON.parse(saved);
+                        // Only apply if no URL params are present (first load)
+                        const urlParams = new URLSearchParams(window.location.search);
+                        if (!urlParams.has('column')) {
+                            document.querySelectorAll('input[name="column"]').forEach(checkbox => {
+                                checkbox.checked = enabledColumns.includes(checkbox.value);
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error loading column selection:', e);
+                }
+            }
+
+            // Save column selection to localStorage
+            function saveColumnSelection() {
+                try {
+                    const enabledColumns = [];
+                    document.querySelectorAll('input[name="column"]:checked').forEach(checkbox => {
+                        enabledColumns.push(checkbox.value);
+                    });
+                    localStorage.setItem(columnsStorageKey, JSON.stringify(enabledColumns));
+                } catch (e) {
+                    console.error('Error saving column selection:', e);
+                }
+            }
+
             // Load saved column widths from localStorage
             function loadColumnWidths() {
                 try {
-                    const saved = localStorage.getItem(storageKey);
+                    const saved = localStorage.getItem(widthStorageKey);
                     if (saved) {
                         const widths = JSON.parse(saved);
                         Object.keys(widths).forEach(colKey => {
@@ -505,7 +538,7 @@
                             widths[colKey] = th.offsetWidth;
                         }
                     });
-                    localStorage.setItem(storageKey, JSON.stringify(widths));
+                    localStorage.setItem(widthStorageKey, JSON.stringify(widths));
                 } catch (e) {
                     console.error('Error saving column widths:', e);
                 }
@@ -564,9 +597,29 @@
                 });
             }
 
+            // Initialize column checkbox event listeners
+            function initColumnCheckboxes() {
+                document.querySelectorAll('input[name="column"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', saveColumnSelection);
+                });
+            }
+
+            // Initialize Apply button to also save and auto-submit with saved columns
+            function initApplyButton() {
+                const form = document.querySelector('form[action*="/data"]');
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        saveColumnSelection();
+                    });
+                }
+            }
+
             // Initialize on page load
+            loadColumnSelection();
             loadColumnWidths();
             initResizeHandles();
+            initColumnCheckboxes();
+            initApplyButton();
         })();
     </script>
 </body>
