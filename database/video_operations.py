@@ -36,8 +36,8 @@ class VideoOperations:
         ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_artist)
 
         payload = {
-            'yt_video_id': video.get('yt_video_id'),  # v1.50.0: Can be NULL for pending videos
-            'ha_content_id': video.get('ha_content_id'),  # v1.50.0: New placeholder ID column
+            'yt_video_id': video.get('yt_video_id'),
+            'ha_content_id': video.get('ha_content_id'),
             'ha_title': ha_title,
             'ha_artist': video.get('ha_artist'),
             'ha_app_name': video.get('ha_app_name'),

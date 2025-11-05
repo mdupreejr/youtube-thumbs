@@ -195,7 +195,6 @@ class QuotaProber:
                     logger.info("Quota prober: Time to check if YouTube quota is restored")
                     quota_restored = self.quota_guard.attempt_recovery_probe(self.probe_func)
 
-                    # v1.51.0: If quota was restored, retry pending videos
                     if quota_restored:
                         logger.info("Quota restored! Starting automatic retry of pending videos...")
                         self._retry_pending_videos()

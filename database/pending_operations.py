@@ -45,8 +45,8 @@ class PendingOperations:
         pending_id = self._pending_video_id(title, artist, duration)
 
         payload = {
-            'yt_video_id': None,  # v1.50.0: yt_video_id is NULL for pending videos
-            'ha_content_id': pending_id,  # v1.50.0: Use ha_content_id for placeholder
+            'yt_video_id': None,
+            'ha_content_id': pending_id,
             'ha_title': title,
             'ha_artist': artist,
             'ha_app_name': app_name,

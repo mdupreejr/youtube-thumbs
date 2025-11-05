@@ -62,15 +62,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id);
     """
 
-    # v1.58.0: Separated matching status from rating queue
-    # YouTube matching status tracked in: yt_match_* columns
-    # - yt_match_pending (1=pending match, 0=matched)
-    # - yt_match_requested_at, yt_match_attempts, yt_match_last_attempt, yt_match_last_error
-    # Rating queue (for quota blocking) tracked in: rating_queue_* columns
-    # - rating_queue_pending (TEXT: 'like'/'dislike' or NULL)
-    # - rating_queue_requested_at, rating_queue_attempts, rating_queue_last_attempt, rating_queue_last_error
-    # Removed redundant pending_match column
-
     IMPORT_HISTORY_SCHEMA = """
         CREATE TABLE IF NOT EXISTS import_history (
             entry_id TEXT PRIMARY KEY,
@@ -80,8 +71,6 @@ class DatabaseConnection:
         );
         CREATE INDEX IF NOT EXISTS idx_import_history_yt_video_id ON import_history(yt_video_id);
     """
-
-    # v1.64.0: Removed NOT_FOUND_SEARCHES_SCHEMA - now using video_ratings table
 
     API_USAGE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS api_usage (
@@ -123,9 +112,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_stats_cache_expires ON stats_cache(expires_at);
     """
 
-    # v1.67.1: Opportunistic search results cache
-    # Stores all videos from search results, not just matched ones
-    # Lightweight table, auto-expires after 30 days
     SEARCH_RESULTS_CACHE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS search_results_cache (
             yt_video_id TEXT PRIMARY KEY,
@@ -177,27 +163,6 @@ class DatabaseConnection:
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
                     self._conn.executescript(self.SEARCH_RESULTS_CACHE_SCHEMA)
 
-                    # Ensure all required columns exist (handles both new and existing DBs)
-                    self._add_column_if_missing('video_ratings', 'ha_content_hash', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'pending_reason', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'ha_app_name', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'source', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'ha_content_id', 'TEXT')
-
-                    # Ensure matching status columns exist
-                    self._add_column_if_missing('video_ratings', 'yt_match_pending', 'INTEGER')
-                    self._add_column_if_missing('video_ratings', 'yt_match_requested_at', 'TIMESTAMP')
-                    self._add_column_if_missing('video_ratings', 'yt_match_attempts', 'INTEGER')
-                    self._add_column_if_missing('video_ratings', 'yt_match_last_attempt', 'TIMESTAMP')
-                    self._add_column_if_missing('video_ratings', 'yt_match_last_error', 'TEXT')
-
-                    # Ensure rating queue columns exist
-                    self._add_column_if_missing('video_ratings', 'rating_queue_pending', 'TEXT')
-                    self._add_column_if_missing('video_ratings', 'rating_queue_requested_at', 'TIMESTAMP')
-                    self._add_column_if_missing('video_ratings', 'rating_queue_attempts', 'INTEGER')
-                    self._add_column_if_missing('video_ratings', 'rating_queue_last_attempt', 'TIMESTAMP')
-                    self._add_column_if_missing('video_ratings', 'rating_queue_last_error', 'TEXT')
-
                     # Create indexes
                     self._conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)"
@@ -209,63 +174,6 @@ class DatabaseConnection:
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
-
-    def _table_info(self, table: str) -> List[Dict[str, Any]]:
-        # Validate table name to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'api_usage', 'stats_cache'}
-        if table not in VALID_TABLES:
-            raise ValueError(f"Invalid table name: {table}")
-
-        cursor = self._conn.execute(f"PRAGMA table_info({table});")
-        return [dict(row) for row in cursor.fetchall()]
-
-    def _table_columns(self, table: str) -> List[str]:
-        return [row['name'] for row in self._table_info(table)]
-
-    def _add_column_if_missing(self, table: str, column: str, column_type: str) -> None:
-        """Add a column to a table if it doesn't exist."""
-        # Validate inputs to prevent SQL injection
-        VALID_TABLES = {'video_ratings', 'import_history', 'api_usage', 'stats_cache'}
-        VALID_COLUMN_TYPES = {'TEXT', 'INTEGER', 'TIMESTAMP', 'REAL'}
-
-        if table not in VALID_TABLES:
-            raise ValueError(f"Invalid table name: {table}")
-        if column_type.upper() not in VALID_COLUMN_TYPES:
-            raise ValueError(f"Invalid column type: {column_type}")
-        if not column.replace('_', '').isalnum():
-            raise ValueError(f"Invalid column name: {column}")
-
-        columns = self._table_columns(table)
-        if column not in columns:
-            logger.info(f"Adding missing column {column} to {table} table")
-            with self._conn:
-                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
-
-    def _normalize_existing_timestamps(self) -> None:
-        """Convert legacy ISO8601 timestamps with 'T' separator to sqlite friendly format."""
-        # Hardcoded column names - safe from SQL injection
-        columns = ('date_added', 'date_last_played')
-        updates = []
-        with self._lock:
-            try:
-                with self._conn:
-                    for column in columns:
-                        # nosec B608 - column names are hardcoded literals, not user input
-                        cursor = self._conn.execute(
-                            f"""
-                            UPDATE video_ratings
-                            SET {column} = REPLACE({column}, 'T', ' ')
-                            WHERE {column} LIKE '%T%';
-                            """
-                        )
-                        if cursor.rowcount:
-                            updates.append((column, cursor.rowcount))
-            except sqlite3.DatabaseError as exc:
-                logger.error(f"Failed to normalize timestamp format: {exc}")
-                return
-
-        for column, count in updates:
-            logger.info("Normalized %s timestamp values (%s rows)", column, count)
 
     @staticmethod
     def timestamp(ts = None) -> str:

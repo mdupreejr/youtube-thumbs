@@ -46,7 +46,7 @@ class MetricsTracker:
         # Batch operations tracking - kept at 100 (rarely used)
         self._batch_operations = deque(maxlen=100)
 
-        # v1.51.0: Pending video retry tracking
+        # Pending video retry tracking
         self._pending_retries = deque(maxlen=100)
 
     def record_api_call(self, api_type: str, success: bool = True, duration_ms: Optional[float] = None):
@@ -390,7 +390,7 @@ class MetricsTracker:
             ('api', self.get_api_stats),
             ('ratings', self.get_rating_stats),
             ('search', self.get_search_stats),
-            ('retry', self.get_retry_stats),  # v1.51.0: Add retry stats
+            ('retry', self.get_retry_stats),
             ('system', self.get_system_stats)
         ]
 
