@@ -1056,8 +1056,8 @@
                             <td>{{ video.yt_channel or '-' }}</td>
                             <td style="white-space: nowrap;">
                                 {% if video.date_added %}
-                                    {{ video.date_added[:10] }}<br>
-                                    <span style="font-size: 0.8em; color: #64748b;">{{ video.date_added[11:19] }}</span>
+                                    {{ (video.date_added|string)[:10] }}<br>
+                                    <span style="font-size: 0.8em; color: #64748b;">{{ (video.date_added|string)[11:19] }}</span>
                                 {% else %}
                                     -
                                 {% endif %}
