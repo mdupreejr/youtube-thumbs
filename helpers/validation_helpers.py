@@ -67,7 +67,8 @@ def validate_limit_param(
 def validate_page_param(
     request_args,
     param_name: str = 'page',
-    default: int = 1
+    default: int = 1,
+    max_page: int = 10000
 ) -> Tuple[Optional[int], Optional[Response]]:
     """
     Validate and sanitize a page number parameter from request arguments.
@@ -76,6 +77,7 @@ def validate_page_param(
         request_args: Flask request.args object
         param_name: Name of the parameter to validate (default: 'page')
         default: Default value if parameter not provided (default: 1)
+        max_page: Maximum allowed page number to prevent DoS (default: 10000)
 
     Returns:
         Tuple of (validated_value, error_response)
@@ -117,6 +119,9 @@ def validate_page_param(
         value = int(raw_value)
         if value < 1:
             return None, create_error_response(f'{param_name.capitalize()} must be at least 1')
+        # SECURITY: Prevent DoS by limiting maximum page number
+        if value > max_page:
+            return None, create_error_response(f'{param_name.capitalize()} exceeds maximum allowed value of {max_page}')
         return value, None
     except (ValueError, TypeError):
         return None, create_error_response(f'Invalid {param_name} parameter: must be a positive integer')
