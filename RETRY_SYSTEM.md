@@ -29,7 +29,7 @@ Videos in the database can be in one of these states:
 - YouTube search completed but no match found
 - Marked by retry system after failed search
 - Won't be retried (no YouTube video exists)
-- Also cached in `not_found_searches` table
+- Cached in video_ratings to prevent repeated searches
 
 ### ❌ Pending - Search Failed (`pending_match = 1`, `pending_reason = 'search_failed'`)
 - Search API call failed (network error, API error, etc.)

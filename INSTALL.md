@@ -86,7 +86,7 @@ host, skip the button and browse directly to `http://<home-assistant-host>:<sqli
 If Google reports `quotaExceeded`, the add-on writes
 `/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic for
 12 hours (tweak with the `quota_cooldown_hours` option or `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
-API returns `503` responses and the history tracker skips new matches.
+API returns `503` responses and new videos are stored as pending for retry after quota recovery.
 
 Every time a video is matched we store both the Home Assistant artist/channel
 metadata and the YouTube channel so you can inspect mismatches later via

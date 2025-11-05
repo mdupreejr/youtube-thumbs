@@ -40,17 +40,7 @@ If no cache match found:
 
 **Search Hit**: Video matched and cached for future plays.
 
-### 3. Not Found Cache (Prevents Repeated Searches)
-
-If YouTube search returns no results:
-
-1. **Record in not_found_searches table**: Title + artist + duration + timestamp
-2. **Cache duration**: 7 days (prevents searching again for same song)
-3. **Future lookups**: Skip YouTube search if in not_found cache
-
-**Not Found Hit**: Logged but no database entry created.
-
-### 4. Quota Exceeded Handling
+### 3. Quota Exceeded Handling
 
 If YouTube quota is exhausted during search:
 
@@ -112,7 +102,6 @@ Primary table storing all video metadata, play history, ratings, and pending sta
   - NULL - Not pending (successfully matched)
 - `source` (TEXT) - How video was added
   - `ha_live` - Playing on Home Assistant media player
-  - `import_youtube` - Imported from YouTube export
   - `manual` - Manually added
 
 **Pending Rating Queue Fields**:
@@ -155,42 +144,61 @@ pending_match: 1
 pending_reason: "not_found"
 ```
 
-### not_found_searches (Search Cache)
+### api_usage (API Quota Tracking)
 
-Prevents repeatedly searching YouTube for songs that don't exist.
+Tracks YouTube API usage by hour for quota management.
+
+**Fields**:
+- `date` (TEXT, PRIMARY KEY) - Date in YYYY-MM-DD format
+- `hour_00` through `hour_23` (INTEGER) - API quota units used per hour
+- `timestamp` (TIMESTAMP) - Last update timestamp
+
+**Behavior**:
+- Records every YouTube API call with quota cost (search=100, videos.list=1)
+- Enables quota usage analytics and trends
+- Helps identify quota-heavy operations
+
+### api_call_log (Detailed API Logging)
+
+Detailed log of every YouTube API call for debugging and analysis.
 
 **Fields**:
 - `id` (INTEGER, PRIMARY KEY) - Auto-increment ID
-- `title` (TEXT, INDEXED) - Song title that wasn't found
-- `artist` (TEXT) - Artist name (can be NULL)
-- `duration` (INTEGER) - Duration in seconds (can be NULL)
-- `search_query` (TEXT) - Actual query sent to YouTube
-- `content_hash` (TEXT, INDEXED) - SHA1 hash (title+duration+artist)
-- `timestamp` (TIMESTAMP, INDEXED) - When search failed
-- `expires_at` (TIMESTAMP, INDEXED) - When cache entry expires (timestamp + 7 days)
+- `timestamp` (TIMESTAMP, INDEXED) - When API call was made
+- `api_method` (TEXT, INDEXED) - API method called (search, videos.list, etc.)
+- `operation_type` (TEXT) - High-level operation (search_video, get_video_details, etc.)
+- `query_params` (TEXT) - Query parameters sent to API
+- `quota_cost` (INTEGER) - Quota units consumed
+- `success` (BOOLEAN, INDEXED) - Whether call succeeded
+- `error_message` (TEXT) - Error message if failed
+- `results_count` (INTEGER) - Number of results returned
+- `context` (TEXT) - Additional context (e.g., video title)
 
 **Behavior**:
-- Before searching YouTube, checks if title+duration+artist in this table
-- If found and not expired, skips YouTube search (saves quota)
-- Expired entries cleaned up automatically on addon startup
-- Default expiration: 7 days
+- Logs every YouTube API interaction
+- Enables analysis of API call patterns
+- Helps identify quota waste
+- Accessible via /logs/api-calls web interface
 
-### import_history (Deduplication)
+### search_results_cache (Search Result Cache)
 
-Tracks YouTube export imports to prevent duplicate entries.
+Caches YouTube search results to avoid redundant API calls.
 
 **Fields**:
 - `id` (INTEGER, PRIMARY KEY) - Auto-increment ID
-- `entry_id` (TEXT, UNIQUE) - Hash of import entry (timestamp + video_id + action)
-- `source` (TEXT) - Import source ('youtube_export', 'manual', etc.)
-- `yt_video_id` (TEXT) - YouTube video ID that was imported
-- `action` (TEXT) - What was imported ('watch', 'like', 'dislike')
-- `imported_at` (TIMESTAMP) - When import occurred
+- `yt_video_id` (TEXT, INDEXED) - YouTube video ID
+- `yt_title` (TEXT, INDEXED) - Video title
+- `yt_channel` (TEXT) - Channel name
+- `yt_duration` (INTEGER, INDEXED) - Video duration in seconds
+- `cached_at` (TIMESTAMP) - When video was cached
+- `expires_at` (TIMESTAMP, INDEXED) - When cache entry expires
+- Additional YouTube metadata fields
 
 **Behavior**:
-- Before importing a YouTube export entry, checks if `entry_id` already exists
-- Prevents duplicate play counts and ratings from re-importing same file
-- Used by import_youtube_export.py script
+- Stores all videos from search results (not just matched ones)
+- 30-day TTL (configurable)
+- Enables duration-based lookups without new API calls
+- Automatically cleans expired entries
 
 ## Content Hash Algorithm
 
@@ -239,13 +247,7 @@ A video in the database can be in one of these states:
    - Searched YouTube but no match found
    - Marked by retry mechanism after failed search
    - Won't be retried again (no YouTube video exists)
-   - Also added to `not_found_searches` table
-
-4. **Not in Database** (no record)
-   - In `not_found_searches` table only
-   - YouTube search was attempted but failed
-   - No database entry created to save space
-   - Prevents future searches for 7 days
+   - Cached in video_ratings to prevent repeated searches
 
 ## Pending Video Retry
 
@@ -276,7 +278,7 @@ For complete documentation, see [RETRY_SYSTEM.md](RETRY_SYSTEM.md).
    - For each pending video:
      - Search YouTube with ha_title + ha_duration + ha_artist
      - **If found**: Update with YouTube data, set `pending_match = 0`, populate `yt_video_id`
-     - **If not found**: Set `pending_reason = 'not_found'`, add to `not_found_searches`
+     - **If not found**: Set `pending_reason = 'not_found'` to prevent future retries
 
 **Configuration**:
 - `pending_video_retry_enabled` (default: true) - Enable/disable automatic retry

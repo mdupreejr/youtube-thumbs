@@ -8,7 +8,6 @@ A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs 
 - ⚡ **Bulk Rating Interface** - Quickly rate up to 50 unrated songs at once
 - 🔍 **Smart matching** - Automatic YouTube video matching with caching
 - 📊 **Database Viewer** - Built-in sqlite_web interface
-- 🕒 **History tracking** - Automatic background tracking of all songs
 - 🛡️ **Quota protection** - Built-in rate limiting and cooldown
 - 💾 **SQLite storage** - Local database with comprehensive metadata
 
@@ -66,8 +65,6 @@ automation:
 | `rate_limit_per_day` | 500 | Max API calls per day |
 | `quota_cooldown_hours` | 12 | Hours to pause after quota error |
 | `log_level` | INFO | Logging level |
-| `history_tracker_enabled` | true | Background history tracking |
-| `history_poll_interval` | 60 | Seconds between polls |
 
 For all options, see config.json.
 
@@ -121,9 +118,11 @@ For complete API documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 All data stored in `/config/youtube_thumbs/ratings.db`:
 
-- **video_ratings** - All matched videos with metadata, ratings, play counts
-- **not_found_searches** - Caches failed searches (7 days)
-- **import_history** - Tracks imported YouTube exports
+- **video_ratings** - All matched videos with metadata, ratings, play counts, pending videos
+- **api_usage** - YouTube API call tracking
+- **api_call_log** - Detailed API call logs for debugging
+- **stats_cache** - Cached statistics for performance
+- **search_results_cache** - Cached search results (30 days)
 
 Access via the **Database Viewer** link in the web interface.
 
