@@ -136,6 +136,53 @@ class StatsOperations:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_rated_videos(self, rating: str, page: int = 1, per_page: int = 50) -> Dict:
+        """
+        Get videos with specific rating (like/dislike) with pagination.
+
+        Args:
+            rating: Rating to filter by ('like' or 'dislike')
+            page: Page number (1-indexed)
+            per_page: Number of results per page
+
+        Returns:
+            Dictionary with videos list, total count, and page info
+        """
+        with self._lock:
+            # Get total count
+            cursor = self._conn.execute(
+                """
+                SELECT COUNT(*) as count
+                FROM video_ratings
+                WHERE yt_match_pending = 0 AND rating = ?
+                """,
+                (rating,)
+            )
+            total_count = cursor.fetchone()['count']
+            total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
+
+            # Get paginated results
+            offset = (page - 1) * per_page
+            cursor = self._conn.execute(
+                """
+                SELECT *
+                FROM video_ratings
+                WHERE yt_match_pending = 0 AND rating = ?
+                ORDER BY date_last_played DESC, play_count DESC
+                LIMIT ? OFFSET ?
+                """,
+                (rating, per_page, offset)
+            )
+            videos = [dict(row) for row in cursor.fetchall()]
+
+            return {
+                'videos': videos,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'current_page': page,
+                'per_page': per_page
+            }
+
     def get_top_channels(self, limit: int = 10) -> List[Dict]:
         """
         Get channels with most videos and plays.

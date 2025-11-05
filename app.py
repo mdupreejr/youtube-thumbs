@@ -1433,6 +1433,76 @@ def stats_page() -> str:
         return "<h1>Error loading statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
+@app.route('/stats/liked')
+def stats_liked_page() -> str:
+    """Show paginated list of liked videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = db.get_rated_videos('like', page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_last_played': video.get('date_last_played')
+            })
+
+        return render_template('stats_rated.html',
+                             ingress_path=ingress_path,
+                             rating_type='liked',
+                             rating_icon='👍',
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering liked stats: {e}")
+        return "<h1>Error loading liked videos</h1>", 500
+
+
+@app.route('/stats/disliked')
+def stats_disliked_page() -> str:
+    """Show paginated list of disliked videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = db.get_rated_videos('dislike', page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_last_played': video.get('date_last_played')
+            })
+
+        return render_template('stats_rated.html',
+                             ingress_path=ingress_path,
+                             rating_type='disliked',
+                             rating_icon='👎',
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering disliked stats: {e}")
+        return "<h1>Error loading disliked videos</h1>", 500
+
+
 def _validate_data_viewer_params(request_args):
     """
     Validate and sanitize data viewer parameters.

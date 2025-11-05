@@ -263,6 +263,9 @@ class Database:
     def get_recent_activity(self, limit: int = 20) -> List[Dict]:
         return self._stats_ops.get_recent_activity(limit)
 
+    def get_rated_videos(self, rating: str, page: int = 1, per_page: int = 50) -> Dict:
+        return self._stats_ops.get_rated_videos(rating, page, per_page)
+
     def get_top_channels(self, limit: int = 10) -> List[Dict]:
         return self._stats_ops.get_top_channels(limit)
 

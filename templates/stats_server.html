@@ -96,6 +96,23 @@
             text-align: center;
         }
 
+        .metric-card.clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .metric-card.clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background: #f8fafc;
+        }
+
+        .metric-card a {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
         .metric-value {
             font-size: 1.75em;
             font-weight: 700;
@@ -267,13 +284,17 @@
                 <div class="metric-value">{{ summary.total_plays }}</div>
                 <div class="metric-label">Total Plays</div>
             </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ summary.liked }}</div>
-                <div class="metric-label">Liked</div>
+            <div class="metric-card clickable">
+                <a href="{{ ingress_path }}/stats/liked">
+                    <div class="metric-value">{{ summary.liked }}</div>
+                    <div class="metric-label">Liked 👍</div>
+                </a>
             </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ summary.disliked }}</div>
-                <div class="metric-label">Disliked</div>
+            <div class="metric-card clickable">
+                <a href="{{ ingress_path }}/stats/disliked">
+                    <div class="metric-value">{{ summary.disliked }}</div>
+                    <div class="metric-label">Disliked 👎</div>
+                </a>
             </div>
         </div>
 
