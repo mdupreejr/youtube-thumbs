@@ -131,14 +131,29 @@ class YouTubeAPI:
     
     @staticmethod
     def _parse_duration(duration_str: str) -> int:
-        """Parse ISO 8601 duration string to seconds."""
+        """
+        Parse ISO 8601 duration string to seconds.
+
+        Args:
+            duration_str: ISO 8601 duration (e.g., "PT3M45S")
+
+        Returns:
+            Duration in seconds
+
+        Raises:
+            ValueError: If duration string format is invalid
+        """
+        if not duration_str:
+            raise ValueError("Duration string is empty")
+
         match = YouTubeAPI.DURATION_PATTERN.match(duration_str)
-        if match:
-            hours = int(match.group(1) or 0)
-            minutes = int(match.group(2) or 0)
-            seconds = int(match.group(3) or 0)
-            return hours * 3600 + minutes * 60 + seconds
-        return 0
+        if not match:
+            raise ValueError(f"Invalid ISO 8601 duration format: {duration_str}")
+
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        seconds = int(match.group(3) or 0)
+        return hours * 3600 + minutes * 60 + seconds
 
     @staticmethod
     def _quota_error_detail(error: HttpError) -> Optional[str]:
@@ -251,7 +266,12 @@ class YouTubeAPI:
         recording_details = video.get('recordingDetails') or {}
 
         duration_str = content_details.get('duration')
-        duration = self._parse_duration(duration_str) if duration_str else None
+        try:
+            duration = self._parse_duration(duration_str) if duration_str else None
+        except ValueError as e:
+            logger.error(f"Failed to parse duration for video {video_id}: {e}")
+            # Skip videos with invalid duration format
+            return None
 
         # Extract location if available
         location = None
