@@ -467,9 +467,12 @@ def _handle_quota_prober_tab(page, period_filter):
         else:
             display_message = message
 
+        # Calculate time_ago fresh instead of using stale database value
+        time_ago = format_relative_time(log['timestamp'])
+
         formatted_logs.append({
             'timestamp': log['timestamp'],
-            'time_ago': log['timestamp_relative'],
+            'time_ago': time_ago,
             'level': log['level'],
             'event_type': log['event_type'],
             'message': message,

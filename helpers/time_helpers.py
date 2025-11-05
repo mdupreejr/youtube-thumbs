@@ -91,21 +91,23 @@ def format_relative_time(timestamp_input: Union[str, datetime]) -> str:
         return "unknown"
 
 
-def parse_timestamp(timestamp_str: str) -> datetime:
+def parse_timestamp(timestamp_str: Union[str, datetime]) -> datetime:
     """
-    Parse timestamp string into datetime object.
+    Parse timestamp string into datetime object, or return datetime if already a datetime.
 
     Handles both ISO format timestamps and timestamps with space instead of 'T'.
+    Also accepts datetime objects directly (returns them unchanged).
     This is a common pattern in the codebase for parsing database timestamps.
 
     Args:
-        timestamp_str: Timestamp string in ISO format (or with space instead of 'T')
+        timestamp_str: Timestamp string in ISO format (or with space instead of 'T'),
+                      or a datetime object
 
     Returns:
         datetime object
 
     Raises:
-        ValueError: If timestamp_str is None, empty, not a string, or cannot be parsed
+        ValueError: If timestamp_str is None, empty, or cannot be parsed
 
     Examples:
         >>> # ISO format with T
@@ -114,6 +116,10 @@ def parse_timestamp(timestamp_str: str) -> datetime:
 
         >>> # ISO format with space
         >>> parse_timestamp("2024-01-15 12:30:45")
+        datetime(2024, 1, 15, 12, 30, 45)
+
+        >>> # datetime object (Python 3.12 SQLite behavior)
+        >>> parse_timestamp(datetime(2024, 1, 15, 12, 30, 45))
         datetime(2024, 1, 15, 12, 30, 45)
 
         >>> # Invalid input
@@ -125,8 +131,13 @@ def parse_timestamp(timestamp_str: str) -> datetime:
     """
     if timestamp_str is None:
         raise ValueError("Invalid timestamp: None")
+
+    # If already a datetime object, return it directly
+    if isinstance(timestamp_str, datetime):
+        return timestamp_str
+
     if not isinstance(timestamp_str, str):
-        raise ValueError(f"Invalid timestamp: expected string, got {type(timestamp_str).__name__}")
+        raise ValueError(f"Invalid timestamp: expected string or datetime, got {type(timestamp_str).__name__}")
     if not timestamp_str.strip():
         raise ValueError("Invalid timestamp: empty string")
 
