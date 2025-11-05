@@ -438,6 +438,20 @@ def _handle_matches_tab(page, period_filter):
         # Format relative time
         time_ago = format_relative_time(match.get('date_added', ''))
 
+        # Format YouTube published date if available
+        yt_published_at = match.get('yt_published_at')
+        yt_published_formatted = None
+        if yt_published_at:
+            try:
+                from datetime import datetime
+                if isinstance(yt_published_at, str):
+                    pub_dt = datetime.fromisoformat(yt_published_at.replace('Z', '+00:00').replace(' ', 'T'))
+                else:
+                    pub_dt = yt_published_at
+                yt_published_formatted = pub_dt.strftime('%b %d, %Y')
+            except:
+                yt_published_formatted = None
+
         formatted_matches.append({
             'yt_video_id': match.get('yt_video_id'),
             'ha_title': ha_title,
@@ -446,6 +460,7 @@ def _handle_matches_tab(page, period_filter):
             'yt_title': yt_title,
             'yt_channel': yt_channel,
             'yt_duration': yt_duration,
+            'yt_published_at': yt_published_formatted,
             'duration_diff': duration_diff,
             'match_quality': match_quality,
             'match_attempts': match.get('yt_match_attempts', 0),
