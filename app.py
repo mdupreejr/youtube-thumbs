@@ -25,7 +25,7 @@ from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
 from video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
 from search_helpers import search_and_match_video
-from cache_helpers import find_cached_video_refactored
+from cache_helpers import find_cached_video
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
@@ -421,8 +421,8 @@ def _search_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict]:
 
 
 def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Wrapper for cache_helpers.find_cached_video_refactored."""
-    return find_cached_video_refactored(db, ha_media)
+    """Wrapper for cache_helpers.find_cached_video."""
+    return find_cached_video(db, ha_media)
 
 
 def _history_tracker_enabled() -> bool:

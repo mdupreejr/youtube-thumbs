@@ -37,33 +37,7 @@ def build_video_result(video_data: Dict[str, Any], fallback_title: str) -> Dict[
     }
 
 
-def check_content_hash_cache(db, title: str, duration: Optional[int], artist: Optional[str]) -> Optional[Dict[str, Any]]:
-    """
-    Check for a video match using content hash (title+duration+artist).
-
-    Args:
-        db: Database instance
-        title: Video title
-        duration: Video duration in seconds
-        artist: Artist name from Home Assistant
-
-    Returns:
-        Video result dict if found, None otherwise
-    """
-    hash_match = db.find_by_content_hash(title, duration, artist)
-    if hash_match:
-        logger.info(
-            "Using hash-cached video ID %s for title '%s' (duration %s)",
-            hash_match['yt_video_id'],
-            title,
-            duration,
-        )
-        metrics.record_cache_hit('content_hash')
-        return build_video_result(hash_match, title)
-    return None
-
-
-def find_cached_video_refactored(db, ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def find_cached_video(db, ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Simplified cache lookup: check exact matches only.
     If not found, return None and let YouTube search handle it.

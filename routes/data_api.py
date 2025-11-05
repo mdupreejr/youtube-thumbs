@@ -395,7 +395,7 @@ def retry_pending_videos() -> Response:
     """
     import time
     from search_helpers import search_and_match_video
-    from cache_helpers import find_cached_video_refactored
+    from cache_helpers import find_cached_video
     from quota_guard import get_quota_guard
 
     try:
@@ -451,12 +451,13 @@ def retry_pending_videos() -> Response:
             try:
                 ha_title = video.get('ha_title', 'Unknown')
                 ha_artist = video.get('ha_artist', 'Unknown')
+                ha_duration = video.get('ha_duration')
                 ha_content_id = video.get('ha_content_id')
 
                 logger.info(f"Manual retry: Processing '{ha_title}' by {ha_artist}")
 
                 # Try cache first
-                cached_video = find_cached_video_refactored(ha_title, ha_artist)
+                cached_video = find_cached_video(db, {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration})
                 if cached_video:
                     db.resolve_pending_video(ha_content_id, cached_video)
                     resolved += 1
@@ -464,7 +465,10 @@ def retry_pending_videos() -> Response:
                     continue
 
                 # Search YouTube
-                result = search_and_match_video(ha_title, ha_artist)
+                ha_media = {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration}
+                from youtube_api import get_youtube_api
+                yt_api = get_youtube_api()
+                result = search_and_match_video(ha_media, yt_api, db)
 
                 if result and result.get('video'):
                     # Found and matched
