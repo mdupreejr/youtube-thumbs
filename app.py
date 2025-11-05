@@ -27,6 +27,7 @@ from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
 from helpers.pagination_helpers import generate_page_numbers
+from helpers.response_helpers import error_response, success_response
 
 app = Flask(__name__)
 
@@ -436,7 +437,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
         logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
-        return jsonify({"success": False, "error": "An unexpected error occurred while rating the video"}), 500
+        return error_response("An unexpected error occurred while rating the video", 500)
 
 # ============================================================================
 # STATIC FILE ROUTES
@@ -683,9 +684,9 @@ def get_unrated_songs() -> Response:
         try:
             page = int(request.args.get('page', 1))
             if page < 1:
-                return jsonify({'success': False, 'error': 'Page must be at least 1'}), 400
+                return error_response('Page must be at least 1')
         except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid page parameter: must be a positive integer'}), 400
+            return error_response('Invalid page parameter: must be a positive integer')
 
         logger.debug(f"Fetching page {page} of unrated songs")
 
@@ -706,7 +707,7 @@ def get_unrated_songs() -> Response:
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception message: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve unrated videos'}), 500
+        return error_response('Failed to retrieve unrated videos', 500)
 
 @app.route('/api/rate/<video_id>/like', methods=['POST'])
 def rate_song_like(video_id: str) -> Response:
@@ -727,17 +728,17 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         # SECURITY: Validate video ID format (YouTube IDs are 11 chars: alphanumeric, - and _)
         if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
             logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {request.remote_addr}")
-            return jsonify({'success': False, 'error': 'Invalid video ID format'}), 400
+            return error_response('Invalid video ID format')
 
         # Validate rating type
         if rating_type not in ['like', 'dislike']:
             logger.warning(f"Invalid rating type: {rating_type} from {request.remote_addr}")
-            return jsonify({'success': False, 'error': 'Invalid rating type'}), 400
+            return error_response('Invalid rating type')
 
         # Get video info from database
         video_data = db.get_video(video_id)
         if not video_data:
-            return jsonify({'success': False, 'error': 'Video not found in database'}), 404
+            return error_response('Video not found in database', 404)
 
         title = video_data.get('yt_title') or video_data.get('ha_title') or 'Unknown'
 
@@ -791,7 +792,7 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
     except Exception as e:
         logger.error(f"Error rating video {video_id}: {e}")
         logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': 'Failed to rate video'}), 500
+        return error_response('Failed to rate video', 500)
 
 # ============================================================================
 # RATING ROUTES (Main Rating Endpoints)

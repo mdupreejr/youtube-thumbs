@@ -5,6 +5,7 @@ Extracted from app.py to improve code organization.
 from flask import Blueprint, request, jsonify, Response
 from logger import logger
 from helpers.validation_helpers import validate_limit_param
+from helpers.response_helpers import error_response, success_response
 
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
@@ -35,7 +36,7 @@ def get_most_played_stats() -> Response:
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error getting most played stats: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve most played statistics'}), 500
+        return error_response('Failed to retrieve most played statistics', 500)
 
 
 @bp.route('/stats/top-channels', methods=['GET'])
@@ -49,7 +50,7 @@ def get_top_channels_stats() -> Response:
         return jsonify({'success': True, 'data': channels})
     except Exception as e:
         logger.error(f"Error getting top channels stats: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve top channels statistics'}), 500
+        return error_response('Failed to retrieve top channels statistics', 500)
 
 
 @bp.route('/stats/rating-distribution', methods=['GET'])
@@ -60,7 +61,7 @@ def get_rating_distribution() -> Response:
         return jsonify({'success': True, 'data': distribution})
     except Exception as e:
         logger.error(f"Error getting rating distribution: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve rating distribution'}), 500
+        return error_response('Failed to retrieve rating distribution', 500)
 
 
 @bp.route('/stats/summary', methods=['GET'])
@@ -74,7 +75,7 @@ def get_stats_summary() -> Response:
         })
     except Exception as e:
         logger.error(f"Error getting stats summary: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve summary statistics'}), 500
+        return error_response( 'Failed to retrieve summary statistics', 500)
 
 
 @bp.route('/stats/top-rated', methods=['GET'])
@@ -89,7 +90,7 @@ def get_top_rated_api() -> Response:
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error getting top rated: {e}")
-        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+        return error_response( 'An error occurred processing your request', 500)
 
 
 @bp.route('/stats/recent', methods=['GET'])
@@ -104,7 +105,7 @@ def get_recent_activity_api() -> Response:
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error getting recent activity: {e}")
-        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+        return error_response( 'An error occurred processing your request', 500)
 
 
 @bp.route('/stats/categories', methods=['GET'])
@@ -115,7 +116,7 @@ def get_category_stats() -> Response:
         return jsonify({'success': True, 'data': categories})
     except Exception as e:
         logger.error(f"Error getting category stats: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve category statistics'}), 500
+        return error_response( 'Failed to retrieve category statistics', 500)
 
 
 @bp.route('/stats/timeline', methods=['GET'])
@@ -131,7 +132,7 @@ def get_timeline_stats() -> Response:
         return jsonify({'success': True, 'data': timeline})
     except Exception as e:
         logger.error(f"Error getting timeline stats: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve timeline statistics'}), 500
+        return error_response( 'Failed to retrieve timeline statistics', 500)
 
 
 @bp.route('/stats/api-usage', methods=['GET'])
@@ -148,7 +149,7 @@ def get_api_usage_stats() -> Response:
         return jsonify({'success': True, 'data': usage})
     except Exception as e:
         logger.error(f"Error getting API usage stats: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve API usage statistics'}), 500
+        return error_response( 'Failed to retrieve API usage statistics', 500)
 
 
 @bp.route('/stats/api-usage/daily', methods=['GET'])
@@ -162,7 +163,7 @@ def get_daily_api_usage() -> Response:
         return jsonify({'success': True, 'data': usage})
     except Exception as e:
         logger.error(f"Error getting daily API usage: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve daily API usage'}), 500
+        return error_response( 'Failed to retrieve daily API usage', 500)
 
 
 @bp.route('/stats/api-usage/hourly', methods=['GET'])
@@ -173,7 +174,7 @@ def get_hourly_api_usage() -> Response:
         return jsonify({'success': True, 'data': usage})
     except Exception as e:
         logger.error(f"Error getting hourly API usage: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve hourly API usage'}), 500
+        return error_response( 'Failed to retrieve hourly API usage', 500)
 
 
 @bp.route('/history/plays', methods=['GET'])
@@ -190,10 +191,10 @@ def get_play_history_api() -> Response:
         history = db.get_play_history(limit, offset)
         return jsonify({'success': True, 'data': history})
     except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid offset parameter'}), 400
+        return error_response( 'Invalid offset parameter', 400)
     except Exception as e:
         logger.error(f"Error getting play history: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve play history'}), 500
+        return error_response( 'Failed to retrieve play history', 500)
 
 
 @bp.route('/history/search', methods=['GET'])
@@ -206,15 +207,15 @@ def search_history_api() -> Response:
             return error
 
         if not query:
-            return jsonify({'success': False, 'error': 'Search query required'}), 400
+            return error_response( 'Search query required', 400)
 
         results = db.search_history(query, limit)
         return jsonify({'success': True, 'data': results})
     except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
+        return error_response( 'Invalid limit parameter', 400)
     except Exception as e:
         logger.error(f"Error searching history: {e}")
-        return jsonify({'success': False, 'error': 'Failed to search history'}), 500
+        return error_response( 'Failed to search history', 500)
 
 
 @bp.route('/insights/patterns', methods=['GET'])
@@ -225,7 +226,7 @@ def get_listening_patterns() -> Response:
         return jsonify({'success': True, 'data': patterns})
     except Exception as e:
         logger.error(f"Error getting listening patterns: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve listening patterns'}), 500
+        return error_response( 'Failed to retrieve listening patterns', 500)
 
 
 @bp.route('/insights/trends', methods=['GET'])
@@ -238,10 +239,10 @@ def get_discovery_insights() -> Response:
         insights = db.get_discovery_stats(period_days)
         return jsonify({'success': True, 'data': insights})
     except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid days parameter'}), 400
+        return error_response( 'Invalid days parameter', 400)
     except Exception as e:
         logger.error(f"Error getting discovery insights: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve discovery insights'}), 500
+        return error_response( 'Failed to retrieve discovery insights', 500)
 
 
 @bp.route('/analytics/correlation', methods=['GET'])
@@ -252,7 +253,7 @@ def get_correlation_analysis() -> Response:
         return jsonify({'success': True, 'data': data})
     except Exception as e:
         logger.error(f"Error getting correlation analysis: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve correlation analysis'}), 500
+        return error_response( 'Failed to retrieve correlation analysis', 500)
 
 
 @bp.route('/analytics/retention', methods=['GET'])
@@ -263,7 +264,7 @@ def get_retention_analysis() -> Response:
         return jsonify({'success': True, 'data': data})
     except Exception as e:
         logger.error(f"Error getting retention analysis: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve retention analysis'}), 500
+        return error_response( 'Failed to retrieve retention analysis', 500)
 
 
 @bp.route('/analytics/duration', methods=['GET'])
@@ -274,7 +275,7 @@ def get_duration_analysis() -> Response:
         return jsonify({'success': True, 'data': data})
     except Exception as e:
         logger.error(f"Error getting duration analysis: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve duration analysis'}), 500
+        return error_response( 'Failed to retrieve duration analysis', 500)
 
 
 @bp.route('/analytics/source', methods=['GET'])
@@ -285,7 +286,7 @@ def get_source_breakdown() -> Response:
         return jsonify({'success': True, 'data': data})
     except Exception as e:
         logger.error(f"Error getting source breakdown: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve source breakdown'}), 500
+        return error_response( 'Failed to retrieve source breakdown', 500)
 
 
 @bp.route('/explorer/filter', methods=['POST'])
@@ -295,13 +296,13 @@ def filter_videos_api() -> Response:
         filters = request.get_json()
 
         if not filters:
-            return jsonify({'success': False, 'error': 'Filter criteria required'}), 400
+            return error_response( 'Filter criteria required', 400)
 
         videos = db.filter_videos(filters)
         return jsonify({'success': True, 'data': videos})
     except Exception as e:
         logger.error(f"Error filtering videos: {e}")
-        return jsonify({'success': False, 'error': 'Failed to filter videos'}), 500
+        return error_response( 'Failed to filter videos', 500)
 
 
 @bp.route('/explorer/channels', methods=['GET'])
@@ -312,7 +313,7 @@ def get_all_channels_api() -> Response:
         return jsonify({'success': True, 'data': channels})
     except Exception as e:
         logger.error(f"Error getting channels: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve channels'}), 500
+        return error_response( 'Failed to retrieve channels', 500)
 
 
 @bp.route('/explorer/categories', methods=['GET'])
@@ -323,7 +324,7 @@ def get_all_categories_api() -> Response:
         return jsonify({'success': True, 'data': categories})
     except Exception as e:
         logger.error(f"Error getting categories: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve categories'}), 500
+        return error_response( 'Failed to retrieve categories', 500)
 
 
 @bp.route('/recommendations', methods=['GET'])
@@ -343,7 +344,7 @@ def get_recommendations_api() -> Response:
         return jsonify({'success': True, 'data': recommendations})
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
-        return jsonify({'success': False, 'error': 'An error occurred processing your request'}), 500
+        return error_response( 'An error occurred processing your request', 500)
 
 
 @bp.route('/pending/status', methods=['GET'])
@@ -382,7 +383,7 @@ def get_pending_status() -> Response:
         })
     except Exception as e:
         logger.error(f"Error getting pending status: {e}")
-        return jsonify({'success': False, 'error': 'Failed to retrieve pending video status'}), 500
+        return error_response( 'Failed to retrieve pending video status', 500)
 
 
 @bp.route('/pending/retry', methods=['POST'])
@@ -498,9 +499,9 @@ def retry_pending_videos() -> Response:
         })
 
     except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid batch_size parameter'}), 400
+        return error_response( 'Invalid batch_size parameter', 400)
     except Exception as e:
         logger.error(f"Error in manual pending video retry: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': 'Failed to retry pending videos'}), 500
+        return error_response( 'Failed to retry pending videos', 500)

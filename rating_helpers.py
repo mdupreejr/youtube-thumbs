@@ -8,6 +8,7 @@ from logger import logger, user_action_logger, rating_logger
 from quota_guard import quota_guard
 from metrics_tracker import metrics
 from video_helpers import prepare_video_upsert
+from helpers.response_helpers import error_response, success_response
 
 
 def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:
@@ -25,7 +26,7 @@ def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response,
     if not allowed:
         logger.warning(f"Request blocked: {reason}")
         rating_logger.info(f"{rating_type.upper()} | BLOCKED | Reason: {reason}")
-        return jsonify({"success": False, "error": reason}), 429
+        return error_response(reason, 429)
     return None
 
 
@@ -46,8 +47,8 @@ def validate_current_media(ha_api, rating_type: str) -> Tuple[Optional[Dict], Op
     if not ha_media:
         logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
         rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
-        error_response = jsonify({"success": False, "error": "No media currently playing"}), 400
-        return None, error_response
+        err_response = error_response("No media currently playing")
+        return None, err_response
     return ha_media, None
 
 
@@ -68,7 +69,7 @@ def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_f
         app_name = ha_media.get('app_name', 'unknown')
         logger.info(f"Skipping non-YouTube content: '{title}' from app '{app_name}'")
         rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{app_name}'")
-        return jsonify({"success": False, "error": f"Not YouTube content (app: {app_name})"}), 400
+        return error_response(f"Not YouTube content (app: {app_name})")
     return None
 
 
@@ -127,8 +128,8 @@ def find_or_search_video(
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
         rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: N/A | Reason: Video not found")
         logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
-        error_response = jsonify({"success": False, "error": "Video not found"}), 404
-        return None, error_response
+        err_response = error_response("Video not found", 404)
+        return None, err_response
 
     return video, None
 
