@@ -77,13 +77,12 @@ class YouTubeAPI:
                 with open(token_file, 'w') as f:
                     f.write(old_creds.to_json())
                 logger.info("Successfully migrated credentials to JSON format")
-
-                # Remove old pickle file for security
-                os.remove(legacy_pickle)
-                logger.info("Removed legacy token.pickle file")
+                logger.info("Original token.pickle kept as backup - will be removed after successful authentication")
             except Exception as e:
                 logger.error(f"Failed to migrate token.pickle: {e}")
                 logger.warning("Please re-authenticate to create new JSON token")
+                # Don't delete pickle on error - keep it as backup
+                return
 
         # Load credentials from JSON file
         if os.path.exists(token_file):
@@ -118,6 +117,14 @@ class YouTubeAPI:
             with open(token_file, 'w') as f:
                 f.write(creds.to_json())
             logger.info("YouTube API credentials saved to JSON")
+
+        # After successful authentication, remove legacy pickle file if it still exists
+        if os.path.exists(legacy_pickle) and os.path.exists(token_file):
+            try:
+                os.remove(legacy_pickle)
+                logger.info("Removed legacy token.pickle file after confirming JSON authentication works")
+            except OSError as e:
+                logger.warning(f"Could not remove legacy token.pickle: {e}")
 
         self.youtube = build('youtube', 'v3', credentials=creds)
         logger.info("YouTube API authenticated successfully")
