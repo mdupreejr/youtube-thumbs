@@ -513,7 +513,7 @@ def index() -> str:
 
             # Test YouTube API
             yt_api = get_youtube_api()
-            yt_success, yt_message = check_youtube_api(yt_api)
+            yt_success, yt_message = check_youtube_api(yt_api, quota_guard)
             template_data['yt_test'] = {'success': yt_success, 'message': yt_message}
 
             # Test Database
@@ -624,7 +624,7 @@ def test_youtube() -> Response:
     logger.debug("=== /test/youtube endpoint called ===")
     try:
         yt_api = get_youtube_api()
-        success, message = check_youtube_api(yt_api)
+        success, message = check_youtube_api(yt_api, quota_guard)
         logger.debug(f"YouTube test result: success={success}, message={message}")
         response = jsonify({"success": success, "message": message})
         logger.debug(f"Returning JSON response: {response.get_json()}")
@@ -1436,7 +1436,7 @@ if __name__ == '__main__':
         logger.error("Please ensure credentials.json exists and run the OAuth flow")
 
     # Run startup health checks
-    run_startup_checks(ha_api, yt_api, db)
+    run_startup_checks(ha_api, yt_api, db, quota_guard)
 
     # Clear stats cache on startup to prevent stale data issues
     logger.info("Clearing stats cache...")

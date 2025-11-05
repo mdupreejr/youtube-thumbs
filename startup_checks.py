@@ -65,7 +65,7 @@ def check_home_assistant_api(ha_api) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def check_youtube_api(yt_api) -> Tuple[bool, str]:
+def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
     """Test YouTube API authentication and quota."""
     try:
         logger.info("=" * 60)
@@ -79,6 +79,16 @@ def check_youtube_api(yt_api) -> Tuple[bool, str]:
         if not yt_api.youtube:
             logger.error("✗ YouTube client not authenticated")
             return False, "Not authenticated"
+
+        # Check quota guard before making API call
+        if quota_guard and quota_guard.is_blocked():
+            logger.warning("⚠ YouTube API quota exceeded (cooldown active)")
+            logger.warning("  Skipping API test to avoid further quota consumption")
+            status = quota_guard.status()
+            cooldown_remaining = status.get('cooldown_remaining_seconds', 0)
+            hours = cooldown_remaining // 3600
+            minutes = (cooldown_remaining % 3600) // 60
+            return False, f"Quota cooldown active ({hours}h {minutes}m remaining)"
 
         # Try a simple API call to verify authentication
         logger.info("Testing YouTube API authentication...")
@@ -241,7 +251,7 @@ def check_database(db) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def run_startup_checks(ha_api, yt_api, db) -> bool:
+def run_startup_checks(ha_api, yt_api, db, quota_guard=None) -> bool:
     """Run all startup checks and report status."""
     logger.info("")
     logger.info("░" * 60)
@@ -258,7 +268,7 @@ def run_startup_checks(ha_api, yt_api, db) -> bool:
     all_ok = all_ok and ha_ok
 
     # Check YouTube API
-    yt_ok, yt_msg = check_youtube_api(yt_api)
+    yt_ok, yt_msg = check_youtube_api(yt_api, quota_guard)
     results.append(("YouTube API", yt_ok, yt_msg))
     all_ok = all_ok and yt_ok
 
