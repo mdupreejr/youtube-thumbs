@@ -10,6 +10,7 @@ from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param
+from helpers.request_helpers import get_real_ip
 
 bp = Blueprint('data_viewer', __name__)
 
@@ -123,7 +124,7 @@ def _validate_data_viewer_params(request_args):
         else:
             logger.warning(
                 f"Attempted to select invalid column: "
-                f"{_sanitize_log_value(col)} from {request.remote_addr}"
+                f"{_sanitize_log_value(col)} from {get_real_ip()}"
             )
 
     # Use validated columns or fallback to defaults
@@ -139,7 +140,7 @@ def _validate_data_viewer_params(request_args):
     if sort_by not in DATA_VIEWER_COLUMNS:
         logger.warning(
             f"Invalid sort column attempted: "
-            f"{_sanitize_log_value(sort_by)} from {request.remote_addr}"
+            f"{_sanitize_log_value(sort_by)} from {get_real_ip()}"
         )
         sort_by = 'date_last_played'
 
@@ -148,7 +149,7 @@ def _validate_data_viewer_params(request_args):
     if sort_order not in ['ASC', 'DESC']:
         logger.warning(
             f"Invalid sort order attempted: "
-            f"{_sanitize_log_value(sort_order)} from {request.remote_addr}"
+            f"{_sanitize_log_value(sort_order)} from {get_real_ip()}"
         )
         sort_order = 'DESC'
 

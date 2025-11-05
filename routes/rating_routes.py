@@ -10,6 +10,7 @@ from logger import logger, user_action_logger, rating_logger
 from helpers.response_helpers import error_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 from helpers.video_helpers import get_video_title, get_video_artist
+from helpers.request_helpers import get_real_ip
 from constants import MAX_BATCH_SIZE
 
 bp = Blueprint('rating', __name__)
@@ -250,13 +251,13 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         # SECURITY: Validate all inputs before expensive operations
         # 1. Validate rating type first (cheapest check)
         if rating_type not in ['like', 'dislike']:
-            logger.warning(f"Invalid rating type: {rating_type} from {request.remote_addr}")
+            logger.warning(f"Invalid rating type: {rating_type} from {get_real_ip()}")
             return error_response('Invalid rating type')
 
         # 2. Validate video ID format (more expensive regex check)
         is_valid, error = validate_youtube_video_id(video_id)
         if not is_valid:
-            logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {request.remote_addr}")
+            logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {get_real_ip()}")
             return error
 
         # 3. Only after all validation: perform expensive database lookup
@@ -333,7 +334,7 @@ def require_rate_limit(f):
     def decorated_function(*args, **kwargs):
         allowed, reason = _rate_limiter.check_and_add_request()
         if not allowed:
-            logger.warning(f"Rate limit exceeded for {request.remote_addr} on {request.path}")
+            logger.warning(f"Rate limit exceeded for {get_real_ip()} on {request.path}")
             if request.path.startswith('/api/'):
                 return jsonify({'success': False, 'error': reason}), 429
             return reason, 429
@@ -367,7 +368,7 @@ def rate_song_form() -> Response:
         # SECURITY: Validate video ID format
         is_valid, _ = validate_youtube_video_id(song_id)
         if not is_valid:
-            logger.warning(f"Invalid video ID format: {song_id} from {request.remote_addr}")
+            logger.warning(f"Invalid video ID format: {song_id} from {get_real_ip()}")
             return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
         if rating not in ['like', 'dislike', 'skip']:

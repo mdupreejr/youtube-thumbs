@@ -9,6 +9,9 @@ from flask import Blueprint, render_template, request, jsonify, Response
 from logger import logger
 from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.time_helpers import format_relative_time
+from helpers.validation_helpers import validate_page_param
+from helpers.response_helpers import error_response
+from helpers.request_helpers import get_real_ip
 
 bp = Blueprint('stats', __name__)
 
@@ -130,7 +133,11 @@ def stats_liked_page() -> str:
     """Show paginated list of liked videos."""
     try:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-        page = int(request.args.get('page', 1))
+        page, error = validate_page_param(request.args)
+        if error:
+            return error_response('Invalid page parameter', 400)
+        if not page:
+            page = 1
 
         result = _db.get_rated_videos('like', page=page, per_page=50)
 
@@ -165,7 +172,11 @@ def stats_disliked_page() -> str:
     """Show paginated list of disliked videos."""
     try:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-        page = int(request.args.get('page', 1))
+        page, error = validate_page_param(request.args)
+        if error:
+            return error_response('Invalid page parameter', 400)
+        if not page:
+            page = 1
 
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
 
@@ -200,7 +211,11 @@ def stats_not_found_page() -> str:
     """Show paginated list of not found videos."""
     try:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-        page = int(request.args.get('page', 1))
+        page, error = validate_page_param(request.args)
+        if error:
+            return error_response('Invalid page parameter', 400)
+        if not page:
+            page = 1
 
         result = _db.get_not_found_videos(page=page, per_page=50)
 
@@ -239,17 +254,17 @@ def debug_not_found_analysis() -> Response:
     # SECURITY: Debug endpoints must be explicitly enabled in configuration
     debug_enabled = os.getenv('DEBUG_ENDPOINTS_ENABLED', 'false').lower() == 'true'
     if not debug_enabled:
-        logger.warning(f"SECURITY: Unauthorized access attempt to debug endpoint from {request.remote_addr}")
+        logger.warning(f"SECURITY: Unauthorized access attempt to debug endpoint from {get_real_ip()}")
         return jsonify({
             'error': 'Debug endpoints are disabled',
             'message': 'Set debug_endpoints_enabled: true in addon configuration to enable'
         }), 403
 
     # Log access for security audit
-    logger.warning(f"SECURITY: Debug endpoint accessed from {request.remote_addr}")
+    logger.warning(f"SECURITY: Debug endpoint accessed from {get_real_ip()}")
 
     try:
-        # Get all not_found videos (no pagination limit for analysis)
+        # Get not_found videos (limited to 1000 for performance and security)
         with _db._lock:
             cursor = _db._conn.execute(
                 """
@@ -258,6 +273,7 @@ def debug_not_found_analysis() -> Response:
                 FROM video_ratings
                 WHERE yt_match_pending = 1 AND pending_reason = 'not_found'
                 ORDER BY play_count DESC, date_added DESC
+                LIMIT 1000
                 """
             )
             videos = [dict(row) for row in cursor.fetchall()]

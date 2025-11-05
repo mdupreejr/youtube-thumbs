@@ -7,6 +7,7 @@ import time
 import traceback
 from flask import Blueprint, request, jsonify, Response
 from logger import logger
+from helpers.request_helpers import get_real_ip
 
 bp = Blueprint('system', __name__)
 
@@ -65,7 +66,7 @@ def require_rate_limit(f):
     def decorated_function(*args, **kwargs):
         allowed, reason = _rate_limiter.check_and_add_request()
         if not allowed:
-            logger.warning(f"Rate limit exceeded for {request.remote_addr} on {request.path}")
+            logger.warning(f"Rate limit exceeded for {get_real_ip()} on {request.path}")
             if request.path.startswith('/api/'):
                 return jsonify({'success': False, 'error': reason}), 429
             return reason, 429
