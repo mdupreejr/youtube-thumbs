@@ -1,10 +1,12 @@
 import atexit
 from flask import Flask, jsonify, Response, render_template, request, send_from_directory
+from flask_wtf.csrf import CSRFProtect
 from typing import Tuple, Optional, Dict, Any
 import os
 import re
 import time
 import traceback
+import secrets
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
@@ -94,12 +96,36 @@ def _sanitize_log_value(value: str, max_length: int = 50) -> str:
         value = value[:max_length] + '...'
     return value
 
+def require_rate_limit(f):
+    """
+    SECURITY: Decorator to apply rate limiting to API endpoints.
+    Returns 429 Too Many Requests if rate limit is exceeded.
+    """
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        allowed, reason = rate_limiter.check_and_add_request()
+        if not allowed:
+            logger.warning(f"Rate limit exceeded for {request.remote_addr} on {request.path}")
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': reason}), 429
+            return reason, 429
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 app = Flask(__name__)
 
 # ============================================================================
 # FLASK CONFIGURATION
 # ============================================================================
+
+# SECURITY: Generate secret key for session/CSRF protection
+# In production, this should be set via environment variable
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# SECURITY: Enable CSRF protection for all POST/PUT/DELETE requests
+csrf = CSRFProtect(app)
 
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -119,7 +145,7 @@ def log_request_info():
 
 @app.after_request
 def log_response_info(response):
-    """Log all outgoing responses."""
+    """Log all outgoing responses and add security headers."""
     logger.debug("-"*60)
     logger.debug(f"OUTGOING RESPONSE: {request.method} {request.path}")
     logger.debug(f"  Status: {response.status_code}")
@@ -129,6 +155,44 @@ def log_response_info(response):
     elif response.content_type and 'html' in response.content_type:
         logger.debug(f"  HTML Body (first 200 chars): {response.get_data(as_text=True)[:200]}")
     logger.debug("-"*60)
+
+    # SECURITY: Add security headers to all responses
+    # Prevent clickjacking attacks
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Enable XSS protection in older browsers
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Content Security Policy - allow same origin and inline scripts (needed for templates)
+    # Restrict to self and allow inline scripts/styles for embedded web UI
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https://i.ytimg.com; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'"
+    )
+
+    # Referrer policy - only send referrer for same-origin
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # Permissions policy - disable dangerous features
+    response.headers['Permissions-Policy'] = (
+        "geolocation=(), "
+        "microphone=(), "
+        "camera=(), "
+        "payment=(), "
+        "usb=(), "
+        "magnetometer=(), "
+        "gyroscope=(), "
+        "accelerometer=()"
+    )
+
     return response
 
 # Add error handler to show actual errors
@@ -190,6 +254,39 @@ def handle_exception(e):
         </html>
         """
         return html, 500
+
+# SECURITY: Add specific error handlers to prevent information disclosure
+@app.errorhandler(400)
+def bad_request_error(e):
+    """Handle 400 Bad Request errors."""
+    logger.warning(f"Bad request on {request.path}: {e}")
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Bad request'}), 400
+    return "Bad request", 400
+
+@app.errorhandler(403)
+def forbidden_error(e):
+    """Handle 403 Forbidden errors."""
+    logger.warning(f"Forbidden access attempt on {request.path} from {request.remote_addr}")
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+    return "Forbidden", 403
+
+@app.errorhandler(404)
+def not_found_error(e):
+    """Handle 404 Not Found errors."""
+    logger.debug(f"Not found: {request.path}")
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+    return "Not found", 404
+
+@app.errorhandler(429)
+def rate_limit_error(e):
+    """Handle 429 Rate Limit errors."""
+    logger.warning(f"Rate limit exceeded on {request.path} from {request.remote_addr}")
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+    return "Rate limit exceeded", 429
 
 # ============================================================================
 # DATABASE INITIALIZATION
@@ -654,6 +751,7 @@ def index() -> str:
         return f"<h1>Error loading page</h1><p>{str(e)}</p>", 500
 
 @app.route('/rate-song', methods=['POST'])
+@require_rate_limit
 def rate_song_form() -> Response:
     """
     Handle bulk rating form submissions from server-side rendered page.
@@ -793,11 +891,13 @@ def get_unrated_songs() -> Response:
         return error_response('Failed to retrieve unrated videos', 500)
 
 @app.route('/api/rate/<video_id>/like', methods=['POST'])
+@require_rate_limit
 def rate_song_like(video_id: str) -> Response:
     """Rate a specific video as like (for bulk rating)."""
     return rate_song_direct(video_id, 'like')
 
 @app.route('/api/rate/<video_id>/dislike', methods=['POST'])
+@require_rate_limit
 def rate_song_dislike(video_id: str) -> Response:
     """Rate a specific video as dislike (for bulk rating)."""
     return rate_song_direct(video_id, 'dislike')
@@ -884,10 +984,12 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 # ============================================================================
 
 @app.route('/thumbs_up', methods=['POST'])
+@require_rate_limit
 def thumbs_up() -> Tuple[Response, int]:
     return rate_video('like')
 
 @app.route('/thumbs_down', methods=['POST'])
+@require_rate_limit
 def thumbs_down() -> Tuple[Response, int]:
     return rate_video('dislike')
 
