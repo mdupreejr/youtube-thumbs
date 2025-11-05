@@ -1045,19 +1045,16 @@
                         {% for video in recent_videos %}
                         <tr>
                             <td>
-                                <div style="font-weight: 500;">{{ video.ha_title or video.yt_title or 'Unknown' }}</div>
+                                <span style="font-weight: 500;">{{ video.ha_title or video.yt_title or 'Unknown' }}</span>
                                 {% if video.yt_match_pending %}
-                                <div style="font-size: 0.75em; color: #f59e0b; margin-top: 0.2em;">
-                                    ⏳ Pending: {{ video.pending_reason or 'Unknown' }}
-                                </div>
+                                <span style="font-size: 0.75em; color: #f59e0b; margin-left: 0.5em;">⏳ {{ video.pending_reason or 'Unknown' }}</span>
                                 {% endif %}
                             </td>
                             <td>{{ video.ha_artist or '-' }}</td>
                             <td>{{ video.yt_channel or '-' }}</td>
-                            <td style="white-space: nowrap;">
+                            <td style="white-space: nowrap; font-size: 0.85em;">
                                 {% if video.date_added %}
-                                    {{ (video.date_added|string)[:10] }}<br>
-                                    <span style="font-size: 0.8em; color: #64748b;">{{ (video.date_added|string)[11:19] }}</span>
+                                    {{ (video.date_added|string)[:10] }} {{ (video.date_added|string)[11:19] }}
                                 {% else %}
                                     -
                                 {% endif %}
