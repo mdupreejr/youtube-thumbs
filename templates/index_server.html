@@ -335,7 +335,7 @@
                     <div class="test-status {{ 'status-success' if ha_test.success else 'status-error' }}">
                         {{ '✓ Connected' if ha_test.success else '✗ Error' }}
                     </div>
-                    <p style="margin-top: 10px; color: #666;">{{ ha_test.message|safe }}</p>
+                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ ha_test.message }}</p>
                 </div>
 
                 <!-- YouTube API Test -->
@@ -344,7 +344,7 @@
                     <div class="test-status {{ 'status-success' if yt_test.success else 'status-error' }}">
                         {{ '✓ Connected' if yt_test.success else '✗ Error' }}
                     </div>
-                    <p style="margin-top: 10px; color: #666;">{{ yt_test.message|safe }}</p>
+                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ yt_test.message }}</p>
                 </div>
 
                 <!-- Database Test -->
@@ -353,7 +353,7 @@
                     <div class="test-status {{ 'status-success' if db_test.success else 'status-error' }}">
                         {{ '✓ Connected' if db_test.success else '✗ Error' }}
                     </div>
-                    <p style="margin-top: 10px; color: #666;">{{ db_test.message|safe }}</p>
+                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ db_test.message }}</p>
                 </div>
             </div>
         </div>

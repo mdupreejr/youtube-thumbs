@@ -114,7 +114,7 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
                 f"Quota exceeded at: {quota_exceeded_at}",
                 f"API calls (24h): {api_calls_24h}"
             ]
-            return False, "<br>".join(msg_parts)
+            return False, "\n".join(msg_parts)
 
         # Try a simple API call to verify authentication
         logger.info("Testing YouTube API authentication...")
@@ -136,14 +136,14 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
                     "API authenticated and working",
                     f"API calls (24h): {api_calls_24h}"
                 ]
-                return True, "<br>".join(msg_parts)
+                return True, "\n".join(msg_parts)
             else:
                 logger.warning("⚠ YouTube API returned unexpected response")
                 msg_parts = [
                     "API authenticated but response unexpected",
                     f"API calls (24h): {api_calls_24h}"
                 ]
-                return True, "<br>".join(msg_parts)
+                return True, "\n".join(msg_parts)
 
         except Exception as api_error:
             error_str = str(api_error)
@@ -277,7 +277,7 @@ def check_database(db) -> Tuple[bool, str]:
         if pending_ratings > 0:
             status_parts.append(f"Sync Queue: {pending_ratings} rating{'s' if pending_ratings != 1 else ''} waiting to sync")
 
-        return True, "DB OK:<br>" + "<br>".join(status_parts)
+        return True, "DB OK:\n" + "\n".join(status_parts)
 
     except Exception as e:
         logger.error(f"✗ Database check failed: {str(e)}")
