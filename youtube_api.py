@@ -331,6 +331,13 @@ class YouTubeAPI:
         """
         import unicodedata
 
+        # SECURITY: Validate length before processing to prevent resource exhaustion
+        # YouTube video titles are limited to ~100 chars, but allow 500 for safety
+        MAX_TITLE_LENGTH = 500
+        if len(title) > MAX_TITLE_LENGTH:
+            logger.warning(f"Title exceeds maximum length ({len(title)} > {MAX_TITLE_LENGTH}), truncating")
+            title = title[:MAX_TITLE_LENGTH]
+
         # Clean the title first
         clean_title = title.strip()
 
