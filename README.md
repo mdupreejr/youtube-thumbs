@@ -154,9 +154,8 @@ For database schema details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Documentation
 
 - **[INSTALL.md](INSTALL.md)** - Installation and OAuth setup
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical details, database schema, matching system
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical details, database schema, matching system, retry system
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and updates
-- **[RETRY_SYSTEM.md](RETRY_SYSTEM.md)** - Pending video retry system
 
 ## Security
 
