@@ -533,6 +533,12 @@ def _probe_youtube_api() -> bool:
     Returns:
         True if API is accessible, False if quota exceeded
     """
+    # CRITICAL: Check if quota guard is still blocking calls
+    # If so, don't even try the API call - we know it will be blocked
+    if quota_guard.is_blocked():
+        logger.debug("YouTube API probe skipped - quota guard still active")
+        return False
+
     try:
         logger.debug("Probing YouTube API with lightweight test query...")
         # Get YouTube API instance (creates it if not yet initialized)
@@ -542,8 +548,13 @@ def _probe_youtube_api() -> bool:
         # This should be cheap on quota (just 1 search unit)
         result = api.search_video_globally("test", expected_duration=10)
 
-        # If we get any result (even None), it means no quota error
-        # Quota errors would raise an exception
+        # If we get None, it means quota guard blocked the call internally
+        # (should not happen since we checked above, but defensive)
+        if result is None:
+            logger.debug("YouTube API probe returned None - likely quota blocked")
+            return False
+
+        # If we get any non-None result, quota is available
         logger.debug("YouTube API probe successful - quota appears available")
         return True
     except Exception as exc:

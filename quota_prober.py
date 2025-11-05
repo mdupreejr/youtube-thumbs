@@ -136,7 +136,13 @@ class QuotaProber:
                     logger.info("Retrying match for: %s (duration: %s) [%d/%d]", ha_title[:50], ha_duration, idx + 1, len(pending))
 
                     # Search YouTube for this video
-                    result = self.search_wrapper(ha_title, ha_duration, ha_artist)
+                    ha_media = {
+                        'title': ha_title,
+                        'artist': ha_artist,
+                        'app_name': video.get('ha_app_name', 'YouTube'),
+                        'duration': ha_duration
+                    }
+                    result = self.search_wrapper(ha_media)
 
                     if result:
                         # Found a match - resolve the pending video
