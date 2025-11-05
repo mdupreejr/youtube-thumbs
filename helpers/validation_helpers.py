@@ -122,3 +122,50 @@ def validate_page_param(
             'error': f'Invalid {param_name} parameter: must be a positive integer'
         }), 400)
         return None, error_response
+
+
+def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Response]]:
+    """
+    Validate YouTube video ID format for security.
+
+    YouTube video IDs are exactly 11 characters long and can only contain
+    alphanumeric characters, hyphens, and underscores.
+
+    Args:
+        video_id: The video ID to validate
+
+    Returns:
+        Tuple of (is_valid, error_response)
+        - (True, None) if validation succeeds
+        - (False, Response) if validation fails
+
+    Usage:
+        is_valid, error = validate_youtube_video_id(video_id)
+        if not is_valid:
+            return error
+        # Use video_id safely...
+
+    Examples:
+        >>> # Valid video ID
+        >>> is_valid, error = validate_youtube_video_id('dQw4w9WgXcQ')
+        >>> # is_valid = True, error = None
+
+        >>> # Invalid: too short
+        >>> is_valid, error = validate_youtube_video_id('short')
+        >>> # is_valid = False, error = <Response with 400 status>
+
+        >>> # Invalid: contains invalid characters
+        >>> is_valid, error = validate_youtube_video_id('dQw4w9WgX@Q')
+        >>> # is_valid = False, error = <Response with 400 status>
+    """
+    import re
+
+    # YouTube video IDs are exactly 11 characters: alphanumeric, -, and _
+    if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
+        error_response = make_response(jsonify({
+            'success': False,
+            'error': 'Invalid video ID format'
+        }), 400)
+        return False, error_response
+
+    return True, None

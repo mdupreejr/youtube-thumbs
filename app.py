@@ -28,7 +28,7 @@ from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.response_helpers import error_response, success_response
-from helpers.validation_helpers import validate_page_param
+from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 
 app = Flask(__name__)
 
@@ -582,8 +582,9 @@ def rate_song_form() -> Response:
             logger.error("Missing song_id or rating in form submission")
             return redirect(url_for('index', tab='rating', page=page))
 
-        # SECURITY: Validate video ID format (YouTube IDs are 11 chars: alphanumeric, - and _)
-        if not re.match(r'^[A-Za-z0-9_-]{11}$', song_id):
+        # SECURITY: Validate video ID format
+        is_valid, _ = validate_youtube_video_id(song_id)
+        if not is_valid:
             logger.warning(f"Invalid video ID format: {song_id} from {request.remote_addr}")
             return redirect(url_for('index', tab='rating', page=page))
 
@@ -720,10 +721,11 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
     Used for bulk rating interface.
     """
     try:
-        # SECURITY: Validate video ID format (YouTube IDs are 11 chars: alphanumeric, - and _)
-        if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
+        # SECURITY: Validate video ID format
+        is_valid, error = validate_youtube_video_id(video_id)
+        if not is_valid:
             logger.warning(f"Invalid video ID format in rate_song_direct: {video_id} from {request.remote_addr}")
-            return error_response('Invalid video ID format')
+            return error
 
         # Validate rating type
         if rating_type not in ['like', 'dislike']:
