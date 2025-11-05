@@ -106,18 +106,14 @@ else
     bashio::log.warning "Please copy credentials.json to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
 fi
 
-# Check for token file (prefer token.json, fallback to legacy token.pickle)
+# Check for OAuth token file
 if [ -f "${CONFIG_DIR}/token.json" ]; then
     bashio::log.info "Found token.json in ${CONFIG_DIR}"
     ln -sf "${CONFIG_DIR}/token.json" /app/token.json
     bashio::log.info "Created symlink: /app/token.json -> ${CONFIG_DIR}/token.json"
-elif [ -f "${CONFIG_DIR}/token.pickle" ]; then
-    bashio::log.info "Found legacy token.pickle in ${CONFIG_DIR} (will auto-migrate to token.json)"
-    ln -sf "${CONFIG_DIR}/token.pickle" /app/token.pickle
-    bashio::log.info "Created symlink: /app/token.pickle -> ${CONFIG_DIR}/token.pickle"
 else
-    bashio::log.warning "token.json or token.pickle NOT found in ${CONFIG_DIR}"
-    bashio::log.warning "Please copy token file to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
+    bashio::log.warning "token.json NOT found in ${CONFIG_DIR}"
+    bashio::log.warning "Please copy token.json to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
 fi
 
 bashio::log.info "-------------------------------------------"

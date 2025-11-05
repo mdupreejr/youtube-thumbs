@@ -63,28 +63,6 @@ class YouTubeAPI:
         creds = None
         token_file = 'token.json'  # nosec B105 - filename, not password
 
-        # SECURITY: Migrate from pickle to JSON for credential storage
-        # Check for legacy pickle file and migrate if found
-        legacy_pickle = 'token.pickle'
-        if os.path.exists(legacy_pickle) and not os.path.exists(token_file):
-            logger.info("Found legacy token.pickle file - migrating to secure JSON format")
-            try:
-                import pickle
-                with open(legacy_pickle, 'rb') as f:
-                    # Load the old pickle credentials one last time for migration
-                    old_creds = pickle.load(f)  # nosec B301 - one-time migration only
-
-                # Save as JSON
-                with open(token_file, 'w') as f:
-                    f.write(old_creds.to_json())
-                logger.info("Successfully migrated credentials to JSON format")
-                logger.info("Original token.pickle kept as backup - will be removed after successful authentication")
-            except Exception as e:
-                logger.error(f"Failed to migrate token.pickle: {e}")
-                logger.warning("Please re-authenticate to create new JSON token")
-                # Don't delete pickle on error - keep it as backup
-                return
-
         # Load credentials from JSON file
         if os.path.exists(token_file):
             try:
@@ -118,14 +96,6 @@ class YouTubeAPI:
             with open(token_file, 'w') as f:
                 f.write(creds.to_json())
             logger.info("YouTube API credentials saved to JSON")
-
-        # After successful authentication, remove legacy pickle file if it still exists
-        if os.path.exists(legacy_pickle) and os.path.exists(token_file):
-            try:
-                os.remove(legacy_pickle)
-                logger.info("Removed legacy token.pickle file after confirming JSON authentication works")
-            except OSError as e:
-                logger.warning(f"Could not remove legacy token.pickle: {e}")
 
         self.youtube = build('youtube', 'v3', credentials=creds)
         logger.info("YouTube API authenticated successfully")

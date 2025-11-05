@@ -3,7 +3,7 @@
 
 # YouTube API OAuth credentials and tokens
 credentials.json
-token.pickle
+token.json
 
 # Database files (may contain personal viewing history)
 *.db
