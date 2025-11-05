@@ -193,7 +193,7 @@ class HistoryTracker:
             return
 
         # Check if this search recently failed (Phase 3: Cache Negative Results)
-        if self.db.is_recently_not_found(title, None, duration):
+        if self.db.is_recently_not_found(title, media.get('artist'), duration):
             logger.debug("History tracker skipping '%s' - recently not found on YouTube", title)
             self._last_failed_key = media_key
             return

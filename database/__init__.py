@@ -124,7 +124,7 @@ class Database:
 
         Args:
             title: Media title
-            artist: Media artist (optional, not used in hash)
+            artist: Media artist (optional, used in hash for accurate matching)
             duration: Media duration in seconds (optional)
 
         Returns:
@@ -133,8 +133,8 @@ class Database:
         if not title:
             return False
 
-        # Use content hash for consistent identification
-        content_hash = get_content_hash(title, duration)
+        # Use content hash for consistent identification (MUST include artist to match recording)
+        content_hash = get_content_hash(title, duration, artist)
 
         with self._lock:
             cur = self._conn.execute(

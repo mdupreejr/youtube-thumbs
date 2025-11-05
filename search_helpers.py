@@ -32,7 +32,7 @@ def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
     return title, duration
 
 
-def should_skip_search(db, title: str, duration: int) -> bool:
+def should_skip_search(db, title: str, duration: int, artist: Optional[str] = None) -> bool:
     """
     Check if search should be skipped due to recent failures or quota blocking.
 
@@ -40,12 +40,13 @@ def should_skip_search(db, title: str, duration: int) -> bool:
         db: Database instance
         title: Video title
         duration: Video duration in seconds
+        artist: Artist name (optional, used for accurate not_found cache matching)
 
     Returns:
         True if search should be skipped, False otherwise
     """
     # Check if this search recently failed (negative result cache)
-    if db.is_recently_not_found(title, None, duration):
+    if db.is_recently_not_found(title, artist, duration):
         metrics.record_not_found_cache_hit(title)
         logger.debug("Skipping search for '%s' - recently marked as not found", title)
         return True
@@ -124,7 +125,8 @@ def select_best_match(
 def record_failed_search(
     db,
     title: str,
-    duration: int
+    duration: int,
+    artist: Optional[str] = None
 ) -> None:
     """
     Record a failed search to prevent repeated API calls.
@@ -133,8 +135,9 @@ def record_failed_search(
         db: Database instance
         title: Video title
         duration: Video duration
+        artist: Artist name (optional, used for accurate cache matching)
     """
-    db.record_not_found(title, None, duration, title)
+    db.record_not_found(title, artist, duration, title)
 
 
 def search_and_match_video(
@@ -175,13 +178,14 @@ def search_and_match_video(
         }
 
     # Step 3: Check if should skip search
-    if should_skip_search(db, title, duration):
+    artist = ha_media.get('artist')
+    if should_skip_search(db, title, duration, artist):
         return None
 
     # Step 4: Search YouTube (with exact duration matching)
     candidates = search_youtube_for_video(yt_api, title, duration)
     if not candidates:
-        record_failed_search(db, title, duration)
+        record_failed_search(db, title, duration, artist)
         return None
 
     # Step 5: Opportunistically cache ALL search results (not just the match!)
@@ -195,7 +199,7 @@ def search_and_match_video(
     # Step 6: Select best match (just take first result)
     video = select_best_match(candidates, title)
     if not video:
-        record_failed_search(db, title, duration)
+        record_failed_search(db, title, duration, artist)
         return None
 
     # Step 7: Log success
