@@ -206,6 +206,44 @@ def stats_disliked_page() -> str:
         return "<h1>Error loading disliked videos</h1>", 500
 
 
+@bp.route('/stats/pending')
+def stats_pending_page() -> str:
+    """Show paginated list of all pending videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page, error = validate_page_param(request.args)
+        if error:
+            return error_response('Invalid page parameter', 400)
+        if not page:
+            page = 1
+
+        result = _db.get_all_pending_videos(page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'pending_reason': video.get('pending_reason', 'unknown'),
+                'play_count': video.get('play_count', 0),
+                'date_added': video.get('date_added'),
+                'yt_match_attempts': video.get('yt_match_attempts', 0)
+            })
+
+        return render_template('stats_pending.html',
+                             ingress_path=ingress_path,
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering pending stats: {e}")
+        return "<h1>Error loading pending videos</h1>", 500
+
+
 @bp.route('/stats/not_found')
 def stats_not_found_page() -> str:
     """Show paginated list of not found videos."""

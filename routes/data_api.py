@@ -460,10 +460,16 @@ def retry_pending_videos() -> Response:
                     resolved += 1
                     logger.info(f"Resolved from YouTube: {ha_title}")
                 else:
-                    # Not found (search_and_match_video returns None if not found)
-                    db.mark_pending_not_found(ha_content_id)
-                    not_found += 1
-                    logger.info(f"Not found: {ha_title}")
+                    # Search returned None - could be quota blocked OR genuinely not found
+                    if quota_blocked:
+                        # Don't mark as not_found if quota is blocked - keep as quota_exceeded
+                        logger.info(f"Quota blocked - keeping {ha_title} as quota_exceeded")
+                        failed += 1
+                    else:
+                        # Genuinely not found (quota is OK but no match found)
+                        db.mark_pending_not_found(ha_content_id)
+                        not_found += 1
+                        logger.info(f"Not found: {ha_title}")
 
                 # Delay between requests to avoid hammering API
                 time.sleep(2)
@@ -473,7 +479,12 @@ def retry_pending_videos() -> Response:
                 failed += 1
 
         processed = len(pending_videos)
-        message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
+
+        # Build message based on quota status
+        if quota_blocked:
+            message = f"Quota exceeded - cannot retry. Processed {processed} videos: {resolved} resolved from cache, {failed} still pending (quota blocked)"
+        else:
+            message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
 
         # Invalidate stats cache if any videos were resolved
         if resolved > 0 or not_found > 0:

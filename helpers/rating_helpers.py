@@ -253,6 +253,20 @@ def execute_rating(
     # Enqueue the rating first to populate yt_rating_* columns
     db.enqueue_rating(yt_video_id, rating_type)
 
+    # Check quota one more time before attempting rating
+    # (quota might have been exhausted during _sync_pending_ratings)
+    should_skip, _ = quota_guard.check_quota_or_skip("execute rating", yt_video_id, rating_type)
+    if should_skip:
+        logger.info(f"Quota blocked during execute_rating for {yt_video_id}, already queued")
+        db.mark_pending_rating(yt_video_id, False, "Quota blocked")
+        return queue_rating_func(
+            yt_video_id,
+            rating_type,
+            media_info,
+            "Quota blocked",
+            record_attempt=False  # Already marked as failed above
+        )
+
     if yt_api.set_video_rating(yt_video_id, rating_type):
         logger.info(f"Successfully rated video {yt_video_id} {rating_type}")
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | SUCCESS")
