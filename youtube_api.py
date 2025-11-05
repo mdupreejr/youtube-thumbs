@@ -463,30 +463,58 @@ class YouTubeAPI:
             logger.debug(f"Found {len(items)} videos globally")
 
             video_ids = [item['id']['videoId'] for item in items]
-            details = self.youtube.videos().list(
-                part='contentDetails,snippet,recordingDetails',
-                id=','.join(video_ids),
-                fields=self.VIDEO_FIELDS,
-            ).execute()
 
-            # Track API usage
-            if _db:
-                _db.record_api_call('videos.list', success=True, quota_cost=1)
-
-            # Process search results and filter by duration
+            # OPTIMIZATION: Batch duration checks to save API quota
+            # Check 5 videos at a time, stop early if we find a match
+            # Maximum 30 videos checked (6 batches of 5)
+            BATCH_SIZE = 5
+            MAX_VIDEOS_TO_CHECK = 30
             candidates = []
-            for video in details.get('items', []):
-                video_info = self._process_search_result(video, expected_duration)
-                if video_info:
-                    candidates.append(video_info)
-                    if len(candidates) >= self.MAX_CANDIDATES:
-                        break
+            videos_checked = 0
+
+            for batch_start in range(0, min(len(video_ids), MAX_VIDEOS_TO_CHECK), BATCH_SIZE):
+                batch_end = min(batch_start + BATCH_SIZE, len(video_ids), MAX_VIDEOS_TO_CHECK)
+                batch_ids = video_ids[batch_start:batch_end]
+
+                logger.debug(f"Checking batch {batch_start//BATCH_SIZE + 1}: videos {batch_start+1}-{batch_end}")
+
+                # Fetch details for this batch only
+                details = self.youtube.videos().list(
+                    part='contentDetails,snippet,recordingDetails',
+                    id=','.join(batch_ids),
+                    fields=self.VIDEO_FIELDS,
+                ).execute()
+
+                # Track API usage
+                if _db:
+                    _db.record_api_call('videos.list', success=True, quota_cost=1)
+
+                videos_checked += len(batch_ids)
+
+                # Process this batch and check for duration matches
+                batch_candidates = []
+                for video in details.get('items', []):
+                    video_info = self._process_search_result(video, expected_duration)
+                    if video_info:
+                        batch_candidates.append(video_info)
+
+                candidates.extend(batch_candidates)
+
+                # If we found matches in this batch, we can stop early
+                if batch_candidates:
+                    logger.debug(f"Found {len(batch_candidates)} match(es) in batch, stopping early (saved checking {len(video_ids) - videos_checked} videos)")
+                    break
+
+                # If we have enough candidates, stop
+                if len(candidates) >= self.MAX_CANDIDATES:
+                    logger.debug(f"Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
+                    break
 
             if not candidates and expected_duration:
                 logger.error(
                     f"No exact duration matches found: HA='{title}' ({expected_duration}s) | "
                     f"Expected YouTube duration: {expected_duration + YOUTUBE_DURATION_OFFSET}s | "
-                    f"Searched {len(details.get('items', []))} videos"
+                    f"Checked {videos_checked}/{len(video_ids)} videos"
                 )
                 return None
 
