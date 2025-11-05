@@ -102,6 +102,24 @@ class DatabaseConnection:
         );
     """
 
+    API_CALL_LOG_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS api_call_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            api_method TEXT NOT NULL,
+            operation_type TEXT,
+            query_params TEXT,
+            quota_cost INTEGER DEFAULT 1,
+            success BOOLEAN DEFAULT 1,
+            error_message TEXT,
+            results_count INTEGER,
+            context TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_api_call_log_timestamp ON api_call_log(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_api_call_log_method ON api_call_log(api_method);
+        CREATE INDEX IF NOT EXISTS idx_api_call_log_success ON api_call_log(success);
+    """
+
     STATS_CACHE_SCHEMA = """
         CREATE TABLE IF NOT EXISTS stats_cache (
             cache_key TEXT PRIMARY KEY,
@@ -161,6 +179,7 @@ class DatabaseConnection:
                     self._conn.executescript(self.VIDEO_RATINGS_SCHEMA)
                     self._conn.executescript(self.IMPORT_HISTORY_SCHEMA)
                     self._conn.executescript(self.API_USAGE_SCHEMA)
+                    self._conn.executescript(self.API_CALL_LOG_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
                     self._conn.executescript(self.SEARCH_RESULTS_CACHE_SCHEMA)
 

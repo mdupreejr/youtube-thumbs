@@ -451,9 +451,18 @@ class YouTubeAPI:
                 fields=self.SEARCH_FIELDS,
             ).execute()
 
-            # Track API usage
+            # Track API usage (both old and new methods for compatibility)
             if _db:
                 _db.record_api_call('search', success=True, quota_cost=100)
+                _db.log_api_call_detailed(
+                    api_method='search',
+                    operation_type='search_video',
+                    query_params=f"q='{search_query}', maxResults={self.MAX_SEARCH_RESULTS}",
+                    quota_cost=100,
+                    success=True,
+                    results_count=len(response.get('items', [])),
+                    context=f"title='{title[:50]}...'" if len(title) > 50 else f"title='{title}'"
+                )
 
             items = response.get('items', [])
             if not items:
@@ -528,9 +537,18 @@ class YouTubeAPI:
                     fields=self.VIDEO_FIELDS,
                 ).execute()
 
-                # Track API usage
+                # Track API usage (both old and new methods for compatibility)
                 if _db:
                     _db.record_api_call('videos.list', success=True, quota_cost=1)
+                    _db.log_api_call_detailed(
+                        api_method='videos.list',
+                        operation_type='get_video_details',
+                        query_params=f"ids={','.join(batch_ids[:3])}{'...' if len(batch_ids) > 3 else ''}",
+                        quota_cost=1,
+                        success=True,
+                        results_count=len(details.get('items', [])),
+                        context=f"batch {batch_start//BATCH_SIZE + 1} of search for '{title[:30]}...'" if len(title) > 30 else f"batch {batch_start//BATCH_SIZE + 1} of search for '{title}'"
+                    )
 
                 videos_checked += len(batch_ids)
 
@@ -578,6 +596,19 @@ class YouTubeAPI:
             is_quota_error = detail is not None
             if is_quota_error:
                 quota_guard.trip('quotaExceeded', context='search', detail=detail)
+
+            # Track failed API call
+            if _db:
+                _db.log_api_call_detailed(
+                    api_method='search',
+                    operation_type='search_video',
+                    query_params=f"q='{search_query}', maxResults={self.MAX_SEARCH_RESULTS}",
+                    quota_cost=100 if not is_quota_error else 0,  # No quota consumed if quota already exceeded
+                    success=False,
+                    error_message=str(e),
+                    context=f"title='{title[:50]}...'" if len(title) > 50 else f"title='{title}'"
+                )
+
             return log_and_suppress(
                 e,
                 f"YouTube API error in search_video_globally | Query: '{title}'",

@@ -174,3 +174,173 @@ class APIUsageOperations:
                 result.append({'hour': hour_str, 'calls': calls})
 
             return result
+
+    def log_api_call_detailed(
+        self,
+        api_method: str,
+        operation_type: str = None,
+        query_params: str = None,
+        quota_cost: int = 1,
+        success: bool = True,
+        error_message: str = None,
+        results_count: int = None,
+        context: str = None
+    ) -> None:
+        """
+        Log a detailed API call for analysis and debugging.
+
+        Args:
+            api_method: The YouTube API method called (e.g., 'search', 'videos.list')
+            operation_type: Type of operation (e.g., 'search_video', 'get_details')
+            query_params: Search query or request parameters (truncated for storage)
+            quota_cost: Quota units consumed (search=100, videos.list=1, etc.)
+            success: Whether the call succeeded
+            error_message: Error message if call failed
+            results_count: Number of results returned
+            context: Additional context (e.g., 'manual_retry', 'history_tracker')
+        """
+        with self._lock:
+            # Truncate long parameters to avoid bloating database
+            if query_params and len(query_params) > 500:
+                query_params = query_params[:497] + '...'
+
+            if error_message and len(error_message) > 500:
+                error_message = error_message[:497] + '...'
+
+            if context and len(context) > 200:
+                context = context[:197] + '...'
+
+            self._conn.execute(
+                """
+                INSERT INTO api_call_log (
+                    api_method, operation_type, query_params, quota_cost,
+                    success, error_message, results_count, context
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (api_method, operation_type, query_params, quota_cost,
+                 success, error_message, results_count, context)
+            )
+            self._conn.commit()
+
+    def get_api_call_log(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        method_filter: str = None,
+        success_filter: bool = None
+    ) -> Dict[str, Any]:
+        """
+        Get detailed API call logs with pagination.
+
+        Args:
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+            method_filter: Filter by API method (optional)
+            success_filter: Filter by success status (optional)
+
+        Returns:
+            Dictionary with logs and pagination info
+        """
+        with self._lock:
+            # Build query with filters
+            where_clauses = []
+            params = []
+
+            if method_filter:
+                where_clauses.append("api_method = ?")
+                params.append(method_filter)
+
+            if success_filter is not None:
+                where_clauses.append("success = ?")
+                params.append(1 if success_filter else 0)
+
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+            # Get total count
+            count_query = f"SELECT COUNT(*) as count FROM api_call_log WHERE {where_sql}"
+            cursor = self._conn.execute(count_query, params)
+            total_count = cursor.fetchone()['count']
+
+            # Get logs
+            log_query = f"""
+                SELECT * FROM api_call_log
+                WHERE {where_sql}
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+            """
+            cursor = self._conn.execute(log_query, params + [limit, offset])
+            logs = [dict(row) for row in cursor.fetchall()]
+
+            return {
+                'logs': logs,
+                'total_count': total_count,
+                'limit': limit,
+                'offset': offset
+            }
+
+    def get_api_call_summary(self, hours: int = 24) -> Dict[str, Any]:
+        """
+        Get summary statistics of API calls for the last N hours.
+
+        Args:
+            hours: Number of hours to look back
+
+        Returns:
+            Dictionary with summary statistics
+        """
+        with self._lock:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+
+            # Total calls and quota
+            cursor = self._conn.execute(
+                """
+                SELECT
+                    COUNT(*) as total_calls,
+                    SUM(quota_cost) as total_quota,
+                    SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_calls,
+                    SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed_calls
+                FROM api_call_log
+                WHERE timestamp >= ?
+                """,
+                (cutoff_time,)
+            )
+            summary = dict(cursor.fetchone())
+
+            # Breakdown by method
+            cursor = self._conn.execute(
+                """
+                SELECT
+                    api_method,
+                    COUNT(*) as call_count,
+                    SUM(quota_cost) as quota_used
+                FROM api_call_log
+                WHERE timestamp >= ?
+                GROUP BY api_method
+                ORDER BY quota_used DESC
+                """,
+                (cutoff_time,)
+            )
+            by_method = [dict(row) for row in cursor.fetchall()]
+
+            # Breakdown by operation type
+            cursor = self._conn.execute(
+                """
+                SELECT
+                    operation_type,
+                    COUNT(*) as call_count,
+                    SUM(quota_cost) as quota_used
+                FROM api_call_log
+                WHERE timestamp >= ? AND operation_type IS NOT NULL
+                GROUP BY operation_type
+                ORDER BY quota_used DESC
+                """,
+                (cutoff_time,)
+            )
+            by_operation = [dict(row) for row in cursor.fetchall()]
+
+            return {
+                'period_hours': hours,
+                'summary': summary,
+                'by_method': by_method,
+                'by_operation': by_operation
+            }

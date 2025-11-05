@@ -32,6 +32,58 @@ def init_logs_routes(database):
     _db = database
 
 
+@bp.route('/logs/api-calls')
+def api_calls_log():
+    """Display detailed YouTube API call logs."""
+    ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
+    try:
+        # Get pagination parameters
+        page, error = validate_page_param(request.args)
+        if error:
+            return error
+
+        # Get filter parameters
+        method_filter = request.args.get('method', None)
+        success_filter_str = request.args.get('success', None)
+        success_filter = None if success_filter_str is None else (success_filter_str.lower() == 'true')
+
+        # Get logs from database
+        per_page = 50
+        offset = (page - 1) * per_page
+        result = _db.get_api_call_log(
+            limit=per_page,
+            offset=offset,
+            method_filter=method_filter if method_filter else None,
+            success_filter=success_filter
+        )
+
+        # Get summary statistics
+        summary = _db.get_api_call_summary(hours=24)
+
+        # Calculate pagination
+        total_count = result['total_count']
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+        page_numbers = generate_page_numbers(page, total_pages)
+
+        return render_template(
+            'logs_api_calls.html',
+            ingress_path=ingress_path,
+            logs=result['logs'],
+            summary=summary,
+            current_page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            page_numbers=page_numbers,
+            method_filter=method_filter,
+            success_filter=success_filter_str
+        )
+
+    except Exception as e:
+        logger.error(f"Error displaying API call logs: {e}")
+        return "<h1>Error loading API call logs</h1>", 500
+
+
 def parse_error_log(
     period_filter: str = 'all',
     level_filter: str = 'all',
