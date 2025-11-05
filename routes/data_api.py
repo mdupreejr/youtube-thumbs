@@ -3,7 +3,6 @@ Data API routes blueprint for statistics, analytics, history, insights, and reco
 Extracted from app.py to improve code organization.
 """
 from flask import Blueprint, request, jsonify, Response
-from flask_wtf.csrf import csrf
 from logger import logger
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
@@ -12,18 +11,21 @@ from constants import MAX_BATCH_SIZE
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
 
-# Database instance will be injected
+# Database and CSRF instances will be injected
 db = None
+csrf = None
 
 
-def init_data_api_routes(database):
+def init_data_api_routes(database, csrf_protect=None):
     """
-    Initialize the data API routes with database instance.
+    Initialize the data API routes with database and CSRF instances.
 
     Args:
         database: Database instance to use for queries
+        csrf_protect: CSRFProtect instance for exempting routes
     """
-    global db
+    global db, csrf
+    csrf = csrf_protect
     db = database
 
 

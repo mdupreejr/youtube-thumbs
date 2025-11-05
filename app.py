@@ -314,7 +314,7 @@ except Exception as e:
 set_youtube_api_database(db)
 
 # Initialize and register data API blueprint
-init_data_api_routes(db)
+init_data_api_routes(db, csrf)
 app.register_blueprint(data_api_bp)
 
 # Initialize and register logs blueprint
