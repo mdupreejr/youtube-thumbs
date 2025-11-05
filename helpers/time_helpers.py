@@ -67,7 +67,17 @@ def format_relative_time(timestamp_input: Union[str, datetime]) -> str:
         # Parse string to datetime if needed
         if isinstance(timestamp_input, str):
             timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
-        delta = datetime.utcnow() - timestamp
+
+        # Use datetime.now() for naive datetimes (no timezone), utcnow() for aware datetimes
+        # This handles both local timestamps (from logs) and UTC timestamps (from database)
+        if timestamp.tzinfo is None:
+            # Naive datetime - assume local time
+            now = datetime.now()
+        else:
+            # Aware datetime - use UTC
+            now = datetime.utcnow()
+
+        delta = now - timestamp
 
         # Handle future timestamps
         if delta.total_seconds() < 0:
