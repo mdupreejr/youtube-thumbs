@@ -37,7 +37,8 @@ def log_and_suppress(
     message: str,
     *args,
     level: str = "error",
-    return_value: Any = None
+    return_value: Any = None,
+    log_traceback: bool = True
 ) -> Any:
     """
     Log an exception with context and return a default value.
@@ -48,13 +49,15 @@ def log_and_suppress(
         *args: Arguments for message formatting
         level: Log level (error, warning, debug)
         return_value: Value to return after logging
+        log_traceback: Whether to log full traceback (default True)
 
     Returns:
         The specified return_value
     """
     log_func = getattr(logger, level, logger.error)
     log_func(f"{message}: {exc}", *args)
-    logger.debug("Exception details", exc_info=True)
+    if log_traceback:
+        logger.debug("Exception details", exc_info=True)
     return return_value
 
 

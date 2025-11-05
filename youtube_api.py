@@ -435,13 +435,15 @@ class YouTubeAPI:
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
-            if detail is not None:
+            is_quota_error = detail is not None
+            if is_quota_error:
                 quota_guard.trip('quotaExceeded', context='search', detail=detail)
             return log_and_suppress(
                 e,
                 f"YouTube API error in search_video_globally | Query: '{title}'",
                 level="error",
-                return_value=None
+                return_value=None,
+                log_traceback=not is_quota_error  # Skip traceback for quota errors
             )
         except Exception as e:
             return log_and_suppress(
@@ -566,12 +568,14 @@ class YouTubeAPI:
 
             except HttpError as e:
                 detail = self._quota_error_detail(e)
-                if detail is not None:
+                is_quota_error = detail is not None
+                if is_quota_error:
                     quota_guard.trip('quotaExceeded', context='batch_get_videos', detail=detail)
                 log_and_suppress(
                     e,
                     f"YouTube API error fetching batch of videos",
-                    level="error"
+                    level="error",
+                    log_traceback=not is_quota_error  # Skip traceback for quota errors
                 )
                 # Return partial results if we hit quota
                 break

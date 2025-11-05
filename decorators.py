@@ -26,7 +26,8 @@ def handle_youtube_error(context: str, return_value: Any = None):
             except HttpError as e:
                 # Check if it's a quota error
                 detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
-                if detail is not None:
+                is_quota_error = detail is not None
+                if is_quota_error:
                     quota_guard.trip('quotaExceeded', context=context, detail=detail)
 
                 # Build error message with context
@@ -38,7 +39,8 @@ def handle_youtube_error(context: str, return_value: Any = None):
                 return log_and_suppress(
                     e, error_msg,
                     level="error",
-                    return_value=return_value
+                    return_value=return_value,
+                    log_traceback=not is_quota_error  # Skip traceback for quota errors
                 )
             except Exception as e:
                 error_msg = f"Unexpected error in {context}"
