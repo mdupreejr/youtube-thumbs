@@ -4,7 +4,7 @@ Parameter validation helper utilities.
 Provides reusable validation logic to eliminate code duplication across routes.
 """
 import re
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from flask import Response
 from helpers.response_helpers import error_response as create_error_response
 
@@ -122,7 +122,7 @@ def validate_page_param(
         return None, create_error_response(f'Invalid {param_name} parameter: must be a positive integer')
 
 
-def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Response]]:
+def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Tuple[Response, int]]]:
     """
     Validate YouTube video ID format for security.
 
@@ -162,12 +162,10 @@ def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Response]]:
     """
     # Validate type and None
     if not video_id or not isinstance(video_id, str):
-        _, err_response = create_error_response('Invalid video ID format')
-        return False, err_response
+        return False, create_error_response('Invalid video ID format')
 
     # Validate format using pre-compiled regex (performance optimization)
     if not _YOUTUBE_VIDEO_ID_PATTERN.match(video_id):
-        _, err_response = create_error_response('Invalid video ID format')
-        return False, err_response
+        return False, create_error_response('Invalid video ID format')
 
     return True, None

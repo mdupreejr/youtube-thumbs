@@ -191,7 +191,17 @@ def handle_exception(e):
         """
         return html, 500
 
-db = get_database()
+# ============================================================================
+# DATABASE INITIALIZATION
+# ============================================================================
+
+try:
+    db = get_database()
+except Exception as e:
+    logger.critical(f"Failed to initialize database: {e}")
+    logger.critical(traceback.format_exc())
+    logger.critical("Application cannot start without database. Exiting.")
+    raise SystemExit(1)
 
 # Inject database into youtube_api module for API usage tracking
 set_youtube_api_database(db)
@@ -730,7 +740,7 @@ def test_db() -> Response:
         logger.error(f"=== ERROR in /test/db endpoint ===")
         logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
+        return jsonify({"success": False, "message": "Error testing database connection"})
 
 # ============================================================================
 # API ROUTES (Bulk Rating Interface)

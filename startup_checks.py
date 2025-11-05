@@ -85,7 +85,7 @@ def check_youtube_api(yt_api, quota_guard=None) -> Tuple[bool, str]:
             logger.warning("⚠ YouTube API quota exceeded (cooldown active)")
             logger.warning("  Skipping API test to avoid further quota consumption")
             status = quota_guard.status()
-            cooldown_remaining = status.get('cooldown_remaining_seconds', 0)
+            cooldown_remaining = status.get('remaining_seconds', 0)
             hours = cooldown_remaining // 3600
             minutes = (cooldown_remaining % 3600) // 60
             return False, f"Quota cooldown active ({hours}h {minutes}m remaining)"
