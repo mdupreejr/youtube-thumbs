@@ -29,10 +29,16 @@ from routes.logs_routes import bp as logs_bp, init_logs_routes
 
 app = Flask(__name__)
 
+# ============================================================================
+# FLASK CONFIGURATION
+# ============================================================================
+
 # Configure Flask to work behind Home Assistant ingress proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# Request/Response logging middleware
+# ============================================================================
+# REQUEST/RESPONSE MIDDLEWARE
+# ============================================================================
 @app.before_request
 def log_request_info():
     """Log all incoming requests."""
@@ -130,6 +136,9 @@ app.register_blueprint(data_api_bp)
 init_logs_routes(db)
 app.register_blueprint(logs_bp)
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
 def format_media_info(title: str, artist: str) -> str:
     """Format media information for logging."""
@@ -426,6 +435,10 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
         return jsonify({"success": False, "error": "An unexpected error occurred while rating the video"}), 500
 
+# ============================================================================
+# STATIC FILE ROUTES
+# ============================================================================
+
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """
@@ -458,6 +471,10 @@ def serve_static(filename):
         logger.error(f"Error serving static file {filename}: {e}")
         logger.error(traceback.format_exc())
         return "Error serving file", 500
+
+# ============================================================================
+# PAGE ROUTES
+# ============================================================================
 
 @app.route('/')
 def index() -> str:
@@ -596,6 +613,10 @@ def rate_song_form() -> Response:
         page = request.form.get('page', '1')
         return redirect(url_for('index', tab='rating', page=page))
 
+# ============================================================================
+# TEST ROUTES (System Connectivity Tests)
+# ============================================================================
+
 @app.route('/test/youtube')
 def test_youtube() -> Response:
     """Test YouTube API connectivity and quota status."""
@@ -644,6 +665,10 @@ def test_db() -> Response:
         logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
+
+# ============================================================================
+# API ROUTES (Bulk Rating Interface)
+# ============================================================================
 
 @app.route('/api/unrated')
 def get_unrated_songs() -> Response:
@@ -764,6 +789,10 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': 'Failed to rate video'}), 500
 
+# ============================================================================
+# RATING ROUTES (Main Rating Endpoints)
+# ============================================================================
+
 @app.route('/thumbs_up', methods=['POST'])
 def thumbs_up() -> Tuple[Response, int]:
     return rate_video('like')
@@ -772,6 +801,9 @@ def thumbs_up() -> Tuple[Response, int]:
 def thumbs_down() -> Tuple[Response, int]:
     return rate_video('dislike')
 
+# ============================================================================
+# MONITORING ROUTES (Health, Status, Metrics)
+# ============================================================================
 
 @app.route('/health', methods=['GET'])
 def health() -> Response:
@@ -1402,6 +1434,9 @@ def data_viewer() -> str:
 app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler(), methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 
+# ============================================================================
+# APPLICATION INITIALIZATION
+# ============================================================================
 
 if __name__ == '__main__':
     # nosec B104 - Binding to 0.0.0.0 is intentional for Docker container deployment
