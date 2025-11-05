@@ -237,13 +237,13 @@ class LogsOperations:
 
     def get_recently_added(self, limit: int = 25) -> List[Dict[str, Any]]:
         """
-        Get the most recently added videos/songs.
+        Get the most recently added videos/songs (unique by title/artist).
 
         Args:
             limit: Number of recent videos to return (default: 25)
 
         Returns:
-            List of dictionaries with video information
+            List of dictionaries with video information (latest entry per unique song)
         """
         with self._lock:
             query = """
@@ -251,6 +251,11 @@ class LogsOperations:
                        yt_url, rating, date_added, play_count, source,
                        yt_match_pending, pending_reason
                 FROM video_ratings
+                WHERE rowid IN (
+                    SELECT MAX(rowid)
+                    FROM video_ratings
+                    GROUP BY COALESCE(ha_title, 'unknown'), COALESCE(ha_artist, 'unknown')
+                )
                 ORDER BY date_added DESC
                 LIMIT ?
             """
