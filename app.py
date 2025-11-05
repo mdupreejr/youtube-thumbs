@@ -762,25 +762,28 @@ def rate_song_form() -> Response:
     Handle bulk rating form submissions from server-side rendered page.
     Processes the rating and redirects back to the rating tab.
     """
-    from flask import redirect, url_for
+    from flask import redirect
     try:
+        # Get ingress path for proper redirect
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
         song_id = request.form.get('song_id')
         rating = request.form.get('rating')
         page = request.form.get('page', '1')
 
         if not song_id or not rating:
             logger.error("Missing song_id or rating in form submission")
-            return redirect(url_for('index', tab='rating', page=page))
+            return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
         # SECURITY: Validate video ID format
         is_valid, _ = validate_youtube_video_id(song_id)
         if not is_valid:
             logger.warning(f"Invalid video ID format: {song_id} from {request.remote_addr}")
-            return redirect(url_for('index', tab='rating', page=page))
+            return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
         if rating not in ['like', 'dislike', 'skip']:
             logger.error(f"Invalid rating value: {rating}")
-            return redirect(url_for('index', tab='rating', page=page))
+            return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
         # Skip ratings don't actually rate, just move to next
         if rating != 'skip':
@@ -797,14 +800,15 @@ def rate_song_form() -> Response:
                 logger.warning(f"Rating failed for {song_id}: status {status_code}")
 
         # Redirect back to rating tab with same page
-        return redirect(url_for('index', tab='rating', page=page))
+        return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
     except Exception as e:
         logger.error(f"Error processing rating form: {e}")
         logger.error(traceback.format_exc())
         # Redirect back even on error
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
         page = request.form.get('page', '1')
-        return redirect(url_for('index', tab='rating', page=page))
+        return redirect(f"{ingress_path}/?tab=rating&page={page}")
 
 # ============================================================================
 # TEST ROUTES (System Connectivity Tests)
