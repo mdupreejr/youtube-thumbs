@@ -20,15 +20,12 @@ configuration:
   rate_limit_per_day:
     name: Rate limit per day
     description: Maximum YouTube Data API calls allowed every 24 hours.
+  quota_cooldown_hours:
+    name: Quota cooldown hours
+    description: Hours to wait after YouTube quota exceeded error before attempting API calls again (1-168 hours).
   log_level:
     name: Log level
     description: Controls verbosity in the add-on logs (DEBUG provides the most detail).
-  history_tracker_enabled:
-    name: History tracker enabled
-    description: Enables the background poller that records every song even when no rating is sent.
-  history_poll_interval:
-    name: History poll interval
-    description: Seconds between history tracker polls (10-300). Lower values capture playback changes faster at the cost of more HA traffic.
   force_quota_unlock:
     name: Force quota unlock
     description: Clear the quota cooldown file on startup so YouTube API calls resume immediately.
@@ -38,3 +35,12 @@ configuration:
   pending_video_retry_batch_size:
     name: Pending video retry batch size
     description: Maximum number of pending videos to retry per quota recovery event (1-500). Helps prevent re-exhausting quota immediately after recovery.
+  search_max_results:
+    name: Search max results
+    description: Maximum number of search results to fetch from YouTube API per query (1-50). Higher values consume more quota but may improve match quality.
+  search_max_candidates:
+    name: Search max candidates
+    description: Maximum number of candidate videos to evaluate for duration matching (1-50). Filters search results to top N most relevant before checking durations.
+  debug_endpoints_enabled:
+    name: Debug endpoints enabled
+    description: Enable debug API endpoints for troubleshooting. Only enable when needed as these endpoints expose internal state.
