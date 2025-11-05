@@ -66,12 +66,24 @@ class YouTubeAPI:
         # Check for legacy pickle file and migrate if found
         legacy_pickle = 'token.pickle'
         if os.path.exists(legacy_pickle) and not os.path.exists(token_file):
-            logger.warning("Found legacy token.pickle file. Please re-authenticate to use JSON storage.")
-            logger.warning("Removing legacy token.pickle for security")
+            logger.info("Found legacy token.pickle file - migrating to secure JSON format")
             try:
+                import pickle
+                with open(legacy_pickle, 'rb') as f:
+                    # Load the old pickle credentials one last time for migration
+                    old_creds = pickle.load(f)  # nosec B301 - one-time migration only
+
+                # Save as JSON
+                with open(token_file, 'w') as f:
+                    f.write(old_creds.to_json())
+                logger.info("Successfully migrated credentials to JSON format")
+
+                # Remove old pickle file for security
                 os.remove(legacy_pickle)
-            except OSError as e:
-                logger.error(f"Failed to remove legacy token.pickle: {e}")
+                logger.info("Removed legacy token.pickle file")
+            except Exception as e:
+                logger.error(f"Failed to migrate token.pickle: {e}")
+                logger.warning("Please re-authenticate to create new JSON token")
 
         # Load credentials from JSON file
         if os.path.exists(token_file):
