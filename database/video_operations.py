@@ -5,7 +5,7 @@ import sqlite3
 from typing import Dict, Any, Optional, List
 
 from logger import logger
-from video_helpers import get_content_hash
+from helpers.video_helpers import get_content_hash
 from error_handler import log_and_suppress
 
 

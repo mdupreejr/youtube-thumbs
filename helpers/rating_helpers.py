@@ -7,8 +7,8 @@ from flask import jsonify, Response
 from logger import logger, user_action_logger, rating_logger
 from quota_guard import quota_guard
 from metrics_tracker import metrics
-from video_helpers import prepare_video_upsert
-from helpers.response_helpers import error_response, success_response
+from .video_helpers import prepare_video_upsert
+from .response_helpers import error_response, success_response
 
 
 def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:

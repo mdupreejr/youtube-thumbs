@@ -395,8 +395,8 @@ def retry_pending_videos() -> Response:
     API endpoint called from JavaScript - CSRF will be exempted in app.py.
     """
     import time
-    from search_helpers import search_and_match_video
-    from cache_helpers import find_cached_video
+    from helpers.search_helpers import search_and_match_video
+    from helpers.cache_helpers import find_cached_video
     from quota_guard import get_quota_guard
 
     try:

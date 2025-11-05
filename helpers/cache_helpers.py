@@ -72,7 +72,7 @@ def find_cached_video(db, ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     cached_video = db.find_cached_video_combined(title, duration, artist)
     if cached_video:
         # Determine which strategy found the match for metrics
-        from video_helpers import get_content_hash
+        from .video_helpers import get_content_hash
         content_hash = get_content_hash(title, duration, artist)
 
         # More robust cache type detection

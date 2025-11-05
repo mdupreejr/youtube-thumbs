@@ -14,7 +14,7 @@ from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
 from .search_cache_operations import SearchCacheOperations
 from .logs_operations import LogsOperations
-from video_helpers import get_content_hash
+from helpers.video_helpers import get_content_hash
 from error_handler import validate_environment_variable
 
 

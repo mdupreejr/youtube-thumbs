@@ -23,10 +23,10 @@ from quota_prober import QuotaProber
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
-from video_helpers import is_youtube_content, get_video_title, get_video_artist
+from helpers.video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
-from search_helpers import search_and_match_video
-from cache_helpers import find_cached_video
+from helpers.search_helpers import search_and_match_video
+from helpers.cache_helpers import find_cached_video
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
@@ -599,7 +599,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
     Refactored handler for rating videos with improved organization.
     Delegates to helper functions for better maintainability.
     """
-    from rating_helpers import (
+    from helpers.rating_helpers import (
         check_rate_limit,
         validate_current_media,
         check_youtube_content,

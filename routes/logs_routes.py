@@ -13,7 +13,7 @@ from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, parse_timestamp
 from helpers.validation_helpers import validate_page_param
-from video_helpers import get_video_title, get_video_artist
+from helpers.video_helpers import get_video_title, get_video_artist
 
 bp = Blueprint('logs', __name__)
 
