@@ -831,6 +831,7 @@ def rate_song_form() -> Response:
 # ============================================================================
 
 @app.route('/test/youtube')
+@require_rate_limit
 def test_youtube() -> Response:
     """Test YouTube API connectivity and quota status."""
     logger.debug("=== /test/youtube endpoint called ===")
@@ -848,6 +849,7 @@ def test_youtube() -> Response:
         return jsonify({"success": False, "message": "Error testing YouTube API connection"})
 
 @app.route('/test/ha')
+@require_rate_limit
 def test_ha() -> Response:
     """Test Home Assistant API connectivity."""
     logger.debug("=== /test/ha endpoint called ===")
@@ -864,6 +866,7 @@ def test_ha() -> Response:
         return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
 
 @app.route('/test/db')
+@require_rate_limit
 def test_db() -> Response:
     """Test database connectivity and integrity."""
     logger.debug("=== /test/db endpoint called ===")
