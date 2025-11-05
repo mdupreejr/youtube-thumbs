@@ -1,0 +1,301 @@
+"""
+Statistics and debug routes for viewing video statistics and ratings.
+Extracted from app.py for better organization.
+"""
+import os
+import traceback
+from datetime import datetime
+from flask import Blueprint, render_template, request, jsonify, Response
+from logger import logger
+from helpers.video_helpers import get_video_title, get_video_artist
+from helpers.time_helpers import format_relative_time
+
+bp = Blueprint('stats', __name__)
+
+# Global database reference (set by init function)
+_db = None
+
+def init_stats_routes(database):
+    """Initialize stats routes with dependencies."""
+    global _db
+    _db = database
+
+
+# ============================================================================
+# STATS ROUTES
+# ============================================================================
+
+@bp.route('/stats')
+def stats_page() -> str:
+    """
+    Server-side rendered statistics page.
+    All processing done on server, no client-side JavaScript required.
+    """
+    try:
+        # Get ingress path for proper link generation
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
+        # Check cache first (5 minute TTL)
+        cached = _db.get_cached_stats('stats_page')
+        if cached:
+            # Add ingress_path to cached data
+            cached['ingress_path'] = ingress_path
+            return render_template('stats_server.html', **cached)
+
+        # Fetch fresh data
+        summary = _db.get_stats_summary()
+        most_played = _db.get_most_played(10)
+        top_channels = _db.get_top_channels(10)
+        recent = _db.get_recent_activity(15)
+        pending_summary = _db.get_pending_summary()
+
+        # Calculate rating percentages (ensure integers to avoid type errors)
+        liked = int(summary.get('liked', 0) or 0)
+        disliked = int(summary.get('disliked', 0) or 0)
+        unrated = int(summary.get('unrated', 0) or 0)
+        total = liked + disliked + unrated
+
+        if total > 0:
+            rating_percentages = {
+                'liked': (liked / total) * 100,
+                'disliked': (disliked / total) * 100,
+                'unrated': (unrated / total) * 100
+            }
+        else:
+            rating_percentages = {'liked': 0, 'disliked': 0, 'unrated': 0}
+
+        # Format recent activity
+        recent_activity = []
+        for item in recent:
+            title = get_video_title(item)
+            artist = get_video_artist(item)
+
+            # Calculate time ago
+            if item.get('date_last_played'):
+                time_ago = format_relative_time(item['date_last_played'])
+                if time_ago == "unknown":
+                    time_ago = "Recently"
+            else:
+                time_ago = "Recently"
+
+            rating_icons = {'like': '👍', 'dislike': '👎', 'none': '➖'}
+            rating_icon = rating_icons.get(item.get('rating', 'none'), '➖')
+
+            recent_activity.append({
+                'title': title,
+                'artist': artist,
+                'time_ago': time_ago,
+                'rating_icon': rating_icon,
+                'yt_video_id': item.get('yt_video_id')
+            })
+
+        # Format most played
+        formatted_most_played = []
+        for video in most_played:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_most_played.append({
+                'title': title,
+                'artist': artist,
+                'play_count': video.get('play_count', 0),
+                'yt_video_id': video.get('yt_video_id')
+            })
+
+        # Prepare template data
+        template_data = {
+            'ingress_path': ingress_path,
+            'summary': summary,
+            'rating_percentages': rating_percentages,
+            'most_played': formatted_most_played,
+            'top_channels': top_channels,
+            'recent_activity': recent_activity,
+            'pending_summary': pending_summary,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        # Cache for 5 minutes
+        _db.set_cached_stats('stats_page', template_data, ttl_seconds=300)
+
+        return render_template('stats_server.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering stats page: {e}")
+        logger.error(traceback.format_exc())
+        # SECURITY: Don't expose error details to user (information disclosure)
+        return "<h1>Error loading statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/stats/liked')
+def stats_liked_page() -> str:
+    """Show paginated list of liked videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = _db.get_rated_videos('like', page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_last_played': video.get('date_last_played')
+            })
+
+        return render_template('stats_rated.html',
+                             ingress_path=ingress_path,
+                             rating_type='liked',
+                             rating_icon='👍',
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering liked stats: {e}")
+        return "<h1>Error loading liked videos</h1>", 500
+
+
+@bp.route('/stats/disliked')
+def stats_disliked_page() -> str:
+    """Show paginated list of disliked videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = _db.get_rated_videos('dislike', page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_last_played': video.get('date_last_played')
+            })
+
+        return render_template('stats_rated.html',
+                             ingress_path=ingress_path,
+                             rating_type='disliked',
+                             rating_icon='👎',
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering disliked stats: {e}")
+        return "<h1>Error loading disliked videos</h1>", 500
+
+
+@bp.route('/stats/not_found')
+def stats_not_found_page() -> str:
+    """Show paginated list of not found videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = _db.get_not_found_videos(page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_added': video.get('date_added'),
+                'yt_match_attempts': video.get('yt_match_attempts', 0)
+            })
+
+        return render_template('stats_not_found.html',
+                             ingress_path=ingress_path,
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering not found stats: {e}")
+        return "<h1>Error loading not found videos</h1>", 500
+
+
+# ============================================================================
+# DEBUG ROUTES
+# ============================================================================
+
+@bp.route('/debug/not_found_analysis')
+def debug_not_found_analysis() -> Response:
+    """Debug endpoint to analyze not_found videos for patterns."""
+    # SECURITY: Debug endpoints must be explicitly enabled in configuration
+    debug_enabled = os.getenv('DEBUG_ENDPOINTS_ENABLED', 'false').lower() == 'true'
+    if not debug_enabled:
+        logger.warning(f"SECURITY: Unauthorized access attempt to debug endpoint from {request.remote_addr}")
+        return jsonify({
+            'error': 'Debug endpoints are disabled',
+            'message': 'Set debug_endpoints_enabled: true in addon configuration to enable'
+        }), 403
+
+    # Log access for security audit
+    logger.warning(f"SECURITY: Debug endpoint accessed from {request.remote_addr}")
+
+    try:
+        # Get all not_found videos (no pagination limit for analysis)
+        with _db._lock:
+            cursor = _db._conn.execute(
+                """
+                SELECT ha_title, ha_artist, ha_duration, yt_match_attempts,
+                       date_added, play_count, ha_content_hash
+                FROM video_ratings
+                WHERE yt_match_pending = 1 AND pending_reason = 'not_found'
+                ORDER BY play_count DESC, date_added DESC
+                """
+            )
+            videos = [dict(row) for row in cursor.fetchall()]
+
+        # Analyze patterns
+        analysis = {
+            'total_count': len(videos),
+            'videos': [],
+            'patterns': {
+                'missing_artist': 0,
+                'missing_duration': 0,
+                'high_attempts': 0,
+                'frequently_played': 0
+            }
+        }
+
+        for video in videos:
+            video_info = {
+                'title': video['ha_title'],
+                'artist': video['ha_artist'],
+                'duration': video['ha_duration'],
+                'attempts': video['yt_match_attempts'],
+                'play_count': video['play_count'],
+                'date_added': video['date_added']
+            }
+            analysis['videos'].append(video_info)
+
+            # Track patterns
+            if not video['ha_artist']:
+                analysis['patterns']['missing_artist'] += 1
+            if not video['ha_duration']:
+                analysis['patterns']['missing_duration'] += 1
+            if video['yt_match_attempts'] > 3:
+                analysis['patterns']['high_attempts'] += 1
+            if video['play_count'] > 5:
+                analysis['patterns']['frequently_played'] += 1
+
+        return jsonify(analysis)
+    except Exception as e:
+        logger.error(f"Error in not_found analysis: {e}")
+        return jsonify({'error': str(e)}), 500
