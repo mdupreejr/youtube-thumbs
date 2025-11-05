@@ -251,20 +251,39 @@ class LogsOperations:
             limit: Number of recent videos to return (default: 25)
 
         Returns:
-            List of dictionaries with video information (latest entry per unique song)
+            List of dictionaries with video information (latest entry per unique song with aggregated play count)
         """
         with self._lock:
+            # Get unique songs with their most recent data and total play count
             query = """
-                SELECT yt_video_id, ha_title, ha_artist, yt_title, yt_channel,
-                       yt_url, rating, date_added, play_count, source,
-                       yt_match_pending, pending_reason
-                FROM video_ratings
-                WHERE rowid IN (
+                SELECT
+                    v.yt_video_id,
+                    v.ha_title,
+                    v.ha_artist,
+                    v.yt_title,
+                    v.yt_channel,
+                    v.yt_url,
+                    v.rating,
+                    v.date_added,
+                    COALESCE(agg.total_play_count, v.play_count) as play_count,
+                    v.source,
+                    v.yt_match_pending,
+                    v.pending_reason
+                FROM video_ratings v
+                LEFT JOIN (
+                    SELECT
+                        yt_video_id,
+                        SUM(play_count) as total_play_count
+                    FROM video_ratings
+                    WHERE yt_video_id IS NOT NULL
+                    GROUP BY yt_video_id
+                ) agg ON v.yt_video_id = agg.yt_video_id
+                WHERE v.rowid IN (
                     SELECT MAX(rowid)
                     FROM video_ratings
                     GROUP BY COALESCE(ha_title, 'unknown'), COALESCE(ha_artist, 'unknown')
                 )
-                ORDER BY date_added DESC
+                ORDER BY v.date_added DESC
                 LIMIT ?
             """
             cursor = self._conn.execute(query, (limit,))
