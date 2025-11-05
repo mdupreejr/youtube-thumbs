@@ -233,8 +233,23 @@ def handle_exception(e):
     logger.error(f"Unhandled exception on {request.path}: {e}")
     logger.error(traceback.format_exc())
 
-    # Check if debug mode is enabled (set via environment variable)
-    debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
+    # SECURITY: Check if debug mode is enabled (set via environment variable)
+    # But forcibly disable in production environments
+    debug_requested = os.getenv('DEBUG', 'false').lower() == 'true'
+
+    # Detect production environment indicators
+    is_production = (
+        os.path.exists('/data/options.json') or  # Home Assistant addon indicator
+        os.getenv('HASSIO', 'false').lower() == 'true' or  # Home Assistant supervisor
+        os.getenv('PRODUCTION', 'false').lower() == 'true'  # Explicit production flag
+    )
+
+    # Force disable debug mode in production
+    if is_production and debug_requested:
+        logger.warning("SECURITY: DEBUG mode was requested but forcibly disabled in production environment")
+        debug_mode = False
+    else:
+        debug_mode = debug_requested
 
     # Check if this is an API route - return JSON
     if request.path.startswith('/api/') or request.path.startswith('/test/') or request.path.startswith('/health') or request.path.startswith('/metrics'):
