@@ -570,9 +570,12 @@ def _probe_youtube_api() -> bool:
     """
     try:
         logger.debug("Probing YouTube API with lightweight test query...")
+        # Get YouTube API instance (creates it if not yet initialized)
+        api = get_youtube_api()
+
         # Search for a well-known video with a simple query
         # This should be cheap on quota (just 1 search unit)
-        result = yt_api.search_video_globally("test", expected_duration=10)
+        result = api.search_video_globally("test", expected_duration=10)
 
         # If we get any result (even None), it means no quota error
         # Quota errors would raise an exception
