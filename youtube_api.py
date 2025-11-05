@@ -326,12 +326,8 @@ class YouTubeAPI:
         Note: artist parameter is kept for compatibility but not used in search
         since ha_artist is typically just "YouTube" (the platform), not the actual artist.
         """
-        if quota_guard.is_blocked():
-            logger.info(
-                "Quota cooldown active; skipping YouTube global search for '%s': %s",
-                title,
-                quota_guard.describe_block(),
-            )
+        should_skip, _ = quota_guard.check_quota_or_skip("YouTube global search", title)
+        if should_skip:
             return None
         try:
             # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
@@ -418,12 +414,8 @@ class YouTubeAPI:
     @handle_youtube_error(context='get_rating', return_value='none')
     def get_video_rating(self, yt_video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
-        if quota_guard.is_blocked():
-            logger.info(
-                "Quota cooldown active; skipping get_video_rating for %s: %s",
-                yt_video_id,
-                quota_guard.describe_block(),
-            )
+        should_skip, _ = quota_guard.check_quota_or_skip("get_video_rating", yt_video_id)
+        if should_skip:
             return self.NO_RATING
 
         logger.info(f"Checking rating for video ID: {yt_video_id}")
@@ -445,13 +437,8 @@ class YouTubeAPI:
     @handle_youtube_error(context='set_rating', return_value=False)
     def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
-        if quota_guard.is_blocked():
-            logger.info(
-                "Quota cooldown active; skipping set_video_rating for %s (%s): %s",
-                yt_video_id,
-                rating,
-                quota_guard.describe_block(),
-            )
+        should_skip, _ = quota_guard.check_quota_or_skip("set_video_rating", yt_video_id, rating)
+        if should_skip:
             return False
 
         logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
@@ -485,12 +472,8 @@ class YouTubeAPI:
         if not video_ids:
             return {}
 
-        if quota_guard.is_blocked():
-            logger.info(
-                "Quota cooldown active; skipping batch_get_videos for %d videos: %s",
-                len(video_ids),
-                quota_guard.describe_block(),
-            )
+        should_skip, _ = quota_guard.check_quota_or_skip("batch_get_videos", f"{len(video_ids)} videos")
+        if should_skip:
             return {}
 
         # YouTube API allows max 50 IDs per call
@@ -579,14 +562,16 @@ class YouTubeAPI:
         results = {}
 
         # Check quota before starting
-        if quota_guard.is_blocked():
+        should_skip, _ = quota_guard.check_quota_or_skip("batch set ratings")
+        if should_skip:
             logger.info("Quota blocked, returning all failures for batch rating")
             return {vid: False for vid, _ in ratings}
 
         # Process ratings one by one with early exit on quota exhaustion
         for video_id, rating in ratings:
             # Check quota before each rating
-            if quota_guard.is_blocked():
+            should_skip, _ = quota_guard.check_quota_or_skip("batch rating item", video_id)
+            if should_skip:
                 logger.warning("Quota exhausted mid-batch at video %s, stopping", video_id)
                 # Mark remaining as failed
                 results[video_id] = False
@@ -597,7 +582,8 @@ class YouTubeAPI:
             results[video_id] = success
 
             # Early exit if we hit quota (set_video_rating will have tripped quota_guard)
-            if not success and quota_guard.is_blocked():
+            should_skip_check, _ = quota_guard.check_quota_or_skip("post-rating quota check")
+            if not success and should_skip_check:
                 logger.warning("Quota exhausted after rating %s, marking remaining as failed", video_id)
                 # Mark any remaining ratings as failed
                 for remaining_vid, _ in ratings:

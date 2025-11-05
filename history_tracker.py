@@ -205,7 +205,8 @@ class HistoryTracker:
             })
 
         if not video:
-            if quota_guard.is_blocked():
+            should_skip, _ = quota_guard.check_quota_or_skip("track history video", title)
+            if should_skip:
                 pending_id = self.db.upsert_pending_media({
                     'title': title,
                     'artist': media.get('artist'),

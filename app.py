@@ -179,7 +179,8 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
     # Validate batch size (YouTube API supports max 50 IDs per videos.list call)
     batch_size = max(1, min(batch_size, 50))
 
-    if quota_guard.is_blocked():
+    should_skip, _ = quota_guard.check_quota_or_skip("sync pending ratings")
+    if should_skip:
         return
 
     # Get more pending ratings to process in batch
@@ -190,7 +191,8 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
     # Prepare batch ratings
     ratings_to_process = []
     for job in pending_jobs:
-        if quota_guard.is_blocked():
+        should_skip, _ = quota_guard.check_quota_or_skip("batch rating processing")
+        if should_skip:
             break
         ratings_to_process.append((job['yt_video_id'], job['rating']))
 
@@ -752,7 +754,8 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         db.record_rating_local(video_id, rating_type)
 
         # Try to rate on YouTube (if not in quota block)
-        if quota_guard.is_blocked():
+        should_skip, _ = quota_guard.check_quota_or_skip("rate video on YouTube", video_id, rating_type)
+        if should_skip:
             # Queue for later sync
             db.enqueue_rating(video_id, rating_type)
             metrics.record_rating(success=False, queued=True)

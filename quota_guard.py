@@ -257,6 +257,44 @@ class QuotaGuard:
         blocked_until = status.get('blocked_until')
         return f"Cooldown active until {blocked_until} UTC ({remaining // 3600}h remaining)."
 
+    def check_quota_or_skip(self, operation_name: str, *args) -> Tuple[bool, str]:
+        """
+        Check if quota is blocked and log skip message if so.
+
+        Returns:
+            Tuple of (should_skip: bool, skip_reason: str)
+            - (False, "") if quota is available (proceed with operation)
+            - (True, reason) if quota is blocked (skip operation)
+
+        Usage:
+            should_skip, reason = quota_guard.check_quota_or_skip("search for video", title)
+            if should_skip:
+                return None  # or appropriate default value
+
+        Example:
+            should_skip, reason = quota_guard.check_quota_or_skip("set_video_rating", yt_video_id, rating)
+            if should_skip:
+                return False
+        """
+        if self.is_blocked():
+            # Build descriptive message with operation and args
+            args_str = ", ".join(str(arg)[:50] for arg in args) if args else ""
+            if args_str:
+                logger.info(
+                    "Quota cooldown active; skipping %s for %s: %s",
+                    operation_name,
+                    args_str,
+                    self.describe_block()
+                )
+            else:
+                logger.info(
+                    "Quota cooldown active; skipping %s: %s",
+                    operation_name,
+                    self.describe_block()
+                )
+            return True, self.describe_block()
+        return False, ""
+
     def status(self) -> Dict[str, Any]:
         state, remaining = self._state_with_remaining()
 

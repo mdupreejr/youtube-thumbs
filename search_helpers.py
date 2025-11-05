@@ -51,12 +51,8 @@ def should_skip_search(db, title: str, duration: int) -> bool:
         return True
 
     # Check if quota is blocked
-    if quota_guard.is_blocked():
-        logger.info(
-            "Skipping YouTube search for '%s' due to quota cooldown: %s",
-            title,
-            quota_guard.describe_block(),
-        )
+    should_skip, _ = quota_guard.check_quota_or_skip("YouTube search", title)
+    if should_skip:
         return True
 
     return False

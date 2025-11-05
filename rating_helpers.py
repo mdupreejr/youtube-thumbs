@@ -97,7 +97,8 @@ def find_or_search_video(
 
     if not video:
         # Check if quota is blocked
-        if quota_guard.is_blocked():
+        should_skip, _ = quota_guard.check_quota_or_skip("locate video for rating", rating_type)
+        if should_skip:
             guard_status = quota_guard.status()
             cooldown_msg = guard_status.get('message')
             logger.error(
@@ -207,7 +208,8 @@ def handle_quota_blocked_rating(
     Returns:
         Response tuple if quota blocked, None otherwise
     """
-    if quota_guard.is_blocked():
+    should_skip, _ = quota_guard.check_quota_or_skip("rate video", yt_video_id, rating_type)
+    if should_skip:
         guard_status = quota_guard.status()
         logger.warning(
             "Queuing %s request for %s due to quota cooldown",
