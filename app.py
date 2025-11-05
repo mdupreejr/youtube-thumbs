@@ -127,9 +127,39 @@ app = Flask(__name__)
 # FLASK CONFIGURATION
 # ============================================================================
 
-# SECURITY: Generate secret key for session/CSRF protection
-# In production, this should be set via environment variable
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+# SECURITY: Generate or load persistent secret key for session/CSRF protection
+def _get_or_create_secret_key() -> str:
+    """Get secret key from env, file, or generate new one."""
+    # First priority: environment variable (for explicit configuration)
+    env_key = os.environ.get('FLASK_SECRET_KEY')
+    if env_key:
+        return env_key
+
+    # Second priority: persistent file (survives restarts)
+    secret_file = Path('/data/flask_secret.key')
+    try:
+        if secret_file.exists():
+            # Read existing key
+            with open(secret_file, 'r') as f:
+                return f.read().strip()
+        else:
+            # Generate new key and persist it
+            new_key = secrets.token_hex(32)
+            # Save with secure permissions (600 - owner read/write only)
+            old_umask = os.umask(0o077)
+            try:
+                with open(secret_file, 'w') as f:
+                    f.write(new_key)
+                os.chmod(secret_file, 0o600)
+                logger.info("Generated and persisted new Flask secret key")
+            finally:
+                os.umask(old_umask)
+            return new_key
+    except Exception as e:
+        logger.warning(f"Failed to persist secret key: {e}. Using session-only key.")
+        return secrets.token_hex(32)
+
+app.config['SECRET_KEY'] = _get_or_create_secret_key()
 
 # CSRF Configuration
 # Disable SSL/referrer checks since we're behind Home Assistant ingress proxy
