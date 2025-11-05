@@ -372,6 +372,7 @@
                         <div class="song-title">{{ song.title }} <span class="song-meta">• {{ song.artist }}{% if song.duration %} • {{ song.duration }}{% endif %}</span></div>
                     </div>
                     <form method="POST" action="{{ ingress_path }}/rate-song" style="display: inline-flex;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="song_id" value="{{ song.id }}">
                         <input type="hidden" name="page" value="{{ current_page }}">
                         <div class="rating-buttons">
