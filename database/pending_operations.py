@@ -38,8 +38,23 @@ class PendingOperations:
                    - 'not_found': Video not found on YouTube
                    - 'search_failed': YouTube search failed
         """
-        title = media.get('title') or 'Unknown Title'
-        artist = media.get('artist', 'Unknown')
+        # VALIDATION: Reject garbage data before it gets into the database
+        # Home Assistant API never returns 'Unknown' or empty strings
+        title = media.get('title')
+        artist = media.get('artist')
+
+        if not title or title in ('Unknown', 'Unknown Title', ''):
+            from logger import logger
+            logger.warning(
+                "Rejecting pending media with invalid title '%s' - HA API never returns 'Unknown'",
+                title
+            )
+            return None
+
+        # Clean up artist - if it's 'Unknown' or empty, treat as None (no artist)
+        if artist in ('Unknown', '', None):
+            artist = None
+
         app_name = media.get('app_name', 'YouTube')
         duration = media.get('duration')
         pending_id = self._pending_video_id(title, artist, duration)

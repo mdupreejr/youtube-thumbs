@@ -27,12 +27,27 @@ class VideoOperations:
                    ha_app_name, ha_duration, yt_duration, yt_url, rating (optional).
             date_added: Optional override timestamp for initial insert (used by migration).
         """
-        ha_title = video.get('ha_title') or video.get('yt_title') or 'Unknown Title'
+        # VALIDATION: Reject garbage data before it gets into the database
+        # Home Assistant API never returns 'Unknown', so if we don't have a real title, skip it
+        ha_title = video.get('ha_title') or video.get('yt_title')
+
+        if not ha_title or ha_title in ('Unknown', 'Unknown Title', ''):
+            logger.warning(
+                "Rejecting video with invalid title '%s' - HA API never returns 'Unknown'",
+                ha_title
+            )
+            return
+
         yt_title = video.get('yt_title')
         yt_channel = video.get('yt_channel')
 
         # Calculate content hash for duplicate detection
         ha_artist = video.get('ha_artist')
+
+        # Also reject if artist is 'Unknown' (garbage data)
+        if ha_artist in ('Unknown', ''):
+            ha_artist = None
+
         ha_content_hash = get_content_hash(ha_title, video.get('ha_duration'), ha_artist)
 
         payload = {
@@ -545,4 +560,64 @@ class VideoOperations:
                     exc,
                     f"Failed to mark pending video as not found {ha_content_id}",
                     level="error"
+                )
+
+    def cleanup_unknown_entries(self) -> Dict[str, int]:
+        """
+        Remove garbage 'Unknown' entries from the database.
+        Home Assistant API never returns 'Unknown', so these are artifacts from
+        error conditions or old code that should be cleaned up.
+
+        Returns:
+            Dict with cleanup statistics
+        """
+        with self._lock:
+            try:
+                # Count entries before cleanup
+                cursor = self._conn.execute(
+                    """
+                    SELECT COUNT(*) as count FROM video_ratings
+                    WHERE ha_title IN ('Unknown', 'Unknown Title')
+                       OR ha_artist = 'Unknown'
+                       OR (ha_title IS NULL OR ha_title = '')
+                    """
+                )
+                before_count = cursor.fetchone()['count']
+
+                if before_count == 0:
+                    logger.info("No Unknown entries found to clean up")
+                    return {'removed': 0, 'before': 0, 'after': 0}
+
+                # Delete Unknown entries
+                with self._conn:
+                    cursor = self._conn.execute(
+                        """
+                        DELETE FROM video_ratings
+                        WHERE ha_title IN ('Unknown', 'Unknown Title')
+                           OR ha_artist = 'Unknown'
+                           OR (ha_title IS NULL OR ha_title = '')
+                        """
+                    )
+                    removed = cursor.rowcount
+
+                # Count remaining entries
+                cursor = self._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
+                after_count = cursor.fetchone()['count']
+
+                logger.info(
+                    f"Cleaned up {removed} Unknown entries. Database now has {after_count} total entries."
+                )
+
+                return {
+                    'removed': removed,
+                    'before': before_count + after_count,
+                    'after': after_count
+                }
+
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to cleanup Unknown entries",
+                    level="error",
+                    return_value={'removed': 0, 'before': 0, 'after': 0, 'error': str(exc)}
                 )

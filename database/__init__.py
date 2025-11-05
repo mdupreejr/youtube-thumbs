@@ -96,6 +96,9 @@ class Database:
     def mark_pending_not_found(self, ha_content_id: str):
         return self._video_ops.mark_pending_not_found(ha_content_id)
 
+    def cleanup_unknown_entries(self) -> Dict[str, int]:
+        return self._video_ops.cleanup_unknown_entries()
+
     # Pending operations
     def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
         return self._pending_ops.upsert_pending_media(media, reason)

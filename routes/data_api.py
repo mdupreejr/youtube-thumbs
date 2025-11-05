@@ -497,3 +497,37 @@ def retry_pending_videos() -> Response:
         import traceback
         logger.error(traceback.format_exc())
         return error_response( 'Failed to retry pending videos', 500)
+
+
+@bp.route('/cleanup/unknown', methods=['POST'])
+def cleanup_unknown_entries() -> Response:
+    """
+    Remove garbage 'Unknown' entries from the database.
+    Home Assistant API never returns 'Unknown', so these are artifacts that waste space and quota.
+    """
+    try:
+        logger.info("Starting cleanup of Unknown entries...")
+
+        # Run cleanup
+        result = db.cleanup_unknown_entries()
+
+        # Invalidate stats cache since database changed
+        if result.get('removed', 0) > 0:
+            db.invalidate_stats_cache()
+            logger.info("Stats cache invalidated after cleanup")
+
+        message = f"Cleanup complete: Removed {result['removed']} Unknown entries. Database now has {result['after']} total entries."
+
+        return jsonify({
+            'success': True,
+            'removed': result['removed'],
+            'before': result['before'],
+            'after': result['after'],
+            'message': message
+        })
+
+    except Exception as e:
+        logger.error(f"Error during Unknown entries cleanup: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return error_response('Failed to cleanup Unknown entries', 500)

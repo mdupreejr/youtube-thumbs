@@ -397,7 +397,7 @@
                 </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <button id="retryBtn" onclick="retryPending()" style="
                     background: #2563eb;
                     color: white;
@@ -410,6 +410,19 @@
                     transition: background 0.2s;
                 " onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
                     🔄 Retry 1 Video
+                </button>
+                <button id="cleanupBtn" onclick="cleanupUnknown()" style="
+                    background: #dc2626;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: 500;
+                    font-size: 0.85em;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
+                    🗑️ Cleanup Unknown
                 </button>
                 <span id="statusMsg" style="color: #64748b; font-size: 0.85em;"></span>
             </div>
@@ -482,6 +495,74 @@
                     }
                 } else {
                     statusMsg.textContent = data.error || 'Error processing request';
+                    statusMsg.style.color = '#ef4444';
+
+                    // Re-enable button after error
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        btn.style.cursor = 'pointer';
+                        statusMsg.textContent = '';
+                    }, 3000);
+                }
+            } catch (error) {
+                statusMsg.textContent = 'Network error - please try again';
+                statusMsg.style.color = '#ef4444';
+
+                // Re-enable button after error
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    statusMsg.textContent = '';
+                }, 3000);
+            }
+        }
+
+        async function cleanupUnknown() {
+            const btn = document.getElementById('cleanupBtn');
+            const statusMsg = document.getElementById('statusMsg');
+
+            if (!confirm('This will permanently delete all "Unknown" entries from the database. Continue?')) {
+                return;
+            }
+
+            // Disable button
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+            statusMsg.textContent = 'Cleaning up...';
+            statusMsg.style.color = '#2563eb';
+
+            try {
+                // SECURITY: Include CSRF token in POST request
+                const response = await fetch('{{ ingress_path }}/api/cleanup/unknown', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    statusMsg.textContent = data.message;
+                    statusMsg.style.color = '#10b981';
+
+                    // Reload if anything was removed
+                    if (data.removed > 0) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        // Re-enable button if nothing removed
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        }, 3000);
+                    }
+                } else {
+                    statusMsg.textContent = data.error || 'Error during cleanup';
                     statusMsg.style.color = '#ef4444';
 
                     // Re-enable button after error
