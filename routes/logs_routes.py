@@ -10,6 +10,7 @@ from typing import Dict, Any, List
 import os
 import re
 from logger import logger
+from helpers.pagination_helpers import generate_page_numbers
 
 bp = Blueprint('logs', __name__)
 
@@ -542,22 +543,7 @@ def logs_viewer():
 
         # Generate page numbers for pagination
         total_pages = template_data.get('total_pages', 0)
-        page_numbers = []
-        if total_pages <= 10:
-            page_numbers = list(range(1, total_pages + 1))
-        elif total_pages > 1:
-            page_numbers = [1]
-            start = max(2, page - 2)
-            end = min(total_pages - 1, page + 2)
-            if start > 2:
-                page_numbers.append('...')
-            for p in range(start, end + 1):
-                page_numbers.append(p)
-            if end < total_pages - 1:
-                page_numbers.append('...')
-            if total_pages > 1:
-                page_numbers.append(total_pages)
-
+        page_numbers = generate_page_numbers(page, total_pages)
         template_data['page_numbers'] = page_numbers
 
         return render_template('logs_viewer.html', **template_data)

@@ -23,6 +23,9 @@ COPY database/ ./database/
 # Copy the routes module directory
 COPY routes/ ./routes/
 
+# Copy the helpers module directory
+COPY helpers/ ./helpers/
+
 # Copy templates directory for Flask web UI
 COPY templates/ ./templates/
 

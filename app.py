@@ -26,6 +26,7 @@ from cache_helpers import find_cached_video_refactored
 from database_proxy import create_database_proxy_handler
 from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
+from helpers.pagination_helpers import generate_page_numbers
 
 app = Flask(__name__)
 
@@ -1384,27 +1385,7 @@ def data_viewer() -> str:
             formatted_rows.append(formatted_row)
 
         # Generate page numbers for pagination
-        page_numbers = []
-        if total_pages <= 10:
-            # Show all pages if 10 or fewer
-            page_numbers = list(range(1, total_pages + 1))
-        else:
-            # Show first, last, and pages around current
-            page_numbers = [1]
-
-            start = max(2, page - 2)
-            end = min(total_pages - 1, page + 2)
-
-            if start > 2:
-                page_numbers.append('...')
-
-            for p in range(start, end + 1):
-                page_numbers.append(p)
-
-            if end < total_pages - 1:
-                page_numbers.append('...')
-
-            page_numbers.append(total_pages)
+        page_numbers = generate_page_numbers(page, total_pages)
 
         # Prepare template data
         template_data = {
