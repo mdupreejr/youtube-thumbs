@@ -392,6 +392,10 @@ class Database:
         """Get full match details for a single video."""
         return self._logs_ops.get_match_details(yt_video_id)
 
+    def get_recently_added(self, limit: int = 25) -> List[Dict[str, Any]]:
+        """Get the most recently added videos/songs."""
+        return self._logs_ops.get_recently_added(limit)
+
 
 # Singleton instance management
 _db_instance: Optional[Database] = None
