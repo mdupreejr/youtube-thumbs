@@ -405,7 +405,9 @@ def retry_pending_videos() -> Response:
         # Rate limiting check - use simple time-based check
         # In production, consider using Redis or similar for distributed rate limiting
         import os
-        last_retry_file = '/tmp/youtube_thumbs_last_retry.txt'
+        import tempfile
+        # SECURITY: Use tempfile.gettempdir() instead of hardcoded /tmp path
+        last_retry_file = os.path.join(tempfile.gettempdir(), 'youtube_thumbs_last_retry.txt')
         if os.path.exists(last_retry_file):
             with open(last_retry_file, 'r') as f:
                 last_retry = float(f.read().strip())

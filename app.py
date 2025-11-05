@@ -210,11 +210,13 @@ def handle_exception(e):
     # Check if this is an API route - return JSON
     if request.path.startswith('/api/') or request.path.startswith('/test/') or request.path.startswith('/health') or request.path.startswith('/metrics'):
         if debug_mode:
+            # SECURITY: Stack trace exposure is acceptable in debug mode only
+            # Debug mode should NEVER be enabled in production (check DEBUG env var)
             return jsonify({
                 'success': False,
                 'error': str(e),
                 'type': type(e).__name__,
-                'traceback': traceback.format_exc()
+                'traceback': traceback.format_exc()  # nosec - debug mode only
             }), 500
         else:
             return jsonify({
@@ -224,7 +226,9 @@ def handle_exception(e):
 
     # For regular pages, return HTML
     if debug_mode:
-        # SECURITY: Only show detailed errors in debug mode
+        # SECURITY: Stack trace exposure acceptable in debug mode only
+        # Debug mode should NEVER be enabled in production (check DEBUG env var)
+        # nosec - debug mode only, controlled by environment variable
         html = f"""
         <html>
         <head><title>Error</title></head>
@@ -748,7 +752,8 @@ def index() -> str:
     except Exception as e:
         logger.error(f"Error rendering index page: {e}")
         logger.error(traceback.format_exc())
-        return f"<h1>Error loading page</h1><p>{str(e)}</p>", 500
+        # SECURITY: Don't expose error details to user (information disclosure)
+        return "<h1>Error loading page</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 @app.route('/rate-song', methods=['POST'])
 @require_rate_limit
@@ -1412,7 +1417,8 @@ def stats_page() -> str:
     except Exception as e:
         logger.error(f"Error rendering stats page: {e}")
         logger.error(traceback.format_exc())
-        return f"<h1>Error loading statistics</h1><p>{str(e)}</p>", 500
+        # SECURITY: Don't expose error details to user (information disclosure)
+        return "<h1>Error loading statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
 def _validate_data_viewer_params(request_args):
@@ -1541,6 +1547,7 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
 
     # SECURITY: Build query with parameterized LIMIT/OFFSET
     # Use explicit string building to avoid f-string injection risks
+    # nosec B608 - select_clause and sort_order are validated against whitelist above
     data_query = (
         "SELECT " + select_clause + " "
         "FROM video_ratings "
@@ -1649,7 +1656,8 @@ def data_viewer() -> str:
     except Exception as e:
         logger.error(f"Error rendering data viewer: {e}")
         logger.error(traceback.format_exc())
-        return f"<h1>Error loading database viewer</h1><p>{str(e)}</p>", 500
+        # SECURITY: Don't expose error details to user (information disclosure)
+        return "<h1>Error loading database viewer</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
 # Database proxy routes - delegates to database_proxy module

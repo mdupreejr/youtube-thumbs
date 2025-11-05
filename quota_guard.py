@@ -279,23 +279,29 @@ class QuotaGuard:
         if self.is_blocked():
             # Build descriptive message with operation and args (sanitized)
             def sanitize_arg(arg) -> str:
-                """Sanitize argument for logging to prevent sensitive data leakage."""
+                """
+                SECURITY: Sanitize argument for logging to prevent sensitive data leakage.
+                Masks video IDs and other potentially sensitive strings.
+                """
                 if isinstance(arg, (int, float, bool)):
                     return str(arg)
                 elif isinstance(arg, str):
-                    # Truncate long strings but don't expose potential tokens/keys
-                    if len(arg) > 50:
-                        return f"{arg[:20]}...{arg[-10:]}"
-                    return arg
+                    # SECURITY: Mask video IDs and other sensitive strings
+                    # Only show length and type, not actual content
+                    if len(arg) > 20:
+                        return f"<string:{len(arg)} chars>"
+                    # For short strings (like ratings), show redacted version
+                    return f"<string:{len(arg)} chars>"
                 else:
                     return f"<{type(arg).__name__}>"
 
+            # SECURITY: Use sanitized args that don't expose video IDs or sensitive data
             args_str = ", ".join(sanitize_arg(arg) for arg in args) if args else ""
             if args_str:
                 logger.info(
-                    "Quota cooldown active; skipping %s for %s: %s",
+                    "Quota cooldown active; skipping %s with %d arg(s): %s",
                     operation_name,
-                    args_str,
+                    len(args),
                     self.describe_block()
                 )
             else:

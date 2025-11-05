@@ -60,7 +60,7 @@ class YouTubeAPI:
     def authenticate(self) -> None:
         """Authenticate with YouTube API using OAuth2."""
         creds = None
-        token_file = 'token.json'
+        token_file = 'token.json'  # nosec B105 - filename not password
 
         # SECURITY: Migrate from pickle to JSON for credential storage
         # Check for legacy pickle file and migrate if found

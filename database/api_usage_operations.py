@@ -43,6 +43,7 @@ class APIUsageOperations:
             hour_col = f"hour_{hour:02d}"
 
             # Insert or update the row for today
+            # nosec B608 - hour_col is validated to be hour_00 through hour_23 (line 40)
             self._conn.execute(
                 f"""
                 INSERT INTO api_usage (date, {hour_col})

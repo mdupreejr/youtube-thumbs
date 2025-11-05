@@ -89,6 +89,7 @@ class LogsOperations:
 
         with self._lock:
             # Get total count
+            # nosec B608 - where_clause built from hardcoded strings with parameterized values
             count_query = f"SELECT COUNT(*) as count FROM video_ratings WHERE {where_clause}"
             cursor = self._conn.execute(count_query, params)
             total_count = cursor.fetchone()['count']
@@ -109,6 +110,7 @@ class LogsOperations:
 
         with self._lock:
             # Get rated songs
+            # nosec B608 - where_clause built from hardcoded strings with parameterized values
             query = f"""
                 SELECT yt_video_id, ha_title, ha_artist, yt_title, yt_channel,
                        rating, date_last_played, play_count, source
@@ -161,6 +163,7 @@ class LogsOperations:
 
         with self._lock:
             # Get total count
+            # nosec B608 - where_clause built from hardcoded strings with parameterized values
             count_query = f"SELECT COUNT(*) as count FROM video_ratings WHERE {where_clause}"
             cursor = self._conn.execute(count_query, params)
             total_count = cursor.fetchone()['count']
@@ -181,6 +184,7 @@ class LogsOperations:
 
         with self._lock:
             # Get match history
+            # nosec B608 - where_clause built from hardcoded strings with parameterized values
             query = f"""
                 SELECT yt_video_id, ha_title, ha_artist, ha_duration,
                        yt_title, yt_channel, yt_duration,

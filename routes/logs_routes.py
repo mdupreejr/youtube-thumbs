@@ -259,7 +259,8 @@ def parse_quota_prober_log(
             # Parse timestamp
             try:
                 timestamp = parse_timestamp(timestamp_str)
-            except:
+            except (ValueError, AttributeError):
+                # Skip lines with unparseable timestamps
                 continue
 
             # Filter by time period
@@ -537,4 +538,5 @@ def logs_viewer():
         logger.error(f"Error rendering logs page: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return f"<h1>Error loading logs</h1><p>{str(e)}</p>", 500
+        # SECURITY: Don't expose error details to user (information disclosure)
+        return "<h1>Error loading logs</h1><p>An internal error occurred. Please try again later.</p>", 500
