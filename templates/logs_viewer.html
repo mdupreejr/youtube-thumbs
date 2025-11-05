@@ -961,33 +961,47 @@
 
             <!-- Quota Prober Logs List -->
             {% if quota_prober_logs %}
-                {% for log in quota_prober_logs %}
-                <div class="log-entry" style="border-left: 3px solid {% if log.event_type == 'probe' %}#2563eb{% elif log.event_type == 'retry' %}#f59e0b{% elif log.event_type == 'success' %}#10b981{% elif log.event_type == 'error' %}#ef4444{% elif log.event_type == 'recovery' %}#8b5cf6{% else %}#94a3b8{% endif %};">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.1em;">{% if log.event_type == 'probe' %}🔍{% elif log.event_type == 'retry' %}🔄{% elif log.event_type == 'success' %}✅{% elif log.event_type == 'error' %}❌{% elif log.event_type == 'recovery' %}🎉{% else %}📝{% endif %}</span>
-                            <span class="log-level {{ log.level.lower() }}">{{ log.level }}</span>
-                            <span style="font-size: 0.75em; color: #64748b;">{{ log.time_ago }}</span>
-                        </div>
-                        <span style="font-size: 0.7em; color: #94a3b8;">{{ log.timestamp }}</span>
-                    </div>
-
-                    <div class="log-message">
-                        <div class="log-text">{{ log.display_message }}</div>
-                        {% if log.truncated %}
-                        <div id="quota-log-{{ loop.index }}" class="log-full">
-                            {{ log.message }}
-                        </div>
-                        <button class="show-more-btn" onclick="toggleQuotaLog({{ loop.index }})">Show more</button>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Level</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in quota_prober_logs %}
+                        <tr>
+                            <td><span class="time-ago">{{ log.time_ago }}</span></td>
+                            <td style="white-space: nowrap;">
+                                <span style="font-size: 1.1em;">{% if log.event_type == 'probe' %}🔍{% elif log.event_type == 'retry' %}🔄{% elif log.event_type == 'success' %}✅{% elif log.event_type == 'error' %}❌{% elif log.event_type == 'recovery' %}🎉{% else %}📝{% endif %}</span>
+                                <span style="font-size: 0.75em; color: #64748b;">{{ log.event_type }}</span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ log.level|lower }}">{{ log.level }}</span>
+                            </td>
+                            <td>
+                                <div class="error-message">
+                                    <div class="error-short">{{ log.display_message }}</div>
+                                    {% if log.truncated %}
+                                    <div class="error-full" id="quota-log-{{ loop.index }}">{{ log.message }}</div>
+                                    <span class="show-more" onclick="toggleQuotaLog({{ loop.index }})">Show more</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
-                <div style="text-align: center; padding: 40px; color: #64748b;">
-                    <div style="font-size: 2em; margin-bottom: 10px;">🔍</div>
-                    <div style="font-size: 0.9em;">No quota prober logs found for the selected filters</div>
-                </div>
+            <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <h3>No quota prober logs found</h3>
+                <p>No logs for the selected filters</p>
+            </div>
             {% endif %}
 
             <!-- Pagination -->
