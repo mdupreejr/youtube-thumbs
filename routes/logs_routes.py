@@ -443,13 +443,14 @@ def _handle_matches_tab(page, period_filter):
         yt_published_formatted = None
         if yt_published_at:
             try:
-                from datetime import datetime
+                # YouTube API returns ISO 8601 string like "2023-10-15T12:00:00Z"
                 if isinstance(yt_published_at, str):
-                    pub_dt = datetime.fromisoformat(yt_published_at.replace('Z', '+00:00').replace(' ', 'T'))
+                    pub_dt = datetime.fromisoformat(yt_published_at.replace('Z', '+00:00'))
                 else:
                     pub_dt = yt_published_at
                 yt_published_formatted = pub_dt.strftime('%b %d, %Y')
-            except:
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.debug(f"Failed to format YouTube published date '{yt_published_at}': {e}")
                 yt_published_formatted = None
 
         formatted_matches.append({

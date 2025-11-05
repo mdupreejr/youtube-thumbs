@@ -506,6 +506,10 @@
                     localStorage.setItem(columnsStorageKey, JSON.stringify(enabledColumns));
                 } catch (e) {
                     console.error('Error saving column selection:', e);
+                    // Provide user feedback for storage errors
+                    if (e.name === 'QuotaExceededError') {
+                        alert('Unable to save column preferences: browser storage is full. Please clear some data or use private/incognito mode.');
+                    }
                 }
             }
 

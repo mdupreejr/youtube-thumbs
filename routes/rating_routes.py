@@ -155,10 +155,14 @@ def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
             logger.error("Failed to sync pending rating for %s: %s", video_id, exc)
 
 
-def rate_video(rating_type: str) -> Tuple[Response, int]:
+def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Response, int]:
     """
     Refactored handler for rating videos with improved organization.
     Delegates to helper functions for better maintainability.
+
+    Args:
+        rating_type: Type of rating ('like' or 'dislike')
+        skip_rate_limit: If True, skip rate limiting check (for manual user actions)
     """
     from helpers.rating_helpers import (
         check_rate_limit,
@@ -173,10 +177,11 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
 
     logger.info(f"{rating_type} request received")
 
-    # Step 1: Check rate limiting
-    rate_limit_response = check_rate_limit(_rate_limiter, rating_type)
-    if rate_limit_response:
-        return rate_limit_response
+    # Step 1: Check rate limiting (skip for manual user actions)
+    if not skip_rate_limit:
+        rate_limit_response = check_rate_limit(_rate_limiter, rating_type)
+        if rate_limit_response:
+            return rate_limit_response
 
     try:
         # Step 2: Get and validate current media
@@ -449,22 +454,22 @@ def rate_song_dislike(video_id: str) -> Response:
 
 
 @bp.route('/thumbs_up', methods=['POST'])
-@require_rate_limit
 def thumbs_up() -> Tuple[Response, int]:
     """
-    DEPRECATED: Legacy endpoint. Use /rate-song instead.
+    Manual rating endpoint for currently playing media.
+    No rate limiting applied - these are user-initiated actions triggered by physical buttons.
     CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     # Note: CSRF exemption handled by app.py when registering blueprint
-    return rate_video('like')
+    return rate_video('like', skip_rate_limit=True)
 
 
 @bp.route('/thumbs_down', methods=['POST'])
-@require_rate_limit
 def thumbs_down() -> Tuple[Response, int]:
     """
-    DEPRECATED: Legacy endpoint. Use /rate-song instead.
+    Manual rating endpoint for currently playing media.
+    No rate limiting applied - these are user-initiated actions triggered by physical buttons.
     CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     # Note: CSRF exemption handled by app.py when registering blueprint
-    return rate_video('dislike')
+    return rate_video('dislike', skip_rate_limit=True)
