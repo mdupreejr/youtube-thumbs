@@ -20,7 +20,6 @@ from youtube_api import get_youtube_api, set_database as set_youtube_api_databas
 from database import get_database
 from quota_guard import quota_guard
 from quota_prober import QuotaProber
-from quota_manager import get_quota_manager
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
@@ -454,11 +453,6 @@ quota_prober.start()
 atexit.register(quota_prober.stop)
 logger.info("Quota prober started successfully")
 
-# Initialize and start new quota manager (hourly checks)
-logger.info("Initializing quota manager...")
-quota_manager = get_quota_manager()
-logger.info("Quota manager initialized successfully")
-
 # Start stats refresher background task (refreshes every hour)
 logger.info("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
@@ -678,12 +672,6 @@ if __name__ == '__main__':
     yt_api = None
     try:
         yt_api = get_youtube_api()
-        # Start quota manager checker thread now that we have YouTube API
-        if yt_api:
-            logger.info("Starting quota manager checker thread...")
-            quota_manager.start_checker(yt_api)
-            atexit.register(quota_manager.stop_checker)
-            logger.info("Quota manager checker thread started")
     except Exception as e:
         logger.error(f"Failed to initialize YouTube API: {str(e)}")
         logger.error("Please ensure credentials.json exists and run the OAuth flow")
