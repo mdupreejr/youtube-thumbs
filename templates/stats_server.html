@@ -466,14 +466,14 @@
                     statusMsg.textContent = data.message;
                     statusMsg.style.color = '#10b981';
 
-                    // Only reload if something was resolved, otherwise let user read the message
-                    if (data.resolved > 0) {
-                        // Reload page after 5 seconds to show updated counts
+                    // Reload if anything changed (resolved OR marked as not_found)
+                    if (data.resolved > 0 || data.not_found > 0) {
+                        // Reload page after 2 seconds to show updated counts
                         setTimeout(() => {
                             window.location.reload();
-                        }, 5000);
+                        }, 2000);
                     } else {
-                        // Re-enable button after 5 seconds if nothing resolved
+                        // Re-enable button after 5 seconds if nothing changed
                         setTimeout(() => {
                             btn.disabled = false;
                             btn.style.opacity = '1';

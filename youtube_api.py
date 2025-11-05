@@ -462,10 +462,53 @@ class YouTubeAPI:
 
             logger.debug(f"Found {len(items)} videos globally")
 
-            video_ids = [item['id']['videoId'] for item in items]
+            # OPTIMIZATION: Score results by title similarity before checking durations
+            # This ensures we check the most relevant matches first
+            def calculate_title_similarity(result_title: str, query_title: str) -> float:
+                """Calculate similarity score between titles (0-1, higher is better)."""
+                result_lower = result_title.lower()
+                query_lower = query_title.lower()
+
+                # Exact match = perfect score
+                if result_lower == query_lower:
+                    return 1.0
+
+                # Contains exact query = high score
+                if query_lower in result_lower:
+                    return 0.9
+
+                # Word overlap scoring
+                result_words = set(result_lower.split())
+                query_words = set(query_lower.split())
+
+                if not query_words:
+                    return 0.0
+
+                # Jaccard similarity (intersection / union)
+                intersection = len(result_words & query_words)
+                union = len(result_words | query_words)
+
+                return intersection / union if union > 0 else 0.0
+
+            # Score and sort results by title similarity
+            scored_items = []
+            for item in items:
+                result_title = item['snippet'].get('title', '')
+                score = calculate_title_similarity(result_title, title)
+                scored_items.append((score, item))
+
+            # Sort by score descending (best matches first)
+            scored_items.sort(key=lambda x: x[0], reverse=True)
+
+            logger.debug(f"Top 3 matches by title similarity: " +
+                        ", ".join([f"{item['snippet'].get('title', '')[:40]}... ({score:.2f})"
+                                  for score, item in scored_items[:3]]))
+
+            video_ids = [item['id']['videoId'] for score, item in scored_items]
 
             # OPTIMIZATION: Batch duration checks to save API quota
             # Check 5 videos at a time, stop early if we find a match
+            # Now checking the 5 BEST title matches first, not just first 5 results
             # Maximum 30 videos checked (6 batches of 5)
             BATCH_SIZE = 5
             MAX_VIDEOS_TO_CHECK = 30
