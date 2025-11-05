@@ -11,6 +11,7 @@ import os
 import re
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
+from helpers.time_helpers import format_relative_time
 
 bp = Blueprint('logs', __name__)
 
@@ -309,38 +310,6 @@ def parse_quota_prober_log(
         'total_count': total_count,
         'stats': stats
     }
-
-
-def format_relative_time(timestamp_str: str) -> str:
-    """
-    Format timestamp as relative time (e.g., "2h ago", "yesterday").
-
-    Args:
-        timestamp_str: ISO format timestamp string
-
-    Returns:
-        Relative time string
-    """
-    try:
-        timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
-        delta = datetime.now() - timestamp
-
-        if delta.days > 30:
-            return timestamp.strftime('%b %d, %Y')
-        elif delta.days > 1:
-            return f"{delta.days}d ago"
-        elif delta.days == 1:
-            return "yesterday"
-        elif delta.seconds >= 3600:
-            hours = delta.seconds // 3600
-            return f"{hours}h ago"
-        elif delta.seconds >= 60:
-            minutes = delta.seconds // 60
-            return f"{minutes}m ago"
-        else:
-            return "just now"
-    except:
-        return timestamp_str
 
 
 @bp.route('/logs')
