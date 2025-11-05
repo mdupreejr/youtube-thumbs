@@ -29,6 +29,7 @@ from routes.logs_routes import bp as logs_bp, init_logs_routes
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.response_helpers import error_response, success_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
+from helpers.time_helpers import parse_timestamp, format_duration, format_relative_time
 
 app = Flask(__name__)
 
@@ -1175,18 +1176,8 @@ def stats_page() -> str:
 
             # Calculate time ago
             if item.get('date_last_played'):
-                try:
-                    played_dt = datetime.fromisoformat(item['date_last_played'].replace(' ', 'T'))
-                    delta = datetime.now() - played_dt
-                    if delta.days > 0:
-                        time_ago = f"{delta.days}d ago"
-                    elif delta.seconds >= 3600:
-                        time_ago = f"{delta.seconds // 3600}h ago"
-                    elif delta.seconds >= 60:
-                        time_ago = f"{delta.seconds // 60}m ago"
-                    else:
-                        time_ago = "Just now"
-                except:
+                time_ago = format_relative_time(item['date_last_played'])
+                if time_ago == "unknown":
                     time_ago = "Recently"
             else:
                 time_ago = "Recently"
@@ -1363,7 +1354,7 @@ def data_viewer() -> str:
                 elif col in ['date_added', 'date_last_played', 'yt_published_at']:
                     if value:
                         try:
-                            dt = datetime.fromisoformat(value.replace(' ', 'T'))
+                            dt = parse_timestamp(value)
                             formatted_row[col] = dt.strftime('%Y-%m-%d %H:%M')
                         except:
                             formatted_row[col] = value

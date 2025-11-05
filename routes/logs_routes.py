@@ -11,7 +11,7 @@ import os
 import re
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
-from helpers.time_helpers import format_relative_time
+from helpers.time_helpers import format_relative_time, parse_timestamp
 from helpers.validation_helpers import validate_page_param
 from video_helpers import get_video_title, get_video_artist
 
@@ -258,7 +258,7 @@ def parse_quota_prober_log(
 
             # Parse timestamp
             try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+                timestamp = parse_timestamp(timestamp_str)
             except:
                 continue
 

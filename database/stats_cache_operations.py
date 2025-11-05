@@ -8,6 +8,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, date
 from typing import Dict, Any, Optional
+from helpers.time_helpers import parse_timestamp
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -55,7 +56,7 @@ class StatsCacheOperations:
             # Handle both string and datetime types (SQLite may return either)
             expires_at_raw = result['expires_at']
             if isinstance(expires_at_raw, str):
-                expires_at = datetime.fromisoformat(expires_at_raw.replace(' ', 'T'))
+                expires_at = parse_timestamp(expires_at_raw)
             elif isinstance(expires_at_raw, datetime):
                 expires_at = expires_at_raw
             else:

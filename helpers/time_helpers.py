@@ -69,3 +69,59 @@ def format_relative_time(timestamp_str: str) -> str:
             return "just now"
     except (ValueError, AttributeError, TypeError):
         return "unknown"
+
+
+def parse_timestamp(timestamp_str: str) -> datetime:
+    """
+    Parse timestamp string into datetime object.
+
+    Handles both ISO format timestamps and timestamps with space instead of 'T'.
+    This is a common pattern in the codebase for parsing database timestamps.
+
+    Args:
+        timestamp_str: Timestamp string in ISO format (or with space instead of 'T')
+
+    Returns:
+        datetime object
+
+    Raises:
+        ValueError: If timestamp_str cannot be parsed
+
+    Examples:
+        >>> # ISO format with T
+        >>> parse_timestamp("2024-01-15T12:30:45")
+        datetime(2024, 1, 15, 12, 30, 45)
+
+        >>> # ISO format with space
+        >>> parse_timestamp("2024-01-15 12:30:45")
+        datetime(2024, 1, 15, 12, 30, 45)
+    """
+    return datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+
+
+def format_duration(seconds: int) -> str:
+    """
+    Format duration in seconds as MM:SS.
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Formatted duration string (MM:SS)
+
+    Examples:
+        >>> format_duration(90)
+        '1:30'
+
+        >>> format_duration(3665)
+        '61:05'
+
+        >>> format_duration(45)
+        '0:45'
+
+        >>> format_duration(0)
+        '0:00'
+    """
+    minutes = seconds // 60
+    secs = seconds % 60
+    return f"{minutes}:{secs:02d}"
