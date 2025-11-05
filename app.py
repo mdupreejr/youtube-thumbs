@@ -540,13 +540,11 @@ def index() -> str:
                 artist = get_video_artist(song)
 
                 # Format duration if available (prefer yt_duration, fallback to ha_duration)
-                duration_str = ''
                 duration = song.get('yt_duration') or song.get('ha_duration')
                 if duration:
-                    duration = int(duration)
-                    minutes = duration // 60
-                    seconds = duration % 60
-                    duration_str = f"{minutes}:{seconds:02d}"
+                    duration_str = format_duration(int(duration))
+                else:
+                    duration_str = ''
 
                 formatted_songs.append({
                     'id': song.get('yt_video_id'),

@@ -3,8 +3,13 @@ Parameter validation helper utilities.
 
 Provides reusable validation logic to eliminate code duplication across routes.
 """
+import re
 from typing import Tuple, Optional
-from flask import jsonify, Response, make_response
+from flask import Response
+from helpers.response_helpers import error_response as create_error_response
+
+# Pre-compiled regex patterns for performance
+_YOUTUBE_VIDEO_ID_PATTERN = re.compile(r'^[A-Za-z0-9_-]{11}$')
 
 
 def validate_limit_param(
@@ -56,11 +61,7 @@ def validate_limit_param(
         value = max(min_value, min(value, max_value))
         return value, None
     except (ValueError, TypeError):
-        error_response = make_response(jsonify({
-            'success': False,
-            'error': f'Invalid {param_name} parameter'
-        }), 400)
-        return None, error_response
+        return None, create_error_response(f'Invalid {param_name} parameter')
 
 
 def validate_page_param(
@@ -107,21 +108,18 @@ def validate_page_param(
         >>> page, error = validate_page_param(request.args)
         >>> # page = None, error = <Response with 400 status>
     """
+    # Get raw value and handle None/empty explicitly
+    raw_value = request_args.get(param_name)
+    if raw_value is None or raw_value == '':
+        return default, None
+
     try:
-        value = int(request_args.get(param_name, default))
+        value = int(raw_value)
         if value < 1:
-            error_response = make_response(jsonify({
-                'success': False,
-                'error': f'{param_name.capitalize()} must be at least 1'
-            }), 400)
-            return None, error_response
+            return None, create_error_response(f'{param_name.capitalize()} must be at least 1')
         return value, None
     except (ValueError, TypeError):
-        error_response = make_response(jsonify({
-            'success': False,
-            'error': f'Invalid {param_name} parameter: must be a positive integer'
-        }), 400)
-        return None, error_response
+        return None, create_error_response(f'Invalid {param_name} parameter: must be a positive integer')
 
 
 def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Response]]:
@@ -157,15 +155,19 @@ def validate_youtube_video_id(video_id: str) -> Tuple[bool, Optional[Response]]:
         >>> # Invalid: contains invalid characters
         >>> is_valid, error = validate_youtube_video_id('dQw4w9WgX@Q')
         >>> # is_valid = False, error = <Response with 400 status>
-    """
-    import re
 
-    # YouTube video IDs are exactly 11 characters: alphanumeric, -, and _
-    if not re.match(r'^[A-Za-z0-9_-]{11}$', video_id):
-        error_response = make_response(jsonify({
-            'success': False,
-            'error': 'Invalid video ID format'
-        }), 400)
-        return False, error_response
+        >>> # Invalid: None or wrong type
+        >>> is_valid, error = validate_youtube_video_id(None)
+        >>> # is_valid = False, error = <Response with 400 status>
+    """
+    # Validate type and None
+    if not video_id or not isinstance(video_id, str):
+        _, err_response = create_error_response('Invalid video ID format')
+        return False, err_response
+
+    # Validate format using pre-compiled regex (performance optimization)
+    if not _YOUTUBE_VIDEO_ID_PATTERN.match(video_id):
+        _, err_response = create_error_response('Invalid video ID format')
+        return False, err_response
 
     return True, None

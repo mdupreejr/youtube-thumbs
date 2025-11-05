@@ -85,7 +85,7 @@ def parse_timestamp(timestamp_str: str) -> datetime:
         datetime object
 
     Raises:
-        ValueError: If timestamp_str cannot be parsed
+        ValueError: If timestamp_str is None, empty, not a string, or cannot be parsed
 
     Examples:
         >>> # ISO format with T
@@ -95,7 +95,21 @@ def parse_timestamp(timestamp_str: str) -> datetime:
         >>> # ISO format with space
         >>> parse_timestamp("2024-01-15 12:30:45")
         datetime(2024, 1, 15, 12, 30, 45)
+
+        >>> # Invalid input
+        >>> parse_timestamp(None)
+        ValueError: Invalid timestamp: None
+
+        >>> parse_timestamp("")
+        ValueError: Invalid timestamp: empty string
     """
+    if timestamp_str is None:
+        raise ValueError("Invalid timestamp: None")
+    if not isinstance(timestamp_str, str):
+        raise ValueError(f"Invalid timestamp: expected string, got {type(timestamp_str).__name__}")
+    if not timestamp_str.strip():
+        raise ValueError("Invalid timestamp: empty string")
+
     return datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
 
 
