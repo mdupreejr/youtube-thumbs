@@ -11,21 +11,18 @@ from constants import MAX_BATCH_SIZE
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
 
-# Database and CSRF instances will be injected
+# Database instance will be injected
 db = None
-csrf = None
 
 
-def init_data_api_routes(database, csrf_protect=None):
+def init_data_api_routes(database):
     """
-    Initialize the data API routes with database and CSRF instances.
+    Initialize the data API routes with database instance.
 
     Args:
         database: Database instance to use for queries
-        csrf_protect: CSRFProtect instance for exempting routes
     """
-    global db, csrf
-    csrf = csrf_protect
+    global db
     db = database
 
 
@@ -391,12 +388,11 @@ def get_pending_status() -> Response:
 
 
 @bp.route('/pending/retry', methods=['POST'])
-@csrf.exempt
 def retry_pending_videos() -> Response:
     """
     Manually trigger retry of pending videos with quota_exceeded reason.
     Processes videos in batches to avoid overwhelming the YouTube API.
-    API endpoint called from JavaScript - CSRF exempted.
+    API endpoint called from JavaScript - CSRF will be exempted in app.py.
     """
     import time
     from search_helpers import search_and_match_video

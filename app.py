@@ -314,8 +314,11 @@ except Exception as e:
 set_youtube_api_database(db)
 
 # Initialize and register data API blueprint
-init_data_api_routes(db, csrf)
+init_data_api_routes(db)
 app.register_blueprint(data_api_bp)
+
+# Exempt specific API endpoints from CSRF protection
+csrf.exempt(data_api_bp.view_functions['retry_pending_videos'])
 
 # Initialize and register logs blueprint
 init_logs_routes(db)
