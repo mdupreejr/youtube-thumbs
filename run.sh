@@ -106,11 +106,40 @@ else
     bashio::log.warning "Please copy credentials.json to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
 fi
 
-# Check for OAuth token file
+# Check for OAuth token file (with one-time pickle to json migration)
 if [ -f "${CONFIG_DIR}/token.json" ]; then
     bashio::log.info "Found token.json in ${CONFIG_DIR}"
     ln -sf "${CONFIG_DIR}/token.json" /app/token.json
     bashio::log.info "Created symlink: /app/token.json -> ${CONFIG_DIR}/token.json"
+elif [ -f "${CONFIG_DIR}/token.pickle" ]; then
+    # One-time migration: convert pickle to json using Python
+    bashio::log.info "Found token.pickle - migrating to token.json..."
+    python3 - <<'EOF'
+import pickle
+import json
+import sys
+
+try:
+    with open("/config/youtube_thumbs/token.pickle", "rb") as f:
+        creds = pickle.load(f)
+
+    with open("/config/youtube_thumbs/token.json", "w") as f:
+        f.write(creds.to_json())
+
+    print("Successfully migrated token.pickle to token.json")
+    sys.exit(0)
+except Exception as e:
+    print(f"Migration failed: {e}")
+    sys.exit(1)
+EOF
+    if [ $? -eq 0 ]; then
+        bashio::log.info "Migration successful - token.json created"
+        bashio::log.info "You can delete token.pickle manually if desired"
+        ln -sf "${CONFIG_DIR}/token.json" /app/token.json
+        bashio::log.info "Created symlink: /app/token.json -> ${CONFIG_DIR}/token.json"
+    else
+        bashio::log.error "Migration failed - please re-authenticate or manually create token.json"
+    fi
 else
     bashio::log.warning "token.json NOT found in ${CONFIG_DIR}"
     bashio::log.warning "Please copy token.json to /addon_configs/XXXXXXXX_youtube_thumbs/ (exposed as ${CONFIG_DIR})"
