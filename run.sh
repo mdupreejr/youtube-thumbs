@@ -194,7 +194,7 @@ bashio::log.info "Running startup health checks..."
 
 # Start the Flask application with full error capture
 bashio::log.info "Starting Flask application..."
-bash /app/run_app.sh 2>&1 | while IFS= read -r line; do
+python3 /app/app.py 2>&1 | while IFS= read -r line; do
     bashio::log.info "$line"
 done
 
