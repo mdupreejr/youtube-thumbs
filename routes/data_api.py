@@ -469,22 +469,18 @@ def retry_pending_videos() -> Response:
                 ha_media = {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration}
                 from youtube_api import get_youtube_api
                 yt_api = get_youtube_api()
-                result = search_and_match_video(ha_media, yt_api, db)
+                video = search_and_match_video(ha_media, yt_api, db)
 
-                if result and result.get('video'):
-                    # Found and matched
-                    db.resolve_pending_video(ha_content_id, result['video'])
+                if video and video.get('yt_video_id'):
+                    # Found and matched - search_and_match_video returns the video dict directly
+                    db.resolve_pending_video(ha_content_id, video)
                     resolved += 1
                     logger.info(f"Resolved from YouTube: {ha_title}")
-                elif result and result.get('reason') == 'not_found':
-                    # Not found
+                else:
+                    # Not found (search_and_match_video returns None if not found)
                     db.mark_pending_not_found(ha_content_id)
                     not_found += 1
                     logger.info(f"Not found: {ha_title}")
-                else:
-                    # Search failed
-                    failed += 1
-                    logger.warning(f"Search failed: {ha_title}")
 
                 # Delay between requests to avoid hammering API
                 time.sleep(2)
