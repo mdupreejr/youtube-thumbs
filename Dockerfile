@@ -32,10 +32,9 @@ COPY static/ ./static/
 # Copy translations directory
 COPY translations/ ./translations/
 
-# Copy startup scripts
+# Copy startup script
 COPY run.sh .
-COPY run_app.sh .
-RUN chmod +x run.sh run_app.sh
+RUN chmod +x run.sh
 
 # Expose port (although host_network=true means this is mostly for documentation)
 EXPOSE 21812
