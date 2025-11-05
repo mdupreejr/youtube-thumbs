@@ -12,6 +12,7 @@ import re
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time
+from video_helpers import get_video_title, get_video_artist
 
 bp = Blueprint('logs', __name__)
 
@@ -356,8 +357,8 @@ def logs_viewer():
             # Format songs for template
             formatted_songs = []
             for song in result['songs']:
-                title = (song.get('ha_title') or song.get('yt_title') or 'Unknown').strip() or 'Unknown'
-                artist = (song.get('ha_artist') or song.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+                title = get_video_title(song)
+                artist = get_video_artist(song)
 
                 # Format relative time
                 time_ago = format_relative_time(song.get('date_last_played', ''))

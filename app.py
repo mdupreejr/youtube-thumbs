@@ -19,7 +19,7 @@ from quota_prober import QuotaProber
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES
-from video_helpers import is_youtube_content
+from video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
 from search_helpers import search_and_match_video_refactored
 from cache_helpers import find_cached_video_refactored
@@ -536,8 +536,8 @@ def index() -> str:
             # Format songs for template
             formatted_songs = []
             for song in result['songs']:
-                title = (song.get('ha_title') or song.get('yt_title') or 'Unknown').strip() or 'Unknown'
-                artist = (song.get('ha_artist') or song.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+                title = get_video_title(song)
+                artist = get_video_artist(song)
 
                 # Format duration if available (prefer yt_duration, fallback to ha_duration)
                 duration_str = ''
@@ -1172,8 +1172,8 @@ def stats_page() -> str:
         # Format recent activity
         recent_activity = []
         for item in recent:
-            title = (item.get('ha_title') or item.get('yt_title') or 'Unknown').strip() or 'Unknown'
-            artist = (item.get('ha_artist') or item.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+            title = get_video_title(item)
+            artist = get_video_artist(item)
 
             # Calculate time ago
             if item.get('date_last_played'):
@@ -1206,8 +1206,8 @@ def stats_page() -> str:
         # Format most played
         formatted_most_played = []
         for video in most_played:
-            title = (video.get('ha_title') or video.get('yt_title') or 'Unknown').strip() or 'Unknown'
-            artist = (video.get('ha_artist') or video.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+            title = get_video_title(video)
+            artist = get_video_artist(video)
             formatted_most_played.append({
                 'title': title,
                 'artist': artist,

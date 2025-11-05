@@ -59,6 +59,60 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     }
 
 
+def get_video_title(video: Dict[str, Any]) -> str:
+    """
+    Extract title from video data, preferring ha_title over yt_title.
+
+    Args:
+        video: Video dict with ha_title and/or yt_title fields
+
+    Returns:
+        Video title, or 'Unknown' if not found
+
+    Examples:
+        >>> video = {'ha_title': 'Song Name', 'yt_title': 'Song Name - Artist'}
+        >>> get_video_title(video)
+        'Song Name'
+
+        >>> video = {'yt_title': 'Video Title'}
+        >>> get_video_title(video)
+        'Video Title'
+
+        >>> video = {}
+        >>> get_video_title(video)
+        'Unknown'
+    """
+    title = (video.get('ha_title') or video.get('yt_title') or 'Unknown').strip() or 'Unknown'
+    return title
+
+
+def get_video_artist(video: Dict[str, Any]) -> str:
+    """
+    Extract artist/channel from video data, preferring ha_artist over yt_channel.
+
+    Args:
+        video: Video dict with ha_artist and/or yt_channel fields
+
+    Returns:
+        Artist/channel name, or 'Unknown' if not found
+
+    Examples:
+        >>> video = {'ha_artist': 'Artist Name', 'yt_channel': 'Channel Name'}
+        >>> get_video_artist(video)
+        'Artist Name'
+
+        >>> video = {'yt_channel': 'Channel Name'}
+        >>> get_video_artist(video)
+        'Channel Name'
+
+        >>> video = {}
+        >>> get_video_artist(video)
+        'Unknown'
+    """
+    artist = (video.get('ha_artist') or video.get('yt_channel') or 'Unknown').strip() or 'Unknown'
+    return artist
+
+
 def is_youtube_content(ha_media: Dict[str, Any]) -> bool:
     """
     Check if the media is from YouTube based on app_name field.
