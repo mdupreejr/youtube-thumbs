@@ -80,19 +80,14 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
             logger.error("✗ YouTube client not authenticated")
             return False, "Not authenticated"
 
-        # Get 24-hour API call count from database if available
+        # Get 24-hour API usage from database if available
         api_calls_24h = 0
+        quota_used_24h = 0
         if db:
             try:
-                from datetime import datetime, timedelta
-                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-                usage = db.get_api_daily_usage(yesterday)
-                if usage:
-                    api_calls_24h = usage.get('total_calls', 0)
-                # Also get today's usage
-                today_usage = db.get_api_daily_usage()
-                if today_usage:
-                    api_calls_24h += today_usage.get('total_calls', 0)
+                summary = db.get_api_call_summary(hours=24)
+                api_calls_24h = summary.get('total_calls', 0)
+                quota_used_24h = summary.get('total_quota_cost', 0)
             except Exception as e:
                 logger.debug(f"Could not fetch API usage stats: {e}")
 
@@ -110,9 +105,13 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
             quota_exceeded_at = state.get('set_at', 'Unknown') if state else 'Unknown'
 
             msg_parts = [
-                f"Quota cooldown active ({hours}h {minutes}m remaining)",
+                f"⚠️ Quota cooldown active",
+                f"Time remaining: {hours}h {minutes}m",
                 f"Quota exceeded at: {quota_exceeded_at}",
-                f"API calls (24h): {api_calls_24h}"
+                f"",
+                f"API usage (last 24h):",
+                f"  • Calls: {api_calls_24h}",
+                f"  • Quota used: {quota_used_24h:,} / 10,000"
             ]
             return False, "\n".join(msg_parts)
 
@@ -132,16 +131,24 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
             if 'items' in response:
                 logger.info("✓ YouTube API authenticated and working")
                 logger.info("  API calls available - quota OK")
+                quota_remaining = 10000 - quota_used_24h
                 msg_parts = [
-                    "API authenticated and working",
-                    f"API calls (24h): {api_calls_24h}"
+                    "✓ API authenticated and working",
+                    "",
+                    f"API usage (last 24h):",
+                    f"  • Calls: {api_calls_24h}",
+                    f"  • Quota used: {quota_used_24h:,} / 10,000",
+                    f"  • Quota remaining: ~{quota_remaining:,}"
                 ]
                 return True, "\n".join(msg_parts)
             else:
                 logger.warning("⚠ YouTube API returned unexpected response")
                 msg_parts = [
-                    "API authenticated but response unexpected",
-                    f"API calls (24h): {api_calls_24h}"
+                    "⚠️ API authenticated but response unexpected",
+                    "",
+                    f"API usage (last 24h):",
+                    f"  • Calls: {api_calls_24h}",
+                    f"  • Quota used: {quota_used_24h:,} / 10,000"
                 ]
                 return True, "\n".join(msg_parts)
 
@@ -150,14 +157,28 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
             if 'quota' in error_str.lower():
                 logger.error("✗ YouTube API quota exceeded")
                 logger.error("  Wait for quota reset or increase your quota in Google Cloud Console")
-                return False, "Quota exceeded"
+                msg_parts = [
+                    "❌ Quota exceeded",
+                    "",
+                    f"API usage (last 24h):",
+                    f"  • Calls: {api_calls_24h}",
+                    f"  • Quota used: {quota_used_24h:,} / 10,000"
+                ]
+                return False, "\n".join(msg_parts)
             elif 'invalid' in error_str.lower() and 'credentials' in error_str.lower():
                 logger.error("✗ YouTube API credentials invalid or expired")
                 logger.error("  Re-run OAuth flow to refresh credentials")
-                return False, "Invalid credentials"
+                return False, "❌ Invalid credentials - Re-run OAuth flow"
             else:
                 logger.error(f"✗ YouTube API error: {error_str}")
-                return False, f"API error: {error_str}"
+                msg_parts = [
+                    f"❌ API error: {error_str}",
+                    "",
+                    f"API usage (last 24h):",
+                    f"  • Calls: {api_calls_24h}",
+                    f"  • Quota used: {quota_used_24h:,}"
+                ]
+                return False, "\n".join(msg_parts)
 
     except Exception as e:
         logger.error(f"✗ YouTube API check failed: {str(e)}")
