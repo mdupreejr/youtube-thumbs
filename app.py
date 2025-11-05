@@ -1743,32 +1743,34 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
     safe_sort = sort_by.replace('"', '""')
     quoted_sort_by = '"' + safe_sort + '"'
 
-    # Get total count of distinct video IDs
-    count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
-    total_count = db._conn.execute(count_query).fetchone()['count']
+    # SECURITY: Use database lock for thread safety
+    with db._lock:
+        # Get total count of distinct video IDs
+        count_query = "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings"
+        total_count = db._conn.execute(count_query).fetchone()['count']
 
-    # Calculate pagination
-    total_pages = (total_count + limit - 1) // limit
-    page = max(1, min(page, total_pages if total_pages > 0 else 1))
-    offset = (page - 1) * limit
+        # Calculate pagination
+        total_pages = (total_count + limit - 1) // limit
+        page = max(1, min(page, total_pages if total_pages > 0 else 1))
+        offset = (page - 1) * limit
 
-    # SECURITY: Build query with parameterized LIMIT/OFFSET
-    # Use explicit string building to avoid f-string injection risks
-    # nosec B608 - select_clause and sort_order are validated against whitelist above
-    data_query = (
-        "SELECT " + select_clause + " "
-        "FROM video_ratings "
-        "WHERE rowid IN ("
-        "  SELECT MAX(rowid) "
-        "  FROM video_ratings "
-        "  GROUP BY yt_video_id"
-        ") "
-        "ORDER BY " + quoted_sort_by + " " + sort_order + " "
-        "LIMIT ? OFFSET ?"
-    )
+        # SECURITY: Build query with parameterized LIMIT/OFFSET
+        # Use explicit string building to avoid f-string injection risks
+        # nosec B608 - select_clause and sort_order are validated against whitelist above
+        data_query = (
+            "SELECT " + select_clause + " "
+            "FROM video_ratings "
+            "WHERE rowid IN ("
+            "  SELECT MAX(rowid) "
+            "  FROM video_ratings "
+            "  GROUP BY yt_video_id"
+            ") "
+            "ORDER BY " + quoted_sort_by + " " + sort_order + " "
+            "LIMIT ? OFFSET ?"
+        )
 
-    cursor = db._conn.execute(data_query, (limit, offset))
-    rows = cursor.fetchall()
+        cursor = db._conn.execute(data_query, (limit, offset))
+        rows = cursor.fetchall()
 
     return rows, total_count, total_pages, page
 
