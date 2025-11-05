@@ -1541,6 +1541,62 @@ def stats_not_found_page() -> str:
         return "<h1>Error loading not found videos</h1>", 500
 
 
+@app.route('/debug/not_found_analysis')
+def debug_not_found_analysis() -> Response:
+    """Debug endpoint to analyze not_found videos for patterns."""
+    try:
+        # Get all not_found videos (no pagination limit for analysis)
+        with db._lock:
+            cursor = db._conn.execute(
+                """
+                SELECT ha_title, ha_artist, ha_duration, yt_match_attempts,
+                       date_added, play_count, ha_content_hash
+                FROM video_ratings
+                WHERE yt_match_pending = 1 AND pending_reason = 'not_found'
+                ORDER BY play_count DESC, date_added DESC
+                """
+            )
+            videos = [dict(row) for row in cursor.fetchall()]
+
+        # Analyze patterns
+        analysis = {
+            'total_count': len(videos),
+            'videos': [],
+            'patterns': {
+                'missing_artist': 0,
+                'missing_duration': 0,
+                'high_attempts': 0,
+                'frequently_played': 0
+            }
+        }
+
+        for video in videos:
+            video_info = {
+                'title': video['ha_title'],
+                'artist': video['ha_artist'],
+                'duration': video['ha_duration'],
+                'attempts': video['yt_match_attempts'],
+                'play_count': video['play_count'],
+                'date_added': video['date_added']
+            }
+            analysis['videos'].append(video_info)
+
+            # Track patterns
+            if not video['ha_artist']:
+                analysis['patterns']['missing_artist'] += 1
+            if not video['ha_duration']:
+                analysis['patterns']['missing_duration'] += 1
+            if video['yt_match_attempts'] > 3:
+                analysis['patterns']['high_attempts'] += 1
+            if video['play_count'] > 5:
+                analysis['patterns']['frequently_played'] += 1
+
+        return jsonify(analysis)
+    except Exception as e:
+        logger.error(f"Error in not_found analysis: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 def _validate_data_viewer_params(request_args):
     """
     Validate and sanitize data viewer parameters.
