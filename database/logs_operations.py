@@ -37,7 +37,7 @@ class LogsOperations:
         if period == 'all':
             return None
 
-        now = datetime.now()
+        now = datetime.utcnow()
         if period == 'hour':
             cutoff = now - timedelta(hours=1)
         elif period == 'day':

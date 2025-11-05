@@ -850,7 +850,7 @@
                     <tbody>
                         {% for error in errors %}
                         <tr>
-                            <td><span class="time-ago">{{ error.time_ago }}</span></td>
+                            <td><span class="timestamp" title="{{ error.time_ago }}">{{ error.timestamp }}</span></td>
                             <td>
                                 <span class="badge badge-{{ error.level|lower }}">{{ error.level }}</span>
                             </td>
@@ -988,7 +988,7 @@
                     <tbody>
                         {% for log in quota_prober_logs %}
                         <tr>
-                            <td><span class="time-ago">{{ log.time_ago }}</span></td>
+                            <td><span class="timestamp" title="{{ log.time_ago }}">{{ log.timestamp }}</span></td>
                             <td style="white-space: nowrap;">
                                 <span style="font-size: 1.1em;">{% if log.event_type == 'probe' %}🔍{% elif log.event_type == 'retry' %}🔄{% elif log.event_type == 'success' %}✅{% elif log.event_type == 'error' %}❌{% elif log.event_type == 'recovery' %}🎉{% else %}📝{% endif %}</span>
                                 <span style="font-size: 0.75em; color: #64748b;">{{ log.event_type }}</span>
