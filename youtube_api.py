@@ -358,21 +358,64 @@ class YouTubeAPI:
             if len(clean_title) < 10 and len(parts) > 1:
                 clean_title = ' '.join(p.strip() for p in parts[:2])
 
+        # Remove noise words that don't help search accuracy
+        noise_words = [
+            'FULL', 'HD', 'HQ', '4K', '8K', 'OFFICIAL',
+            'NEW', 'EXCLUSIVE', 'PREMIERE', 'ORIGINAL',
+        ]
+        words = clean_title.split()
+        words = [w for w in words if w.upper() not in noise_words]
+        clean_title = ' '.join(words)
+
         # Remove common suffixes that might interfere with search
         suffixes_to_remove = [
             ' (Official Video)',
             ' (Official Audio)',
             ' (Lyric Video)',
+            ' (Lyrics Video)',
             ' (Audio)',
+            ' (Video)',
             ' [Official Video]',
             ' [Official Audio]',
             ' [Lyric Video]',
             ' [Audio]',
+            ' [Video]',
         ]
         for suffix in suffixes_to_remove:
             if clean_title.endswith(suffix):
                 clean_title = clean_title[:-len(suffix)].strip()
                 break
+
+        # For very long titles (>100 chars), try to extract key terms
+        # Focus on artist names and significant event keywords
+        if len(clean_title) > 100:
+            # Extract artist name if at beginning
+            potential_artist = clean_title.split("'s ")[0] if "'s " in clean_title else None
+
+            # Look for event keywords (concerts, shows, performances)
+            event_keywords = ['Super Bowl', 'Halftime Show', 'Concert', 'Live', 'Performance',
+                            'Awards', 'Festival', 'Tour', 'Show']
+            important_parts = []
+
+            if potential_artist and len(potential_artist) < 30:
+                important_parts.append(potential_artist)
+
+            for keyword in event_keywords:
+                if keyword in clean_title:
+                    # Find the phrase containing this keyword
+                    words = clean_title.split()
+                    for i, word in enumerate(words):
+                        if keyword in ' '.join(words[i:i+len(keyword.split())]):
+                            # Take keyword plus surrounding context (up to 5 words each side)
+                            start = max(0, i - 2)
+                            end = min(len(words), i + len(keyword.split()) + 2)
+                            phrase = ' '.join(words[start:end])
+                            important_parts.append(phrase)
+                            break
+
+            if important_parts:
+                clean_title = ' '.join(important_parts)
+                logger.debug(f"Long title simplified: '{title[:80]}...' -> '{clean_title}'")
 
         # Clean up excessive whitespace
         search_query = ' '.join(clean_title.split())
