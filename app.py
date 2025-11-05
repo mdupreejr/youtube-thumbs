@@ -1507,6 +1507,40 @@ def stats_disliked_page() -> str:
         return "<h1>Error loading disliked videos</h1>", 500
 
 
+@app.route('/stats/not_found')
+def stats_not_found_page() -> str:
+    """Show paginated list of not found videos."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        page = int(request.args.get('page', 1))
+
+        result = db.get_not_found_videos(page=page, per_page=50)
+
+        # Format videos
+        formatted_videos = []
+        for video in result['videos']:
+            title = get_video_title(video)
+            artist = get_video_artist(video)
+            formatted_videos.append({
+                'title': title,
+                'artist': artist,
+                'yt_video_id': video.get('yt_video_id'),
+                'play_count': video.get('play_count', 0),
+                'date_added': video.get('date_added'),
+                'yt_match_attempts': video.get('yt_match_attempts', 0)
+            })
+
+        return render_template('stats_not_found.html',
+                             ingress_path=ingress_path,
+                             videos=formatted_videos,
+                             total_count=result['total_count'],
+                             current_page=result['current_page'],
+                             total_pages=result['total_pages'])
+    except Exception as e:
+        logger.error(f"Error rendering not found stats: {e}")
+        return "<h1>Error loading not found videos</h1>", 500
+
+
 def _validate_data_viewer_params(request_args):
     """
     Validate and sanitize data viewer parameters.

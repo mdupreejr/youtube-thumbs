@@ -404,24 +404,7 @@ def retry_pending_videos() -> Response:
         batch_size = int(request.args.get('batch_size', 5))
         batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
 
-        # Rate limiting check - use simple time-based check
-        # In production, consider using Redis or similar for distributed rate limiting
-        import os
-        import tempfile
-        # SECURITY: Use tempfile.gettempdir() instead of hardcoded /tmp path
-        last_retry_file = os.path.join(tempfile.gettempdir(), 'youtube_thumbs_last_retry.txt')
-        if os.path.exists(last_retry_file):
-            with open(last_retry_file, 'r') as f:
-                last_retry = float(f.read().strip())
-                if time.time() - last_retry < 30:  # 30 second cooldown
-                    return jsonify({
-                        'success': False,
-                        'error': 'Please wait 30 seconds between retry attempts'
-                    }), 429
-
-        # Update last retry timestamp
-        with open(last_retry_file, 'w') as f:
-            f.write(str(time.time()))
+        # Note: Rate limiting removed for manual retry button - user controls when to retry
 
         # Get pending videos with quota_exceeded reason
         pending_videos = db.get_pending_videos(limit=batch_size, reason_filter='quota_exceeded')
@@ -491,6 +474,11 @@ def retry_pending_videos() -> Response:
 
         processed = len(pending_videos)
         message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
+
+        # Invalidate stats cache if any videos were resolved
+        if resolved > 0 or not_found > 0:
+            db.invalidate_stats_cache()
+            logger.debug("Stats cache invalidated after manual retry")
 
         return jsonify({
             'success': True,
