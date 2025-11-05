@@ -402,7 +402,8 @@
 
         <div class="card">
             <p class="info-text">
-                {{ total_count }} records • Page {{ page }}/{{ total_pages }} • Sort: <strong>{{ all_columns[sort_by] }}</strong> {{ '▼' if sort_order == 'DESC' else '▲' }} • <em>Click headers to sort, bookmark URL to save preferences</em>
+                {{ total_count }} records • Page {{ page }}/{{ total_pages }} • Sort: <strong>{{ all_columns[sort_by] }}</strong> {{ '▼' if sort_order == 'DESC' else '▲' }} • <em>Click headers to sort, column widths and selection are auto-saved</em>
+                <br><small style="color: #94a3b8;">Tip: Use <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 2px;">?reset-columns=true</code> to reset column preferences to defaults</small>
             </p>
 
             <div class="table-container">
@@ -469,6 +470,20 @@
 
     <script>
         // Column resizing and state persistence functionality
+        // ========================================================================
+        // STORAGE BEHAVIOR NOTE:
+        // Column preferences (widths and enabled/disabled state) are stored in the
+        // browser's localStorage. This means:
+        //
+        // 1. PERSISTENCE: Preferences are saved across browser sessions
+        // 2. PER-BROWSER: Each browser/device maintains its own preferences
+        // 3. PER-ORIGIN: localStorage is scoped to the addon's origin (secure)
+        // 4. MULTI-USER: If multiple users share the same device/browser,
+        //    they will see the same column preferences
+        //
+        // To reset preferences, use: ?reset-columns=true
+        // To override with URL params, pass ?column=field1&column=field2
+        // ========================================================================
         (function() {
             const widthStorageKey = 'db_viewer_column_widths';
             const columnsStorageKey = 'db_viewer_enabled_columns';
@@ -477,18 +492,54 @@
             let startX = 0;
             let startWidth = 0;
 
+            // Get all valid column values from the current page
+            function getValidColumns() {
+                const validColumns = new Set();
+                document.querySelectorAll('input[name="column"]').forEach(checkbox => {
+                    validColumns.add(checkbox.value);
+                });
+                return validColumns;
+            }
+
+            // Validate stored columns against current schema
+            function validateStoredColumns(enabledColumns) {
+                const validColumns = getValidColumns();
+                // Filter out any columns that no longer exist in the schema
+                return enabledColumns.filter(col => validColumns.has(col));
+            }
+
             // Load saved column selection from localStorage
             function loadColumnSelection() {
                 try {
-                    const saved = localStorage.getItem(columnsStorageKey);
-                    if (saved) {
-                        const enabledColumns = JSON.parse(saved);
-                        // Only apply if no URL params are present (first load)
-                        const urlParams = new URLSearchParams(window.location.search);
-                        if (!urlParams.has('column')) {
-                            document.querySelectorAll('input[name="column"]').forEach(checkbox => {
-                                checkbox.checked = enabledColumns.includes(checkbox.value);
-                            });
+                    const urlParams = new URLSearchParams(window.location.search);
+
+                    // Check for explicit reset parameter (?reset-columns=true)
+                    if (urlParams.get('reset-columns') === 'true') {
+                        // User explicitly requested reset - don't apply saved preferences
+                        return;
+                    }
+
+                    // Only apply saved preferences if URL doesn't have column parameters
+                    if (!urlParams.has('column')) {
+                        const saved = localStorage.getItem(columnsStorageKey);
+                        if (saved) {
+                            try {
+                                let enabledColumns = JSON.parse(saved);
+
+                                // Validate stored columns against current schema
+                                enabledColumns = validateStoredColumns(enabledColumns);
+
+                                // Apply valid stored preferences
+                                if (enabledColumns.length > 0) {
+                                    document.querySelectorAll('input[name="column"]').forEach(checkbox => {
+                                        checkbox.checked = enabledColumns.includes(checkbox.value);
+                                    });
+                                }
+                            } catch (parseError) {
+                                console.warn('Stored column preferences are corrupted, clearing:', parseError);
+                                // Clear corrupted data
+                                localStorage.removeItem(columnsStorageKey);
+                            }
                         }
                     }
                 } catch (e) {
