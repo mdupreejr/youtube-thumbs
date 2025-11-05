@@ -453,8 +453,12 @@
             statusMsg.style.color = '#2563eb';
 
             try {
+                // SECURITY: Include CSRF token in POST request
                 const response = await fetch('{{ ingress_path }}/api/pending/retry?batch_size=1', {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
                 });
                 const data = await response.json();
 

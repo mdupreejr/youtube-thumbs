@@ -323,9 +323,9 @@ set_youtube_api_database(db)
 init_data_api_routes(db)
 app.register_blueprint(data_api_bp)
 
-# Exempt specific API endpoints from CSRF protection
-# After blueprint registration, view functions are in app.view_functions with namespaced names
-csrf.exempt(app.view_functions['data_api.retry_pending_videos'])
+# SECURITY: CSRF protection now enabled for all endpoints
+# Frontend JavaScript sends X-CSRFToken header with fetch() requests
+# Flask-WTF automatically checks both form fields and X-CSRFToken header
 
 # Initialize and register logs blueprint
 init_logs_routes(db)
@@ -1012,15 +1012,21 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 # ============================================================================
 
 @app.route('/thumbs_up', methods=['POST'])
-@csrf.exempt
 @require_rate_limit
 def thumbs_up() -> Tuple[Response, int]:
+    """
+    DEPRECATED: Legacy endpoint. Use /rate-song instead.
+    CSRF protection enabled - send X-CSRFToken header or csrf_token form field.
+    """
     return rate_video('like')
 
 @app.route('/thumbs_down', methods=['POST'])
-@csrf.exempt
 @require_rate_limit
 def thumbs_down() -> Tuple[Response, int]:
+    """
+    DEPRECATED: Legacy endpoint. Use /rate-song instead.
+    CSRF protection enabled - send X-CSRFToken header or csrf_token form field.
+    """
     return rate_video('dislike')
 
 # ============================================================================
