@@ -54,12 +54,6 @@ class Database:
         )
 
     # Connection methods
-    def _table_info(self, table: str):
-        return self._connection._table_info(table)
-
-    def _table_columns(self, table: str):
-        return self._connection._table_columns(table)
-
     @staticmethod
     def _timestamp(ts: Optional[str] = None) -> Optional[str]:
         return DatabaseConnection.timestamp(ts)
