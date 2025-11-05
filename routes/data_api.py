@@ -4,6 +4,7 @@ Extracted from app.py to improve code organization.
 """
 from flask import Blueprint, request, jsonify, Response
 from logger import logger
+from helpers.validation_helpers import validate_limit_param
 
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
@@ -27,12 +28,11 @@ def init_data_api_routes(database):
 def get_most_played_stats() -> Response:
     """Get most played songs for statistics dashboard."""
     try:
-        limit = int(request.args.get('limit', 10))
-        limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
+        limit, error = validate_limit_param(request.args, default=10, max_value=100)
+        if error:
+            return error
         videos = db.get_most_played(limit)
         return jsonify({'success': True, 'data': videos})
-    except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting most played stats: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve most played statistics'}), 500
@@ -42,12 +42,11 @@ def get_most_played_stats() -> Response:
 def get_top_channels_stats() -> Response:
     """Get top channels/artists for statistics dashboard."""
     try:
-        limit = int(request.args.get('limit', 10))
-        limit = max(1, min(limit, 100))  # Enforce bounds: 1-100
+        limit, error = validate_limit_param(request.args, default=10, max_value=100)
+        if error:
+            return error
         channels = db.get_top_channels(limit)
         return jsonify({'success': True, 'data': channels})
-    except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting top channels stats: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve top channels statistics'}), 500
@@ -82,11 +81,9 @@ def get_stats_summary() -> Response:
 def get_top_rated_api() -> Response:
     """Get top rated videos."""
     try:
-        try:
-            limit = int(request.args.get('limit', 10))
-            limit = max(1, min(limit, 100))
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
+        limit, error = validate_limit_param(request.args, default=10, max_value=100)
+        if error:
+            return error
 
         videos = db.get_top_rated(limit)
         return jsonify({'success': True, 'data': videos})
@@ -99,11 +96,9 @@ def get_top_rated_api() -> Response:
 def get_recent_activity_api() -> Response:
     """Get recent activity."""
     try:
-        try:
-            limit = int(request.args.get('limit', 20))
-            limit = max(1, min(limit, 100))
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Invalid limit parameter'}), 400
+        limit, error = validate_limit_param(request.args, default=20, max_value=100)
+        if error:
+            return error
 
         videos = db.get_recent_activity(limit)
         return jsonify({'success': True, 'data': videos})
@@ -185,8 +180,9 @@ def get_hourly_api_usage() -> Response:
 def get_play_history_api() -> Response:
     """Get play history."""
     try:
-        limit = int(request.args.get('limit', 50))
-        limit = max(1, min(limit, 500))
+        limit, error = validate_limit_param(request.args, default=50, max_value=500)
+        if error:
+            return error
 
         offset = int(request.args.get('offset', 0))
         offset = max(0, offset)
@@ -194,7 +190,7 @@ def get_play_history_api() -> Response:
         history = db.get_play_history(limit, offset)
         return jsonify({'success': True, 'data': history})
     except ValueError:
-        return jsonify({'success': False, 'error': 'Invalid limit or offset parameter'}), 400
+        return jsonify({'success': False, 'error': 'Invalid offset parameter'}), 400
     except Exception as e:
         logger.error(f"Error getting play history: {e}")
         return jsonify({'success': False, 'error': 'Failed to retrieve play history'}), 500
@@ -205,8 +201,9 @@ def search_history_api() -> Response:
     """Search history."""
     try:
         query = request.args.get('q', '').strip()
-        limit = int(request.args.get('limit', 50))
-        limit = max(1, min(limit, 500))
+        limit, error = validate_limit_param(request.args, default=50, max_value=500)
+        if error:
+            return error
 
         if not query:
             return jsonify({'success': False, 'error': 'Search query required'}), 400
@@ -334,14 +331,13 @@ def get_recommendations_api() -> Response:
     """Get video recommendations."""
     try:
         based_on = request.args.get('strategy', 'likes')
-        limit = int(request.args.get('limit', 10))
+        limit, error = validate_limit_param(request.args, default=10, max_value=50)
+        if error:
+            return error
 
         # Validate strategy
         if based_on not in ['likes', 'played', 'discover']:
             based_on = 'likes'
-
-        # Limit range
-        limit = max(1, min(limit, 50))
 
         recommendations = db.get_recommendations(based_on, limit)
         return jsonify({'success': True, 'data': recommendations})
