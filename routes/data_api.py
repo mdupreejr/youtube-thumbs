@@ -3,6 +3,7 @@ Data API routes blueprint for statistics, analytics, history, insights, and reco
 Extracted from app.py to improve code organization.
 """
 from flask import Blueprint, request, jsonify, Response
+from flask_wtf.csrf import csrf
 from logger import logger
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
@@ -388,10 +389,12 @@ def get_pending_status() -> Response:
 
 
 @bp.route('/pending/retry', methods=['POST'])
+@csrf.exempt
 def retry_pending_videos() -> Response:
     """
     Manually trigger retry of pending videos with quota_exceeded reason.
     Processes videos in batches to avoid overwhelming the YouTube API.
+    API endpoint called from JavaScript - CSRF exempted.
     """
     import time
     from search_helpers import search_and_match_video
