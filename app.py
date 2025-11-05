@@ -994,11 +994,13 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 # ============================================================================
 
 @app.route('/thumbs_up', methods=['POST'])
+@csrf.exempt
 @require_rate_limit
 def thumbs_up() -> Tuple[Response, int]:
     return rate_video('like')
 
 @app.route('/thumbs_down', methods=['POST'])
+@csrf.exempt
 @require_rate_limit
 def thumbs_down() -> Tuple[Response, int]:
     return rate_video('dislike')
