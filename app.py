@@ -28,6 +28,7 @@ from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.response_helpers import error_response, success_response
+from helpers.validation_helpers import validate_page_param
 
 app = Flask(__name__)
 
@@ -525,11 +526,8 @@ def index() -> str:
 
         # Get unrated songs if on rating tab
         elif current_tab == 'rating':
-            try:
-                page = int(request.args.get('page', 1))
-                if page < 1:
-                    page = 1
-            except (ValueError, TypeError):
+            page, _ = validate_page_param(request.args)
+            if not page:  # If validation failed, default to 1
                 page = 1
 
             result = db.get_unrated_videos(page=page, limit=50)
@@ -681,12 +679,9 @@ def get_unrated_songs() -> Response:
     logger.debug(f"Request args: {request.args}")
 
     try:
-        try:
-            page = int(request.args.get('page', 1))
-            if page < 1:
-                return error_response('Page must be at least 1')
-        except (ValueError, TypeError):
-            return error_response('Invalid page parameter: must be a positive integer')
+        page, error = validate_page_param(request.args)
+        if error:
+            return error
 
         logger.debug(f"Fetching page {page} of unrated songs")
 
@@ -1249,12 +1244,8 @@ def data_viewer() -> str:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
         # Get query parameters with validation
-        try:
-            page = int(request.args.get('page', 1))
-            if page < 1 or page > 1000000:  # Reasonable upper bound
-                page = 1
-        except (ValueError, OverflowError):
-            logger.warning(f"Invalid page parameter: {request.args.get('page')} from {request.remote_addr}")
+        page, _ = validate_page_param(request.args)
+        if not page or page > 1000000:  # Reasonable upper bound
             page = 1
 
         limit = 50  # Videos per page

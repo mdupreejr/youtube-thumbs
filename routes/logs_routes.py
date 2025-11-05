@@ -12,6 +12,7 @@ import re
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time
+from helpers.validation_helpers import validate_page_param
 from video_helpers import get_video_title, get_video_artist
 
 bp = Blueprint('logs', __name__)
@@ -324,11 +325,8 @@ def logs_viewer():
         if current_tab not in ['rated', 'matches', 'errors', 'quota_prober']:
             current_tab = 'rated'
 
-        try:
-            page = int(request.args.get('page', 1))
-            if page < 1:
-                page = 1
-        except (ValueError, TypeError):
+        page, _ = validate_page_param(request.args)
+        if not page:  # If validation failed, default to 1
             page = 1
 
         period_filter = request.args.get('period', 'all')
