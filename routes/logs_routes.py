@@ -487,6 +487,16 @@ def _handle_quota_prober_tab(page, period_filter):
     }
 
 
+def _handle_recent_tab():
+    """Handle recently added videos tab."""
+    videos = _db.get_recently_added(limit=25)
+
+    return {
+        'recent_videos': videos,
+        'total_count': len(videos)
+    }
+
+
 @bp.route('/logs')
 def logs_viewer():
     """
@@ -495,7 +505,7 @@ def logs_viewer():
     try:
         # Get query parameters
         current_tab = request.args.get('tab', 'rated')
-        if current_tab not in ['rated', 'matches', 'errors', 'quota_prober']:
+        if current_tab not in ['rated', 'matches', 'errors', 'quota_prober', 'recent']:
             current_tab = 'rated'
 
         page, _ = validate_page_param(request.args)
@@ -526,6 +536,8 @@ def logs_viewer():
             template_data.update(_handle_errors_tab(page, period_filter))
         elif current_tab == 'quota_prober':
             template_data.update(_handle_quota_prober_tab(page, period_filter))
+        elif current_tab == 'recent':
+            template_data.update(_handle_recent_tab())
 
         # Generate page numbers for pagination
         total_pages = template_data.get('total_pages', 0)

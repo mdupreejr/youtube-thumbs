@@ -234,3 +234,28 @@ class LogsOperations:
         if result:
             return dict(result)
         return None
+
+    def get_recently_added(self, limit: int = 25) -> List[Dict[str, Any]]:
+        """
+        Get the most recently added videos/songs.
+
+        Args:
+            limit: Number of recent videos to return (default: 25)
+
+        Returns:
+            List of dictionaries with video information
+        """
+        with self._lock:
+            query = """
+                SELECT yt_video_id, ha_title, ha_artist, yt_title, yt_channel,
+                       yt_url, rating, date_added, play_count, source,
+                       yt_match_pending, pending_reason
+                FROM video_ratings
+                ORDER BY date_added DESC
+                LIMIT ?
+            """
+            cursor = self._conn.execute(query, (limit,))
+            videos = cursor.fetchall()
+
+        # Convert to list of dicts
+        return [dict(video) for video in videos]

@@ -470,6 +470,9 @@
                 <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button {{ 'active' if current_tab == 'matches' else '' }}">
                     Matches
                 </a>
+                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button {{ 'active' if current_tab == 'recent' else '' }}">
+                    Recent
+                </a>
                 <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button {{ 'active' if current_tab == 'errors' else '' }}">
                     Errors
                 </a>
@@ -907,6 +910,81 @@
                 {% else %}
                     <button disabled>Next →</button>
                 {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Recent Videos Tab -->
+            {% if current_tab == 'recent' %}
+            <div class="stats-grid" style="margin-bottom: 1em;">
+                <div class="stat-card">
+                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 0.3em;">Recently Added</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: #2563eb;">{{ total_count }}</div>
+                </div>
+            </div>
+
+            {% if recent_videos %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Title</th>
+                            <th style="width: 15%;">Artist</th>
+                            <th style="width: 20%;">Channel</th>
+                            <th style="width: 15%;">Date Added</th>
+                            <th style="width: 10%;">Rating</th>
+                            <th style="width: 10%;">Plays</th>
+                            <th style="width: 5%;">Link</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for video in recent_videos %}
+                        <tr>
+                            <td>
+                                <div style="font-weight: 500;">{{ video.ha_title or video.yt_title or 'Unknown' }}</div>
+                                {% if video.yt_match_pending %}
+                                <div style="font-size: 0.75em; color: #f59e0b; margin-top: 0.2em;">
+                                    ⏳ Pending: {{ video.pending_reason or 'Unknown' }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>{{ video.ha_artist or '-' }}</td>
+                            <td>{{ video.yt_channel or '-' }}</td>
+                            <td style="white-space: nowrap;">
+                                {% if video.date_added %}
+                                    {{ video.date_added[:10] }}<br>
+                                    <span style="font-size: 0.8em; color: #64748b;">{{ video.date_added[11:19] }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if video.rating == 'like' %}
+                                    <span style="color: #10b981;">👍 Like</span>
+                                {% elif video.rating == 'dislike' %}
+                                    <span style="color: #ef4444;">👎 Dislike</span>
+                                {% else %}
+                                    <span style="color: #94a3b8;">- None</span>
+                                {% endif %}
+                            </td>
+                            <td style="text-align: center;">{{ video.play_count or 0 }}</td>
+                            <td style="text-align: center;">
+                                {% if video.yt_url %}
+                                <a href="{{ video.yt_url }}" target="_blank" style="color: #2563eb; text-decoration: none; font-size: 1.2em;" title="Watch on YouTube">🔗</a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <h3>No Videos Yet</h3>
+                <p>No videos have been added to the database yet.</p>
             </div>
             {% endif %}
             {% endif %}
