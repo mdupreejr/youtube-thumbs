@@ -145,14 +145,31 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 # ============================================================================
 # REQUEST/RESPONSE MIDDLEWARE
 # ============================================================================
+
+# SECURITY: Headers that should never be logged in full
+SENSITIVE_HEADERS = {
+    'Authorization', 'Cookie', 'X-API-Key', 'X-Auth-Token',
+    'X-CSRFToken', 'X-Session-Token', 'API-Key', 'Bearer'
+}
+
+def _sanitize_headers(headers: dict) -> dict:
+    """Sanitize sensitive headers before logging."""
+    sanitized = {}
+    for key, value in headers.items():
+        if key in SENSITIVE_HEADERS or key.lower() in {'authorization', 'cookie'}:
+            sanitized[key] = '***REDACTED***'
+        else:
+            sanitized[key] = value
+    return sanitized
+
 @app.before_request
 def log_request_info():
-    """Log all incoming requests."""
+    """Log all incoming requests with sanitized headers."""
     logger.debug("="*60)
     logger.debug(f"INCOMING REQUEST: {request.method} {request.path}")
     logger.debug(f"  Remote addr: {request.remote_addr}")
     logger.debug(f"  Query string: {request.query_string.decode('utf-8')}")
-    logger.debug(f"  Headers: {dict(request.headers)}")
+    logger.debug(f"  Headers: {_sanitize_headers(dict(request.headers))}")
     logger.debug("="*60)
 
 @app.after_request
