@@ -1551,8 +1551,21 @@ def stats_not_found_page() -> str:
 
 
 @app.route('/debug/not_found_analysis')
+@require_rate_limit
 def debug_not_found_analysis() -> Response:
     """Debug endpoint to analyze not_found videos for patterns."""
+    # SECURITY: Debug endpoints must be explicitly enabled in configuration
+    debug_enabled = os.getenv('DEBUG_ENDPOINTS_ENABLED', 'false').lower() == 'true'
+    if not debug_enabled:
+        logger.warning(f"SECURITY: Unauthorized access attempt to debug endpoint from {request.remote_addr}")
+        return jsonify({
+            'error': 'Debug endpoints are disabled',
+            'message': 'Set debug_endpoints_enabled: true in addon configuration to enable'
+        }), 403
+
+    # Log access for security audit
+    logger.warning(f"SECURITY: Debug endpoint accessed from {request.remote_addr}")
+
     try:
         # Get all not_found videos (no pagination limit for analysis)
         with db._lock:
