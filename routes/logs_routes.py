@@ -493,7 +493,8 @@ def _handle_recent_tab():
 
     return {
         'recent_videos': videos,
-        'total_count': len(videos)
+        'total_count': len(videos),
+        'total_pages': 0  # Recent tab doesn't use pagination
     }
 
 
