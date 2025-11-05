@@ -140,7 +140,6 @@ class DatabaseConnection:
 
         self._configure()
         self._ensure_schema()
-        self._normalize_existing_timestamps()
 
     def _configure(self) -> None:
         """Set SQLite pragmas for durability and concurrency."""
