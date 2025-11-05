@@ -144,18 +144,31 @@
 
         .item-info {
             flex: 1;
+            min-width: 0;
         }
 
         .item-title {
             font-weight: 600;
             color: #1e293b;
-            margin-bottom: 4px;
             font-size: 0.85em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .item-title a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .item-title a:hover {
+            text-decoration: underline;
         }
 
         .item-meta {
             font-size: 0.75em;
             color: #64748b;
+            margin-left: 0.5em;
         }
 
         .item-stat {
@@ -300,8 +313,14 @@
                 {% for video in most_played %}
                 <div class="list-item">
                     <div class="item-info">
-                        <div class="item-title">{{ video.title }}</div>
-                        <div class="item-meta">{{ video.artist }}</div>
+                        <div class="item-title">
+                            {% if video.yt_video_id %}
+                                <a href="https://www.youtube.com/watch?v={{ video.yt_video_id }}" target="_blank" rel="noopener noreferrer">{{ video.title }}</a>
+                            {% else %}
+                                {{ video.title }}
+                            {% endif %}
+                            <span class="item-meta">• {{ video.artist }}</span>
+                        </div>
                     </div>
                     <div class="item-stat">{{ video.play_count }} plays</div>
                 </div>
@@ -380,8 +399,14 @@
                 {% for item in recent_activity %}
                 <div class="list-item">
                     <div class="item-info">
-                        <div class="item-title">{{ item.title }}</div>
-                        <div class="item-meta">{{ item.artist }} • {{ item.time_ago }}</div>
+                        <div class="item-title">
+                            {% if item.yt_video_id %}
+                                <a href="https://www.youtube.com/watch?v={{ item.yt_video_id }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+                            {% else %}
+                                {{ item.title }}
+                            {% endif %}
+                            <span class="item-meta">• {{ item.artist }} • {{ item.time_ago }}</span>
+                        </div>
                     </div>
                     <div class="item-stat">{{ item.rating_icon }}</div>
                 </div>

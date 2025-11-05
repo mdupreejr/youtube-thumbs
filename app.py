@@ -1393,7 +1393,8 @@ def stats_page() -> str:
                 'title': title,
                 'artist': artist,
                 'time_ago': time_ago,
-                'rating_icon': rating_icon
+                'rating_icon': rating_icon,
+                'yt_video_id': item.get('yt_video_id')
             })
 
         # Format most played
@@ -1404,7 +1405,8 @@ def stats_page() -> str:
             formatted_most_played.append({
                 'title': title,
                 'artist': artist,
-                'play_count': video.get('play_count', 0)
+                'play_count': video.get('play_count', 0),
+                'yt_video_id': video.get('yt_video_id')
             })
 
         # Prepare template data
