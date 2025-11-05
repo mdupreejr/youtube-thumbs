@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import stat
 import traceback
 from typing import Optional, List, Dict, Any, Tuple
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -66,6 +67,15 @@ class YouTubeAPI:
         # Load credentials from JSON file
         if os.path.exists(token_file):
             try:
+                # Check and fix insecure file permissions
+                file_stat = os.stat(token_file)
+                file_mode = stat.S_IMODE(file_stat.st_mode)
+                expected_mode = stat.S_IRUSR | stat.S_IWUSR  # 600
+
+                if file_mode != expected_mode:
+                    logger.warning(f"Token file has insecure permissions ({oct(file_mode)}), fixing to 600")
+                    os.chmod(token_file, expected_mode)
+
                 with open(token_file, 'r') as f:
                     token_data = json.load(f)
                 creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
@@ -76,6 +86,17 @@ class YouTubeAPI:
                 logger.warning("Removing corrupted token file")
                 os.remove(token_file)
                 creds = None
+            except OSError as e:
+                logger.error(f"Failed to check/fix token file permissions: {e}")
+                # Continue anyway - permission check failure shouldn't block authentication
+                try:
+                    with open(token_file, 'r') as f:
+                        token_data = json.load(f)
+                    creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
+                    logger.info("Loaded YouTube API credentials from JSON (permission check failed)")
+                except Exception as inner_e:
+                    logger.error(f"Failed to load credentials: {inner_e}")
+                    creds = None
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -93,10 +114,17 @@ class YouTubeAPI:
                 )
                 creds = flow.run_local_server(port=0)
 
-            # Save credentials as JSON (secure, no arbitrary code execution risk)
-            with open(token_file, 'w') as f:
-                f.write(creds.to_json())
-            logger.info("YouTube API credentials saved to JSON")
+            # Save credentials as JSON with secure file permissions (600)
+            # Set umask to ensure file is created with restricted permissions
+            old_umask = os.umask(0o077)  # Creates files as 600 (owner-only read/write)
+            try:
+                with open(token_file, 'w') as f:
+                    f.write(creds.to_json())
+                # Explicitly set permissions to be safe
+                os.chmod(token_file, stat.S_IRUSR | stat.S_IWUSR)  # 600 (rw-------)
+                logger.info("YouTube API credentials saved to JSON with secure permissions (600)")
+            finally:
+                os.umask(old_umask)  # Restore original umask
 
         self.youtube = build('youtube', 'v3', credentials=creds)
         logger.info("YouTube API authenticated successfully")

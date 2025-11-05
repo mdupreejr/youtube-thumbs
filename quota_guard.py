@@ -356,9 +356,7 @@ class QuotaGuard:
 
     def record_success(self) -> None:
         """Record a successful API call and potentially reset attempts."""
-        if not self.state_file.exists():
-            return
-
+        # Fix TOCTOU vulnerability: Try to open file directly instead of checking existence first
         try:
             with self.state_file.open('r+', encoding='utf-8') as handle:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
@@ -392,6 +390,9 @@ class QuotaGuard:
                 finally:
                     # Always release the lock
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except FileNotFoundError:
+            # File doesn't exist - this is normal, quota guard hasn't been tripped yet
+            return
         except OSError as exc:
             logger.error("Failed to record success: %s", exc)
 

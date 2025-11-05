@@ -8,6 +8,7 @@ import time
 import traceback
 import secrets
 import json
+import types
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
@@ -39,7 +40,8 @@ from helpers.time_helpers import parse_timestamp, format_duration, format_relati
 # ============================================================================
 
 # All available columns for data viewer with friendly display names
-DATA_VIEWER_COLUMNS = {
+# SECURITY: Use immutable MappingProxyType to prevent runtime modification
+_DATA_VIEWER_COLUMNS_MUTABLE = {
     'yt_video_id': 'Video ID',
     'ha_title': 'Title (HA)',
     'ha_artist': 'Artist (HA)',
@@ -61,6 +63,10 @@ DATA_VIEWER_COLUMNS = {
     'yt_category_id': 'Category',
     'pending_reason': 'Pending Reason'
 }
+DATA_VIEWER_COLUMNS = types.MappingProxyType(_DATA_VIEWER_COLUMNS_MUTABLE)
+
+# SECURITY: Regex to validate SQL identifiers (alphanumeric and underscore only)
+_SQL_IDENTIFIER_PATTERN = re.compile(r'^[a-z_][a-z0-9_]*$', re.IGNORECASE)
 
 # Default columns to display if none selected
 DEFAULT_DATA_VIEWER_COLUMNS = [
@@ -1683,7 +1689,8 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
     Note: This function may adjust the page number if it exceeds total_pages.
     Always use the returned page value, not the input page value.
     """
-    # SECURITY: Defense-in-depth validation (assert to catch programming errors)
+    # SECURITY: Multi-layer validation to prevent SQL injection
+    # Layer 1: Check all columns are in immutable whitelist
     if not all(col in DATA_VIEWER_COLUMNS for col in selected_columns):
         logger.error(f"SECURITY: Invalid columns in query: {selected_columns}")
         raise ValueError(f"Invalid columns passed to _build_data_query")
@@ -1696,15 +1703,23 @@ def _build_data_query(db, selected_columns, sort_by, sort_order, page, limit=DEF
         logger.error(f"SECURITY: Invalid sort order: {sort_order}")
         raise ValueError(f"Invalid sort_order passed to _build_data_query")
 
-    # SECURITY: Build SQL with explicit string concatenation (safer than f-strings)
+    # Layer 2: Validate SQL identifier format (defense in depth)
+    for col in selected_columns:
+        if not _SQL_IDENTIFIER_PATTERN.match(col):
+            logger.error(f"SECURITY: Column name contains invalid characters: {col}")
+            raise ValueError(f"Column name validation failed")
+
+    if not _SQL_IDENTIFIER_PATTERN.match(sort_by):
+        logger.error(f"SECURITY: Sort column contains invalid characters: {sort_by}")
+        raise ValueError(f"Sort column validation failed")
+
+    # Layer 3: Build SQL with properly quoted identifiers
     # Use double quotes for SQL identifiers (standard SQL)
     quoted_columns = []
     for col in selected_columns:
-        # Verify again and quote
-        if col in DATA_VIEWER_COLUMNS:
-            # Replace any quotes in column name (defense in depth)
-            safe_col = col.replace('"', '""')
-            quoted_columns.append('"' + safe_col + '"')
+        # Escape any quotes (defense in depth - should never trigger after Layer 2)
+        safe_col = col.replace('"', '""')
+        quoted_columns.append('"' + safe_col + '"')
 
     select_clause = ', '.join(quoted_columns)
 
