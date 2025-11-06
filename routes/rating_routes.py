@@ -157,42 +157,35 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
         raise
 
 
-def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Response, int]:
+def rate_video(rating_type: str) -> Tuple[Response, int]:
     """
     Unified queue-based handler for rating videos.
     Checks cache first, then queues search+rating if needed.
     All YouTube API calls happen in background worker.
+    No rate limiting needed - users are just adding to queue.
 
     Args:
         rating_type: Type of rating ('like' or 'dislike')
-        skip_rate_limit: If True, skip rate limiting check (for manual user actions)
     """
     from helpers.rating_helpers import (
-        check_rate_limit,
         validate_current_media,
         check_youtube_content
     )
 
     logger.info(f"{rating_type} request received")
 
-    # Step 1: Check rate limiting (skip for manual user actions)
-    if not skip_rate_limit:
-        rate_limit_response = check_rate_limit(_rate_limiter, rating_type, error_response)
-        if rate_limit_response:
-            return rate_limit_response
-
     try:
-        # Step 2: Get and validate current media
+        # Step 1: Get and validate current media
         ha_media, err_resp = validate_current_media(_ha_api, rating_type, error_response)
         if err_resp:
             return err_resp
 
-        # Step 3: Check if it's YouTube content
+        # Step 2: Check if it's YouTube content
         youtube_check_response = check_youtube_content(ha_media, rating_type, _is_youtube_content, error_response)
         if youtube_check_response:
             return youtube_check_response
 
-        # Step 4: Check cache first (no API call)
+        # Step 3: Check cache first (no API call)
         video = _cache_wrapper(ha_media)
 
         if video and video.get('id'):
@@ -287,33 +280,10 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 
 
 # ============================================================================
-# DECORATORS
-# ============================================================================
-
-def require_rate_limit(f):
-    """
-    SECURITY: Decorator to apply rate limiting to API endpoints.
-    Returns 429 Too Many Requests if rate limit is exceeded.
-    """
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        allowed, reason = _rate_limiter.check_and_add_request()
-        if not allowed:
-            logger.warning(f"Rate limit exceeded for {get_real_ip()} on {request.path}")
-            if request.path.startswith('/api/'):
-                return jsonify({'success': False, 'error': reason}), 429
-            return reason, 429
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-# ============================================================================
 # RATING ROUTES
 # ============================================================================
 
 @bp.route('/rate-song', methods=['POST'])
-@require_rate_limit
 def rate_song_form() -> Response:
     """
     Handle bulk rating form submissions from server-side rendered page.
@@ -400,16 +370,14 @@ def get_unrated_songs() -> Response:
 
 
 @bp.route('/api/rate/<video_id>/like', methods=['POST'])
-@require_rate_limit
 def rate_song_like(video_id: str) -> Response:
-    """Rate a specific video as like (for bulk rating)."""
+    """Rate a specific video as like (for bulk rating). No rate limiting - just queueing."""
     return rate_song_direct(video_id, 'like')
 
 
 @bp.route('/api/rate/<video_id>/dislike', methods=['POST'])
-@require_rate_limit
 def rate_song_dislike(video_id: str) -> Response:
-    """Rate a specific video as dislike (for bulk rating)."""
+    """Rate a specific video as dislike (for bulk rating). No rate limiting - just queueing."""
     return rate_song_direct(video_id, 'dislike')
 
 
@@ -417,19 +385,19 @@ def rate_song_dislike(video_id: str) -> Response:
 def thumbs_up() -> Tuple[Response, int]:
     """
     Manual rating endpoint for currently playing media.
-    No rate limiting applied - these are user-initiated actions triggered by physical buttons.
+    Just queues the rating - no rate limiting needed.
     CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     # Note: CSRF exemption handled by app.py when registering blueprint
-    return rate_video('like', skip_rate_limit=True)
+    return rate_video('like')
 
 
 @bp.route('/thumbs_down', methods=['POST'])
 def thumbs_down() -> Tuple[Response, int]:
     """
     Manual rating endpoint for currently playing media.
-    No rate limiting applied - these are user-initiated actions triggered by physical buttons.
+    Just queues the rating - no rate limiting needed.
     CSRF protection exempt to allow external calls (e.g., Home Assistant automations).
     """
     # Note: CSRF exemption handled by app.py when registering blueprint
-    return rate_video('dislike', skip_rate_limit=True)
+    return rate_video('dislike')
