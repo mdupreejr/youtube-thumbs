@@ -46,16 +46,22 @@ def _extract_clean_error_message(exc: Exception) -> str:
     Returns:
         Clean error message string
     """
-    # Check if this is an HttpError from googleapiclient
-    exc_type_name = type(exc).__name__
-    if exc_type_name == 'HttpError':
+    # Try to import HttpError to check type safely
+    try:
+        from googleapiclient.errors import HttpError
+        is_http_error = isinstance(exc, HttpError)
+    except ImportError:
+        # googleapiclient not available, fall back to type name check
+        is_http_error = type(exc).__name__ == 'HttpError'
+    
+    if is_http_error:
         try:
             # Try to extract error from content attribute
             content = getattr(exc, 'content', None)
             if isinstance(content, bytes):
                 try:
                     content = content.decode('utf-8')
-                except Exception:
+                except UnicodeDecodeError:
                     content = None
             
             if isinstance(content, str):
@@ -87,9 +93,9 @@ def _extract_clean_error_message(exc: Exception) -> str:
                     return f"HTTP {status}: {reason}"
                 elif reason:
                     return reason
-        except Exception:
-            # If extraction fails, fall through to default
-            pass
+        except (AttributeError, TypeError) as e:
+            # Log extraction failure for debugging but continue to fallback
+            logger.debug("Failed to extract clean message from HttpError: %s", e)
     
     # For all other exceptions or if extraction failed, use str()
     return str(exc)
