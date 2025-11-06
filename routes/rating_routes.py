@@ -229,31 +229,32 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
 
     # Step 1: Check rate limiting (skip for manual user actions)
     if not skip_rate_limit:
-        rate_limit_response = check_rate_limit(_rate_limiter, rating_type)
+        rate_limit_response = check_rate_limit(_rate_limiter, rating_type, error_response)
         if rate_limit_response:
             return rate_limit_response
 
     try:
         # Step 2: Get and validate current media
-        ha_media, error_response = validate_current_media(_ha_api, rating_type)
-        if error_response:
-            return error_response
+        ha_media, err_resp = validate_current_media(_ha_api, rating_type, error_response)
+        if err_resp:
+            return err_resp
 
         # Step 3: Check if it's YouTube content
-        youtube_check_response = check_youtube_content(ha_media, rating_type, _is_youtube_content)
+        youtube_check_response = check_youtube_content(ha_media, rating_type, _is_youtube_content, error_response)
         if youtube_check_response:
             return youtube_check_response
 
         # Step 4: Find or search for video
-        video, error_response = find_or_search_video(
+        video, err_resp = find_or_search_video(
             ha_media,
             _cache_wrapper,
             _search_wrapper,
             rating_type,
-            format_media_info
+            format_media_info,
+            error_response
         )
-        if error_response:
-            return error_response
+        if err_resp:
+            return err_resp
 
         # Step 5: Update database
         yt_video_id = update_database_for_rating(_db, video, ha_media)

@@ -16,13 +16,14 @@ def _get_quota_guard():
     return get_quota_manager()
 
 
-def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:
+def check_rate_limit(rate_limiter, rating_type: str, error_response_func) -> Optional[Tuple[Response, int]]:
     """
     Check rate limiting and return error response if limit exceeded.
 
     Args:
         rate_limiter: Rate limiter instance
         rating_type: Type of rating (like/dislike)
+        error_response_func: Function to create error responses
 
     Returns:
         Error response tuple if rate limited, None otherwise
@@ -31,17 +32,18 @@ def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response,
     if not allowed:
         logger.warning(f"Request blocked: {reason}")
         rating_logger.info(f"{rating_type.upper()} | BLOCKED | Reason: {reason}")
-        return error_response(reason, 429)
+        return error_response_func(reason, 429)
     return None
 
 
-def validate_current_media(ha_api, rating_type: str) -> Tuple[Optional[Dict], Optional[Tuple[Response, int]]]:
+def validate_current_media(ha_api, rating_type: str, error_response_func) -> Tuple[Optional[Dict], Optional[Tuple[Response, int]]]:
     """
     Get and validate current media from Home Assistant.
 
     Args:
         ha_api: Home Assistant API instance
         rating_type: Type of rating for logging
+        error_response_func: Function to create error responses
 
     Returns:
         Tuple of (media_dict, error_response)
@@ -52,12 +54,12 @@ def validate_current_media(ha_api, rating_type: str) -> Tuple[Optional[Dict], Op
     if not ha_media:
         logger.error(f"No media currently playing | Context: rate_video ({rating_type})")
         rating_logger.info(f"{rating_type.upper()} | FAILED | No media currently playing")
-        err_response = error_response("No media currently playing")
+        err_response = error_response_func("No media currently playing")
         return None, err_response
     return ha_media, None
 
 
-def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_func) -> Optional[Tuple[Response, int]]:
+def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_func, error_response_func) -> Optional[Tuple[Response, int]]:
     """
     Check if media is YouTube content and return error if not.
 
@@ -65,6 +67,7 @@ def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_f
         ha_media: Media information from Home Assistant
         rating_type: Type of rating for logging
         is_youtube_content_func: Function to check if content is from YouTube
+        error_response_func: Function to create error responses
 
     Returns:
         Error response tuple if not YouTube content, None otherwise
@@ -74,7 +77,7 @@ def check_youtube_content(ha_media: Dict, rating_type: str, is_youtube_content_f
         app_name = ha_media.get('app_name', 'unknown')
         logger.info(f"Skipping non-YouTube content: '{title}' from app '{app_name}'")
         rating_logger.info(f"{rating_type.upper()} | SKIPPED | Non-YouTube content from '{app_name}'")
-        return error_response(f"Not YouTube content (app: {app_name})")
+        return error_response_func(f"Not YouTube content (app: {app_name})")
     return None
 
 
@@ -83,7 +86,8 @@ def find_or_search_video(
     find_cached_func,
     search_and_match_func,
     rating_type: str,
-    format_media_info_func
+    format_media_info_func,
+    error_response_func
 ) -> Tuple[Optional[Dict], Optional[Tuple[Response, int]]]:
     """
     Find video in cache or search for it.
@@ -94,6 +98,7 @@ def find_or_search_video(
         search_and_match_func: Function to search and match video
         rating_type: Type of rating for logging
         format_media_info_func: Function to format media info for logging
+        error_response_func: Function to create error responses
 
     Returns:
         Tuple of (video_dict, error_response)
@@ -145,7 +150,7 @@ def find_or_search_video(
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: N/A | FAILED - Video not found")
         rating_logger.info(f"{rating_type.upper()} | FAILED | {media_info} | ID: N/A | Reason: Video not found")
         logger.error(f"Video not found | Context: rate_video ({rating_type}) | Media: {media_info}")
-        err_response = error_response("Video not found", 404)
+        err_response = error_response_func("Video not found", 404)
         return None, err_response
 
     return video, None
