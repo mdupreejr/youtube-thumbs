@@ -13,8 +13,6 @@ bp = Blueprint('system', __name__)
 
 # Global references (set by init function)
 _ha_api = None
-_quota_guard = None
-_quota_prober = None
 _get_youtube_api = None
 _db = None
 _metrics = None
@@ -24,8 +22,6 @@ _check_database = None
 
 def init_system_routes(
     ha_api,
-    quota_guard,
-    quota_prober,
     get_youtube_api_func,
     database,
     metrics_tracker,
@@ -34,13 +30,11 @@ def init_system_routes(
     check_database_func
 ):
     """Initialize system routes with dependencies."""
-    global _ha_api, _quota_guard, _quota_prober, _get_youtube_api, _db
+    global _ha_api, _get_youtube_api, _db
     global _metrics, _check_home_assistant_api
     global _check_youtube_api, _check_database
 
     _ha_api = ha_api
-    _quota_guard = quota_guard
-    _quota_prober = quota_prober
     _get_youtube_api = get_youtube_api_func
     _db = database
     _metrics = metrics_tracker
@@ -173,26 +167,10 @@ def status() -> Response:
     Query Parameters:
         format: 'json' (default) or 'html' for formatted view
     """
-    guard_status = _quota_guard.status()
-
-    # Check quota prober health and attempt recovery if needed
-    prober_healthy = _quota_prober.is_healthy()
-    if not prober_healthy:
-        logger.warning("Quota prober unhealthy, attempting restart")
-        _quota_prober.ensure_running()
-        prober_healthy = _quota_prober.is_healthy()
-
     # Get health score from metrics
     health_score, warnings = _metrics.get_health_score()
 
-    # Add prober warning if still unhealthy
-    if not prober_healthy:
-        warnings.append("Quota prober is not running")
-        health_score = min(health_score, 60)  # Cap health score if prober is down
-
-    if guard_status.get('blocked'):
-        overall_status = "cooldown"
-    elif health_score >= 70:
+    if health_score >= 70:
         overall_status = "healthy"
     elif health_score >= 40:
         overall_status = "degraded"
@@ -202,12 +180,7 @@ def status() -> Response:
     response_data = {
         "status": overall_status,
         "health_score": health_score,
-        "warnings": warnings,
-        "quota_guard": guard_status,
-        "quota_prober": {
-            "healthy": prober_healthy,
-            "enabled": _quota_prober.enabled,
-        }
+        "warnings": warnings
     }
 
     # Check if HTML format is requested (default for browser access)

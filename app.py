@@ -17,7 +17,6 @@ from logger import logger, user_action_logger, rating_logger
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
-from quota_manager import init_quota_manager, get_quota_manager, set_quota_guard_compat
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
@@ -395,23 +394,6 @@ def _pending_retry_batch_size() -> int:
         return 50
 
 
-logger.info("Initializing unified quota manager...")
-quota_manager = init_quota_manager(
-    youtube_api_getter=get_youtube_api,
-    db=db,
-    search_wrapper=_search_wrapper,
-    retry_enabled=_pending_retry_enabled(),
-    retry_batch_size=_pending_retry_batch_size(),
-    metrics_tracker=metrics,
-)
-set_quota_guard_compat()  # Set quota_guard variable for backwards compatibility
-quota_guard = quota_manager  # Alias for backwards compatibility
-quota_prober = quota_manager  # Alias for backwards compatibility (system routes)
-logger.info("Starting quota manager background thread...")
-quota_manager.start()
-atexit.register(quota_manager.stop)
-logger.info("Quota manager started successfully")
-
 # Start stats refresher background task (refreshes every hour)
 logger.info("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
@@ -426,9 +408,8 @@ from rating_worker import init_rating_worker
 rating_worker = init_rating_worker(
     db=db,
     youtube_api_getter=get_youtube_api,
-    quota_guard=quota_guard,
     search_wrapper=_search_wrapper,
-    poll_interval=60  # Base interval (overridden by smart sleep: 1h/30s/60s)
+    poll_interval=60  # Base interval (overridden by smart sleep: 1h/60s/60s)
 )
 logger.info("Starting rating worker...")
 rating_worker.start()
@@ -450,7 +431,6 @@ app.register_blueprint(stats_bp)
 # Initialize and register rating blueprint
 init_rating_routes(
     database=db,
-    quota_guard=quota_guard,
     csrf=csrf,
     ha_api=ha_api,
     get_youtube_api_func=get_youtube_api,
@@ -472,8 +452,6 @@ csrf.exempt(app.view_functions['rating.rate_song_dislike'])
 # Initialize and register system routes blueprint
 init_system_routes(
     ha_api=ha_api,
-    quota_guard=quota_guard,
-    quota_prober=quota_prober,
     get_youtube_api_func=get_youtube_api,
     database=db,
     metrics_tracker=metrics,
@@ -574,7 +552,7 @@ def index() -> str:
 
             # Test YouTube API
             yt_api = get_youtube_api()
-            yt_success, yt_message = check_youtube_api(yt_api, quota_guard, db)
+            yt_success, yt_message = check_youtube_api(yt_api, db=db)
             template_data['yt_test'] = {'success': yt_success, 'message': yt_message}
 
             # Test Database
@@ -642,7 +620,7 @@ except Exception as e:
 
 # Run startup health checks (wrapped in try-except to prevent app crashes)
 try:
-    run_startup_checks(ha_api, yt_api, db, quota_guard)
+    run_startup_checks(ha_api, yt_api, db)
 except Exception as e:
     logger.error(f"Startup health checks failed: {str(e)}")
     logger.error(traceback.format_exc())

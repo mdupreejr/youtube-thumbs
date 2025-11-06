@@ -13,6 +13,7 @@ from logger import logger
 from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
 from constants import YOUTUBE_DURATION_OFFSET
+from quota_error import QuotaExceededError
 
 # Global database instance for API usage tracking (injected from app.py)
 _db = None
@@ -21,11 +22,6 @@ def set_database(db):
     """Set the database instance for API usage tracking."""
     global _db
     _db = db
-
-def _get_quota_guard():
-    """Lazy import of quota_guard to avoid circular dependency."""
-    from quota_manager import get_quota_manager
-    return get_quota_manager()
 
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
@@ -439,9 +435,6 @@ class YouTubeAPI:
         Note: artist parameter is kept for compatibility but not used in search
         since ha_artist is typically just "YouTube" (the platform), not the actual artist.
         """
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("YouTube global search", title)
-        if should_skip:
-            return None
         try:
             # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
             search_query = self._build_smart_search_query(title)
@@ -591,15 +584,14 @@ class YouTubeAPI:
                 )
 
             logger.debug(f"Found {len(candidates)} duration-matched candidates")
-            # Record successful API call for quota recovery tracking
-            _get_quota_guard().record_success()
             return candidates
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
             is_quota_error = detail is not None
             if is_quota_error:
-                _get_quota_guard().trip('quotaExceeded', context='search', detail=detail)
+                # Raise exception - worker will catch and sleep for 1 hour
+                raise QuotaExceededError(f"YouTube quota exceeded during search: {detail}")
 
             # Track failed API call
             if _db:
@@ -631,10 +623,6 @@ class YouTubeAPI:
     @handle_youtube_error(context='get_rating', return_value='none')
     def get_video_rating(self, yt_video_id: str) -> str:
         """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("get_video_rating", yt_video_id)
-        if should_skip:
-            return self.NO_RATING
-
         logger.info(f"Checking rating for video ID: {yt_video_id}")
 
         request = self.youtube.videos().getRating(id=yt_video_id)
@@ -643,37 +631,40 @@ class YouTubeAPI:
         if response.get('items'):
             rating = response['items'][0].get('rating', self.NO_RATING)
             logger.info(f"Current rating for {yt_video_id}: {rating}")
-            # Record successful API call for quota recovery tracking
-            _get_quota_guard().record_success()
             return rating
 
-        # Record successful API call even when no items returned
-        _get_quota_guard().record_success()
         return self.NO_RATING
 
     @handle_youtube_error(context='set_rating', return_value=False)
     def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
         """Set rating for a video. Returns True on success, False on failure."""
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("set_video_rating", yt_video_id, rating)
-        if should_skip:
-            return False
-
         logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
 
-        request = self.youtube.videos().rate(
-            id=yt_video_id,
-            rating=rating
-        )
-        request.execute()
+        try:
+            request = self.youtube.videos().rate(
+                id=yt_video_id,
+                rating=rating
+            )
+            request.execute()
 
-        # Track API usage
-        if _db:
-            _db.record_api_call('videos.rate', success=True, quota_cost=50)
+            # Track API usage
+            if _db:
+                _db.record_api_call('videos.rate', success=True, quota_cost=50)
 
-        logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
-        # Record successful API call for quota recovery tracking
-        _get_quota_guard().record_success()
-        return True
+            logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
+            return True
+
+        except HttpError as e:
+            detail = self._quota_error_detail(e)
+            if detail:
+                # Raise exception - worker will catch and sleep for 1 hour
+                raise QuotaExceededError(f"YouTube quota exceeded during set_video_rating: {detail}")
+
+            # Non-quota error
+            logger.error(f"Failed to rate video {yt_video_id}: {e}")
+            if _db:
+                _db.record_api_call('videos.rate', success=False, quota_cost=0, error_message=str(e))
+            return False
 
     def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
@@ -687,10 +678,6 @@ class YouTubeAPI:
             Dict mapping video ID to video details (or None if not found)
         """
         if not video_ids:
-            return {}
-
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("batch_get_videos", f"{len(video_ids)} videos")
-        if should_skip:
             return {}
 
         # YouTube API allows max 50 IDs per call
@@ -737,15 +724,14 @@ class YouTubeAPI:
                     if vid not in all_videos:
                         all_videos[vid] = {'yt_video_id': vid, 'exists': False}
 
-                # Record successful API call for quota recovery tracking
-                _get_quota_guard().record_success()
                 logger.info(f"Successfully fetched {len(response.get('items', []))} videos from batch of {len(batch)}")
 
             except HttpError as e:
                 detail = self._quota_error_detail(e)
                 is_quota_error = detail is not None
                 if is_quota_error:
-                    _get_quota_guard().trip('quotaExceeded', context='batch_get_videos', detail=detail)
+                    # Raise exception - worker will catch and sleep for 1 hour
+                    raise QuotaExceededError(f"YouTube quota exceeded during batch_get_videos: {detail}")
                 log_and_suppress(
                     e,
                     f"YouTube API error fetching batch of videos",
@@ -780,35 +766,18 @@ class YouTubeAPI:
 
         results = {}
 
-        # Check quota before starting
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("batch set ratings")
-        if should_skip:
-            logger.info("Quota blocked, returning all failures for batch rating")
-            return {vid: False for vid, _ in ratings}
-
-        # Process ratings one by one with early exit on quota exhaustion
+        # Process ratings one by one - QuotaExceededError will propagate to caller
         for video_id, rating in ratings:
-            # Check quota before each rating
-            should_skip, _ = _get_quota_guard().check_quota_or_skip("batch rating item", video_id)
-            if should_skip:
-                logger.warning("Quota exhausted mid-batch at video %s, stopping", video_id)
-                # Mark remaining as failed
+            try:
+                success = self.set_video_rating(video_id, rating)
+                results[video_id] = success
+            except QuotaExceededError:
+                # Quota exceeded - mark remaining as failed and re-raise
                 results[video_id] = False
-                continue
-
-            # Try to rate the video
-            success = self.set_video_rating(video_id, rating)
-            results[video_id] = success
-
-            # Early exit if we hit quota (set_video_rating will have tripped quota_guard)
-            should_skip_check, _ = _get_quota_guard().check_quota_or_skip("post-rating quota check")
-            if not success and should_skip_check:
-                logger.warning("Quota exhausted after rating %s, marking remaining as failed", video_id)
-                # Mark any remaining ratings as failed
                 for remaining_vid, _ in ratings:
                     if remaining_vid not in results:
                         results[remaining_vid] = False
-                break
+                raise
 
         return results
 

@@ -9,6 +9,7 @@ import threading
 import time
 from typing import Optional, Tuple
 from logger import logger, rating_logger
+from quota_error import QuotaExceededError
 
 
 class RatingWorker:
@@ -31,20 +32,18 @@ class RatingWorker:
       * Heartbeat timeout: 2 hours (allows for quota blocked sleep)
     """
 
-    def __init__(self, db, youtube_api_getter, quota_guard, search_wrapper, poll_interval: int = 60):
+    def __init__(self, db, youtube_api_getter, search_wrapper, poll_interval: int = 60):
         """
         Initialize the rating worker.
 
         Args:
             db: Database instance
             youtube_api_getter: Function that returns YouTube API instance
-            quota_guard: Quota manager instance
             search_wrapper: Function to perform YouTube searches
             poll_interval: Base seconds between checks (overridden by smart sleep)
         """
         self.db = db
         self.youtube_api_getter = youtube_api_getter
-        self.quota_guard = quota_guard
         self.search_wrapper = search_wrapper
         self.poll_interval = poll_interval
 
@@ -157,47 +156,49 @@ class RatingWorker:
             'success': Item processed
             'empty': No items in queue
         """
-        # Check quota first - don't waste time querying DB if blocked
-        if self.quota_guard.is_blocked():
-            return 'blocked'
-
-        # Priority 1: Process one rating (lightweight API call)
-        pending_ratings = self.db.list_pending_ratings(limit=1)
-        if pending_ratings:
-            try:
-                yt_api = self.youtube_api_getter()
-                if not yt_api:
-                    logger.error("RatingWorker: YouTube API not available")
+        try:
+            # Priority 1: Process one rating (lightweight API call)
+            pending_ratings = self.db.list_pending_ratings(limit=1)
+            if pending_ratings:
+                try:
+                    yt_api = self.youtube_api_getter()
+                    if not yt_api:
+                        logger.error("RatingWorker: YouTube API not available")
+                        return 'empty'
+                except Exception as e:
+                    logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
                     return 'empty'
-            except Exception as e:
-                logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
-                return 'empty'
 
-            logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
-            self._process_single_rating(yt_api, pending_ratings[0])
+                logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
+                self._process_single_rating(yt_api, pending_ratings[0])
 
-            # Update activity timestamp
-            with self._lock:
-                self._last_activity = time.time()
+                # Update activity timestamp
+                with self._lock:
+                    self._last_activity = time.time()
 
-            logger.info("RatingWorker: Processed 1 rating this cycle")
-            return 'success'
+                logger.info("RatingWorker: Processed 1 rating this cycle")
+                return 'success'
 
-        # Priority 2: Process one search (only if no ratings pending)
-        search_job = self.db.claim_pending_search()
-        if search_job:
-            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
-            self._process_search(search_job)
+            # Priority 2: Process one search (only if no ratings pending)
+            search_job = self.db.claim_pending_search()
+            if search_job:
+                logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
+                self._process_search(search_job)
 
-            # Update activity timestamp
-            with self._lock:
-                self._last_activity = time.time()
+                # Update activity timestamp
+                with self._lock:
+                    self._last_activity = time.time()
 
-            logger.info("RatingWorker: Processed 1 search this cycle")
-            return 'success'
+                logger.info("RatingWorker: Processed 1 search this cycle")
+                return 'success'
 
-        # Nothing to process
-        return 'empty'
+            # Nothing to process
+            return 'empty'
+
+        except QuotaExceededError as e:
+            # Quota exceeded - sleep for 1 hour
+            logger.warning(f"RatingWorker: YouTube quota exceeded: {e}")
+            return 'blocked'
 
     def _process_search(self, job) -> None:
         """Process a single search request."""
@@ -364,14 +365,13 @@ class RatingWorker:
 _rating_worker: Optional[RatingWorker] = None
 
 
-def init_rating_worker(db, youtube_api_getter, quota_guard, search_wrapper, poll_interval: int = 60) -> RatingWorker:
+def init_rating_worker(db, youtube_api_getter, search_wrapper, poll_interval: int = 60) -> RatingWorker:
     """
     Initialize the global rating worker.
 
     Args:
         db: Database instance
         youtube_api_getter: Function that returns YouTube API instance
-        quota_guard: Quota manager instance
         search_wrapper: Function to perform YouTube searches
         poll_interval: Base seconds between checks (overridden by smart sleep)
 
@@ -379,7 +379,7 @@ def init_rating_worker(db, youtube_api_getter, quota_guard, search_wrapper, poll
         Initialized RatingWorker instance
     """
     global _rating_worker
-    _rating_worker = RatingWorker(db, youtube_api_getter, quota_guard, search_wrapper, poll_interval)
+    _rating_worker = RatingWorker(db, youtube_api_getter, search_wrapper, poll_interval)
     return _rating_worker
 
 
