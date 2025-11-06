@@ -779,6 +779,12 @@ class StatsOperations:
             limit = int(filters.get('limit', 50))
             offset = int(filters.get('offset', 0))
 
+            # SECURITY WARNING: Using f-string for SQL query construction
+            # This is ONLY safe because:
+            #   - where_clause contains HARDCODED SQL fragments with parameterized values
+            #   - sort_by is validated against whitelist of allowed columns
+            #   - sort_order is validated against ['ASC', 'DESC']
+            # NEVER add user input directly to these variables - always validate and parameterize
             # nosec B608 - where_clause built from parameterized queries, sort_by validated against whitelist
             query = f"""
                 SELECT * FROM video_ratings

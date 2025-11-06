@@ -110,6 +110,10 @@ class LogsOperations:
         offset = (page - 1) * limit
 
         with self._lock:
+            # SECURITY WARNING: Using f-string for SQL query construction
+            # This is ONLY safe because where_clause contains HARDCODED SQL fragments
+            # NEVER add user input directly to where_clause - always use parameterized queries (?)
+            # All user inputs MUST go through the params list
             # Get rated songs (deduplicated by ha_title/ha_artist to show latest entry)
             # nosec B608 - where_clause built from hardcoded strings with parameterized values
             query = f"""

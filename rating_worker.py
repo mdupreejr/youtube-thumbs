@@ -134,6 +134,11 @@ class RatingWorker:
                     sleep_time = 60  # 60 seconds when queue empty
                     logger.debug("RatingWorker: Queue empty, sleeping 60 seconds")
 
+            except QuotaExceededError as e:
+                # Catch QuotaExceededError first (more specific than Exception)
+                # This ensures quota errors always trigger 1-hour sleep even if they escape from _process_next_item
+                logger.warning(f"RatingWorker: Quota exceeded in worker loop: {e}")
+                sleep_time = 3600  # 1 hour
             except Exception as e:
                 logger.error(f"RatingWorker error in processing loop: {e}")
                 sleep_time = 60  # Sleep 60s on error, then retry
@@ -327,7 +332,12 @@ class RatingWorker:
             # Stop the old worker thread (but not the monitor)
             if self._thread:
                 self._stop_event.set()
-                self._thread.join(timeout=5)
+                self._thread.join(timeout=10)  # Increased timeout to 10s
+
+                # SAFETY: Verify thread actually stopped before restarting
+                if self._thread.is_alive():
+                    logger.error("Worker thread did not stop cleanly after 10s, cannot restart safely")
+                    return
 
             # Clear stop event and restart
             self._stop_event.clear()

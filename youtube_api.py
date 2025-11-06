@@ -331,7 +331,15 @@ class YouTubeAPI:
         """
         import unicodedata
 
-        # SECURITY: Validate length before processing to prevent resource exhaustion
+        # SECURITY: Validate input type
+        if not isinstance(title, str):
+            raise ValueError("Title must be a string")
+
+        # SECURITY: Normalize Unicode FIRST to prevent normalization attacks
+        # NFC (Canonical Decomposition, followed by Canonical Composition) is the standard form
+        title = unicodedata.normalize('NFC', title)
+
+        # SECURITY: Validate length AFTER normalization to prevent length bypass attacks
         # YouTube video titles are limited to ~100 chars, but allow 500 for safety
         MAX_TITLE_LENGTH = 500
         if len(title) > MAX_TITLE_LENGTH:

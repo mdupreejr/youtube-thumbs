@@ -257,6 +257,10 @@ class APIUsageOperations:
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
             # Get total count
+            # SECURITY WARNING: Using f-string for SQL query construction
+            # This is ONLY safe because where_sql contains HARDCODED SQL fragments
+            # NEVER add user input directly to where_sql - always use parameterized queries (?)
+            # All user inputs MUST go through the params list
             count_query = f"SELECT COUNT(*) as count FROM api_call_log WHERE {where_sql}"
             cursor = self._conn.execute(count_query, params)
             total_count = cursor.fetchone()['count']
