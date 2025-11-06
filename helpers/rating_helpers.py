@@ -5,10 +5,13 @@ Extracted from app.py to improve code organization and reduce function complexit
 from typing import Tuple, Optional, Dict, Any
 from flask import jsonify, Response
 from logger import logger, user_action_logger, rating_logger
-from quota_guard import quota_guard
+from quota_manager import get_quota_manager
 from metrics_tracker import metrics
 from .video_helpers import prepare_video_upsert
 from .response_helpers import error_response, success_response
+
+# Get quota manager instance (backwards compatible with quota_guard)
+quota_guard = get_quota_manager()
 
 
 def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:

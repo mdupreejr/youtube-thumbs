@@ -4,8 +4,11 @@ Extracted from app.py to improve code organization and reduce function complexit
 """
 from typing import Optional, Dict, Any, List
 from logger import logger
-from quota_guard import quota_guard
+from quota_manager import get_quota_manager
 from metrics_tracker import metrics
+
+# Get quota manager instance (backwards compatible with quota_guard)
+quota_guard = get_quota_manager()
 
 
 def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:

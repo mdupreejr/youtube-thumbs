@@ -57,37 +57,45 @@
 
 ---
 
-### ✅ Phase 3: Quota System Review (v3.14.0 → v3.15.0)
+### ✅ Phase 3: Quota System Unification (v3.14.0 → v3.16.0)
 
-**Problem:** 100% error rate on YouTube API calls during quota exceeded periods
-- Appeared to be lack of automatic recovery
-- Investigation revealed redundant quota checking systems
+**Problem:** Hundreds of API calls during quota exceeded periods
+- YouTube API quota dashboard showing 144+ calls/day just for probing
+- quota_guard and quota_prober were separate systems
+- Probe function used 6+ quota units per probe (search + videos.list calls)
 
-**Discovery:** System already had intelligent quota management!
-- `quota_prober.py` - Background thread checking every 5 minutes
-- `quota_guard.py` - Hourly probe intervals with exponential backoff
-- `_probe_youtube_api()` - Minimal test API call
-- Automatically resumes when quota available
+**Root Cause:**
+- `_probe_youtube_api()` called `search_video_globally()` which used 6+ API calls
+- Probing hourly × 6 calls = 144+ API calls/day for quota checking alone
+- Two separate classes (quota_guard + quota_prober) added complexity
 
-**What Happened:**
-1. Initially created `quota_manager.py` to solve 100% error issue
-2. Code review revealed `execute_api_call` method had no callers (dead code)
-3. Discovered existing `quota_prober` + `quota_guard` already provides:
-   - ✅ Hourly quota restoration checks
-   - ✅ Automatic resume when quota available
-   - ✅ Background thread already running
-   - ✅ Exponential backoff (2h → 4h → 8h → 16h → 24h)
+**Solution: Unified QuotaManager** (v3.16.0)
+- Merged quota_guard.py (472 lines) + quota_prober.py (215 lines) into quota_manager.py (737 lines)
+- Created lightweight probe using only `videos().list()` - **1 quota unit per probe**
+- Single class handles both circuit breaker AND recovery detection
+- Changed thread check interval from 5 minutes to 30 minutes
+- Kept probe interval at 1 hour (as desired)
 
-**Resolution:**
-- Removed redundant `quota_manager.py` (284 lines)
-- Kept existing `quota_prober` + `quota_guard` system
-- Documented that desired functionality already exists
+**How It Works:**
+1. QuotaManager blocks all API calls when quota exceeded (circuit breaker)
+2. Background thread wakes every 30 minutes to check if should probe
+3. Probes hourly with minimal API call (1 quota unit)
+4. Automatically clears block and retries pending videos when quota restored
+5. Maintains exponential backoff (2h → 4h → 8h → 16h → 24h)
 
-**Why 100% Errors?**
-The error rate issue is likely due to:
-- Quota actually being exceeded (legitimate block)
-- Exponential backoff periods working as designed
-- Need to monitor if quota_prober is successfully recovering
+**Impact:**
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Probe cost | 6+ quota units | 1 quota unit | **83% reduction** |
+| Daily probe quota | 144+ units | 24 units | **83% reduction** |
+| Architecture | 2 classes (687 lines) | 1 class (737 lines) | Unified |
+| Thread checks | Every 5 minutes | Every 30 minutes | Less overhead |
+
+**Fixes:**
+- ✅ Resolves hundreds of API calls issue (144+ → 24 per day)
+- ✅ Simpler architecture (2 classes → 1 class)
+- ✅ More efficient probing (6+ units → 1 unit)
+- ✅ Maintains all existing functionality
 
 ---
 
@@ -194,21 +202,27 @@ Watch these metrics to validate the quota system is working:
 ## 🏆 Summary
 
 **Total improvements:** 3 major phases
-**Code quality:** -1,979 lines removed (CSS optimization)
-**Performance:** 56% smaller pages, improved caching
-**User experience:** Accurate times, faster loads
-**System clarity:** Removed redundant quota_manager, documented existing quota_prober
+**Code quality:** -1,979 lines (CSS) + unified quota system
+**Performance:** 56% smaller pages, 83% less quota usage for probing
+**User experience:** Accurate times, faster loads, automatic quota recovery
+**System clarity:** Unified quota management into single efficient class
 
-**Key Discovery:** System already had intelligent quota management via quota_prober + quota_guard!
-- Hourly quota restoration checks ✅
-- Automatic resume ✅
-- Exponential backoff ✅
+**Key Achievements:**
+- CSS Optimization: 56% smaller HTML pages ✅
+- Timezone Fixes: Accurate UTC timestamps ✅
+- Quota System: 83% reduction in probe API calls (144+ → 24 per day) ✅
+- Architecture: Unified quota_guard + quota_prober into QuotaManager ✅
 
-**Actual Issue:** 100% error rate is expected behavior during quota exceeded periods. The system automatically recovers when quota restores.
+**Why This Matters:**
+The hundreds of API calls issue was caused by inefficient probing. Now:
+- Probes use only 1 quota unit (vs 6+)
+- Daily probe quota reduced from 144+ to 24 units
+- Simpler codebase with unified quota management
+- Still automatically recovers when quota restores
 
 ---
 
 **Generated:** November 5, 2025
 **By:** Claude Code
-**Session Duration:** ~3 hours
-**Commits:** 4 major versions (3.12.5, 3.13.0, 3.14.0, 3.15.0)
+**Session Duration:** ~4 hours
+**Commits:** 4 major versions (3.12.5, 3.13.0, 3.15.0, 3.16.0)

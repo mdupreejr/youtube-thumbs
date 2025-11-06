@@ -10,10 +10,13 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import logger
-from quota_guard import quota_guard
+from quota_manager import get_quota_manager
 from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
 from constants import YOUTUBE_DURATION_OFFSET
+
+# Get quota manager instance (backwards compatible with quota_guard)
+quota_guard = get_quota_manager()
 
 # Global database instance for API usage tracking (injected from app.py)
 _db = None

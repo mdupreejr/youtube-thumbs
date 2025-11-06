@@ -18,8 +18,7 @@ from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
-from quota_guard import quota_guard
-from quota_prober import QuotaProber
+from quota_manager import init_quota_manager, get_quota_manager, set_quota_guard_compat
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
@@ -393,65 +392,22 @@ def _pending_retry_batch_size() -> int:
         return 50
 
 
-def _probe_youtube_api() -> bool:
-    """
-    Lightweight probe to test if YouTube API is accessible.
-    Makes a minimal search query to check quota status.
-
-    Returns:
-        True if API is accessible, False if quota exceeded
-    """
-    # CRITICAL: Check if quota guard is still blocking calls
-    # If so, don't even try the API call - we know it will be blocked
-    if quota_guard.is_blocked():
-        logger.debug("YouTube API probe skipped - quota guard still active")
-        return False
-
-    try:
-        logger.debug("Probing YouTube API with lightweight test query...")
-        # Get YouTube API instance (creates it if not yet initialized)
-        api = get_youtube_api()
-
-        # Search for a well-known video with a simple query
-        # This should be cheap on quota (just 1 search unit)
-        result = api.search_video_globally("test", expected_duration=10)
-
-        # If we get None, it means quota guard blocked the call internally
-        # (should not happen since we checked above, but defensive)
-        if result is None:
-            logger.debug("YouTube API probe returned None - likely quota blocked")
-            return False
-
-        # If we get any non-None result, quota is available
-        logger.debug("YouTube API probe successful - quota appears available")
-        return True
-    except Exception as exc:
-        # Check if it's a quota error
-        error_str = str(exc).lower()
-        if 'quota' in error_str or '403' in error_str:
-            logger.debug("YouTube API probe failed - quota still exceeded: %s", exc)
-            return False
-        # Other errors might be transient, return True to clear cooldown
-        logger.warning("YouTube API probe failed with unexpected error: %s", exc)
-        return False
-
-
-logger.info("Initializing quota prober...")
-quota_prober = QuotaProber(
-    quota_guard=quota_guard,
-    probe_func=_probe_youtube_api,
-    check_interval=300,  # Check every 5 minutes if probe is needed
-    enabled=True,
+logger.info("Initializing unified quota manager...")
+quota_manager = init_quota_manager(
+    youtube_api_getter=get_youtube_api,
     db=db,
     search_wrapper=_search_wrapper,
     retry_enabled=_pending_retry_enabled(),
     retry_batch_size=_pending_retry_batch_size(),
     metrics_tracker=metrics,
 )
-logger.info("Starting quota prober...")
-quota_prober.start()
-atexit.register(quota_prober.stop)
-logger.info("Quota prober started successfully")
+set_quota_guard_compat()  # Set quota_guard variable for backwards compatibility
+quota_guard = quota_manager  # Alias for backwards compatibility
+quota_prober = quota_manager  # Alias for backwards compatibility (system routes)
+logger.info("Starting quota manager background thread...")
+quota_manager.start()
+atexit.register(quota_manager.stop)
+logger.info("Quota manager started successfully")
 
 # Start stats refresher background task (refreshes every hour)
 logger.info("Initializing stats refresher...")

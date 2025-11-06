@@ -5,8 +5,11 @@ from functools import wraps
 from typing import Any, Callable
 from googleapiclient.errors import HttpError
 from logger import logger
-from quota_guard import quota_guard
+from quota_manager import get_quota_manager
 from error_handler import log_and_suppress
+
+# Get quota manager instance (backwards compatible with quota_guard)
+quota_guard = get_quota_manager()
 
 
 def handle_youtube_error(context: str, return_value: Any = None):

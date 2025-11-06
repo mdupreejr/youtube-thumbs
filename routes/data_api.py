@@ -397,7 +397,7 @@ def retry_pending_videos() -> Response:
     import time
     from helpers.search_helpers import search_and_match_video
     from helpers.cache_helpers import find_cached_video
-    from quota_guard import get_quota_guard
+    from quota_manager import get_quota_manager as get_quota_guard
 
     try:
         # Get batch size from request (default: 5, max: 50)
