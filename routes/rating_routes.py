@@ -143,11 +143,11 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
 
         # Log the queuing
         rating_logger.info(f"{rating_type.upper()} | QUEUED | {video_title} | ID: {video_id}")
-        logger.info(f"Queued {rating_type} for {video_id} (will process within 1 hour)")
+        logger.info(f"Queued {rating_type} for {video_id} (will process shortly when quota available)")
 
         return {
             'success': True,
-            'message': f'Rating queued. Will sync to YouTube within 1 hour.',
+            'message': f'Rating queued. Will sync to YouTube shortly when quota available.',
             'queued': True,
             'rating': rating_type
         }

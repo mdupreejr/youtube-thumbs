@@ -16,13 +16,14 @@ class RatingWorker:
     Background worker that processes the rating queue automatically.
 
     All YouTube rating submissions go through this worker, which:
-    - Checks quota availability
-    - Processes ratings in batch (up to 20 at a time)
+    - Checks quota availability every minute
+    - Processes one rating per cycle
     - Retries failures automatically
     - Runs continuously in background thread
+    - Pauses when quota exhausted (quota_guard handles cooldown)
     """
 
-    def __init__(self, db, youtube_api_getter, quota_guard, poll_interval: int = 3600):
+    def __init__(self, db, youtube_api_getter, quota_guard, poll_interval: int = 60):
         """
         Initialize the rating worker.
 
@@ -30,7 +31,7 @@ class RatingWorker:
             db: Database instance
             youtube_api_getter: Function that returns YouTube API instance
             quota_guard: Quota manager instance
-            poll_interval: Seconds between queue checks (default: 3600 = 1 hour)
+            poll_interval: Seconds between queue checks (default: 60 = 1 minute)
         """
         self.db = db
         self.youtube_api_getter = youtube_api_getter
@@ -95,19 +96,17 @@ class RatingWorker:
         logger.info("RatingWorker loop exited")
 
     def _process_queue_batch(self) -> None:
-        """Process a batch of pending ratings from the queue."""
+        """Process one pending rating from the queue."""
         # Check quota first - don't waste time querying DB if blocked
         if self.quota_guard.is_blocked():
             logger.debug("RatingWorker: Quota blocked, skipping queue processing")
             return
 
-        # Get pending ratings from queue
-        pending_jobs = self.db.list_pending_ratings(limit=20)
+        # Get next pending rating from queue (just one)
+        pending_jobs = self.db.list_pending_ratings(limit=1)
         if not pending_jobs:
             logger.debug("RatingWorker: No pending ratings in queue")
             return
-
-        logger.info(f"RatingWorker: Processing {len(pending_jobs)} pending ratings")
 
         # Get YouTube API instance
         try:
@@ -119,43 +118,8 @@ class RatingWorker:
             logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
             return
 
-        # Process ratings in batch if multiple, single if one
-        if len(pending_jobs) > 1:
-            self._process_batch_ratings(yt_api, pending_jobs)
-        else:
-            self._process_single_rating(yt_api, pending_jobs[0])
-
-    def _process_batch_ratings(self, yt_api, pending_jobs) -> None:
-        """Process multiple ratings using batch API."""
-        logger.info(f"RatingWorker: Batch processing {len(pending_jobs)} ratings")
-
-        # Prepare batch: list of (video_id, rating) tuples
-        ratings_to_process = [
-            (job['yt_video_id'], job['rating'])
-            for job in pending_jobs
-        ]
-
-        try:
-            # Call batch API
-            results = yt_api.batch_set_ratings(ratings_to_process)
-
-            # Update database based on results
-            for video_id, rating in ratings_to_process:
-                success = results.get(video_id, False)
-                if success:
-                    self.db.record_rating(video_id, rating)
-                    self.db.mark_pending_rating(video_id, True)
-                    rating_logger.info(f"{rating.upper()} | WORKER-SYNCED | video {video_id}")
-                    logger.debug(f"RatingWorker: Successfully rated {video_id} as {rating}")
-                else:
-                    self.db.mark_pending_rating(video_id, False, "Batch rating failed")
-                    logger.warning(f"RatingWorker: Failed to rate {video_id}")
-
-        except Exception as e:
-            logger.error(f"RatingWorker: Batch processing failed: {e}")
-            # Mark all as failed
-            for job in pending_jobs:
-                self.db.mark_pending_rating(job['yt_video_id'], False, str(e))
+        # Process the single rating
+        self._process_single_rating(yt_api, pending_jobs[0])
 
     def _process_single_rating(self, yt_api, job) -> None:
         """Process a single rating."""
