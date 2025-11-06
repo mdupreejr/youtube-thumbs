@@ -16,7 +16,8 @@ class RatingWorker:
     Background worker that processes search and rating queues automatically.
 
     All YouTube API operations go through this worker, which:
-    - Processes searches first, then ratings (up to 5 each per cycle)
+    - Processes ratings first (lightweight), then searches (heavier quota usage)
+    - Batch processing: up to 5 ratings + 5 searches per cycle
     - Uses smart sleep intervals:
       * 1 hour when quota blocked
       * 30 seconds after processing an item
@@ -148,8 +149,9 @@ class RatingWorker:
 
     def _process_next_item(self) -> str:
         """
-        Process next batch of items from queues (searches first, then ratings).
-        Processes up to 5 searches and 5 ratings per cycle for better throughput.
+        Process next batch of items from queues (ratings first, then searches).
+        Ratings are lightweight, searches use more quota, so prioritize ratings.
+        Processes up to 5 ratings and 5 searches per cycle for better throughput.
 
         Returns:
             'blocked': Quota blocked
@@ -163,22 +165,7 @@ class RatingWorker:
         items_processed = 0
         BATCH_SIZE = 5
 
-        # Priority 1: Process searches (need video_id before we can rate)
-        # Process up to BATCH_SIZE searches per cycle
-        for _ in range(BATCH_SIZE):
-            # Use atomic claim to prevent race conditions
-            search_job = self.db.claim_pending_search()
-            if not search_job:
-                break  # No more searches
-
-            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
-            self._process_search(search_job)
-            items_processed += 1
-
-            # Small delay between items to avoid hammering API
-            time.sleep(2)
-
-        # Priority 2: Process ratings
+        # Priority 1: Process ratings (lightweight API calls)
         # Process up to BATCH_SIZE ratings per cycle
         yt_api = None
         for _ in range(BATCH_SIZE):
@@ -202,6 +189,21 @@ class RatingWorker:
             items_processed += 1
 
             # Small delay between items
+            time.sleep(2)
+
+        # Priority 2: Process searches (heavier API calls, only after ratings done)
+        # Process up to BATCH_SIZE searches per cycle
+        for _ in range(BATCH_SIZE):
+            # Use atomic claim to prevent race conditions
+            search_job = self.db.claim_pending_search()
+            if not search_job:
+                break  # No more searches
+
+            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
+            self._process_search(search_job)
+            items_processed += 1
+
+            # Small delay between items to avoid hammering API
             time.sleep(2)
 
         # Return status based on what was processed
