@@ -248,20 +248,13 @@ def handle_exception(e):
 
     # Check if this is an API route - return JSON
     if request.path.startswith('/api/') or request.path.startswith('/test/') or request.path.startswith('/health') or request.path.startswith('/metrics'):
-        if debug_mode:
-            # SECURITY: Stack trace exposure is acceptable in debug mode only
-            # Debug mode should NEVER be enabled in production (check DEBUG env var)
-            # Do not expose stack trace; only log it on the server
-            return jsonify({
-                'success': False,
-                'error': str(e),
-                'type': type(e).__name__
-            }), 500
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Internal server error'
-            }), 500
+        # SECURITY: Do not expose error details in API responses, even in debug mode
+        # Error messages may contain sensitive information (file paths, connection strings, etc.)
+        # All error details are logged server-side (see lines 228-229)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
 
     # For regular pages, return HTML
     if debug_mode:
