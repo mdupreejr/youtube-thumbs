@@ -222,9 +222,18 @@ trap cleanup EXIT
 
 bashio::log.info "Running startup health checks..."
 
-# Start the Flask application with full error capture
-bashio::log.info "Starting Flask application..."
-python3 /app/app.py 2>&1 | while IFS= read -r line; do
+# Start the Flask application with Gunicorn (production WSGI server)
+bashio::log.info "Starting Flask application with Gunicorn..."
+gunicorn \
+    --bind "${HOST}:${PORT}" \
+    --workers 4 \
+    --threads 2 \
+    --worker-class gthread \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info \
+    'app:app' 2>&1 | while IFS= read -r line; do
     bashio::log.info "$line"
 done
 

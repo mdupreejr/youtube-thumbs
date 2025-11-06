@@ -138,6 +138,26 @@ def handle_csrf_error(e):
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # ============================================================================
+# TEMPLATE CONTEXT PROCESSORS
+# ============================================================================
+
+@app.context_processor
+def inject_static_url():
+    """
+    Inject static_url function into all templates for ingress-aware static file URLs.
+    This ensures static files work correctly through Home Assistant ingress.
+    """
+    def static_url(filename):
+        """Generate static URL with ingress path support."""
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        base_url = url_for('static', filename=filename)
+        if ingress_path:
+            return f"{ingress_path}{base_url}"
+        return base_url
+
+    return dict(static_url=static_url)
+
+# ============================================================================
 # REQUEST/RESPONSE MIDDLEWARE
 # ============================================================================
 
@@ -616,30 +636,32 @@ app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database
 # APPLICATION INITIALIZATION
 # ============================================================================
 
+# Initialize YouTube API (runs on both direct execution and WSGI import)
+yt_api = None
+try:
+    yt_api = get_youtube_api()
+except Exception as e:
+    logger.error(f"Failed to initialize YouTube API: {str(e)}")
+    logger.error("Please ensure credentials.json exists and run the OAuth flow")
+
+# Run startup health checks
+run_startup_checks(ha_api, yt_api, db, quota_guard)
+
+# Clear stats cache on startup to prevent stale data issues
+logger.info("Clearing stats cache...")
+db.invalidate_stats_cache()
+
+logger.info("YouTube Thumbs application initialized and ready")
+
+# Only run the development server if executed directly (not via WSGI)
 if __name__ == '__main__':
     # nosec B104 - Binding to 0.0.0.0 is intentional for Docker container deployment
     host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', '21812'))
 
-    logger.info(f"Starting YouTube Thumbs service on {host}:{port}")
-    logger.info(f"Flask will be accessible at http://{host}:{port}")
+    logger.info(f"Starting Flask development server on {host}:{port}")
+    logger.warning("Using Flask development server. For production, use a WSGI server like Gunicorn.")
 
-    # Initialize YouTube API
-    yt_api = None
-    try:
-        yt_api = get_youtube_api()
-    except Exception as e:
-        logger.error(f"Failed to initialize YouTube API: {str(e)}")
-        logger.error("Please ensure credentials.json exists and run the OAuth flow")
-
-    # Run startup health checks
-    run_startup_checks(ha_api, yt_api, db, quota_guard)
-
-    # Clear stats cache on startup to prevent stale data issues
-    logger.info("Clearing stats cache...")
-    db.invalidate_stats_cache()
-
-    logger.info("Starting Flask application...")
     try:
         app.run(host=host, port=port, debug=False, threaded=True)
     except Exception as e:
