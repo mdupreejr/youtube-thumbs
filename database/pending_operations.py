@@ -89,10 +89,31 @@ class PendingOperations:
         """
         v1.58.0: Queue a rating using rating_queue_* columns.
         Used when YouTube API quota is blocked.
+
+        Raises:
+            ValueError: If rating is invalid
+            Exception: If too many pending ratings (>100 globally)
         """
+        # SECURITY: Validate inputs before database operation
+        if rating not in ['like', 'dislike']:
+            raise ValueError(f"Invalid rating type: {rating}")
+
+        # SECURITY: Prevent queue flooding by limiting pending ratings
+        MAX_PENDING_RATINGS = 100
+
         timestamp = self._timestamp('')
         with self._lock:
             try:
+                # Check pending count before allowing new entry
+                cur = self._conn.execute(
+                    "SELECT COUNT(*) as count FROM video_ratings WHERE rating_queue_pending IS NOT NULL"
+                )
+                pending_count = cur.fetchone()['count']
+
+                if pending_count >= MAX_PENDING_RATINGS:
+                    logger.warning(f"Rating queue full ({pending_count} pending), rejecting new rating")
+                    raise Exception("Rating queue is full. Please try again later.")
+
                 with self._conn:
                     self._conn.execute(
                         """
@@ -190,10 +211,26 @@ class PendingOperations:
 
         Returns:
             Search queue ID
+
+        Raises:
+            Exception: If queue is full (>1000 pending searches)
         """
+        # SECURITY: Prevent queue flooding by limiting pending searches
+        MAX_PENDING_SEARCHES = 1000
+
         timestamp = self._timestamp('')
         with self._lock:
             try:
+                # Check pending count before allowing new entry
+                cur = self._conn.execute(
+                    "SELECT COUNT(*) as count FROM search_queue WHERE status = 'pending'"
+                )
+                pending_count = cur.fetchone()['count']
+
+                if pending_count >= MAX_PENDING_SEARCHES:
+                    logger.warning(f"Search queue full ({pending_count} pending), rejecting new search")
+                    raise Exception("Search queue is full. Please try again later.")
+
                 with self._conn:
                     cur = self._conn.execute(
                         """
@@ -244,6 +281,45 @@ class PendingOperations:
             )
             rows = cur.fetchall()
         return [dict(row) for row in rows]
+
+    def claim_pending_search(self) -> Optional[Dict[str, Any]]:
+        """
+        Atomically claim next pending search for processing.
+        Marks search as 'processing' to prevent duplicate processing.
+
+        Returns:
+            Search job dict or None if no pending searches
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    # Atomic: select and update in one operation
+                    cur = self._conn.execute(
+                        """
+                        UPDATE search_queue
+                        SET status = 'processing',
+                            last_attempt = ?
+                        WHERE id = (
+                            SELECT id FROM search_queue
+                            WHERE status = 'pending'
+                            ORDER BY requested_at ASC
+                            LIMIT 1
+                        )
+                        RETURNING id, ha_title, ha_artist, ha_album, ha_content_id,
+                                  ha_duration, ha_app_name, requested_at,
+                                  attempts, last_error, callback_rating
+                        """,
+                        (self._timestamp(''),)
+                    )
+                    row = cur.fetchone()
+                    return dict(row) if row else None
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to claim pending search",
+                    level="error"
+                )
+                return None
 
     def mark_search_complete(self, search_id: int, found_video_id: str) -> None:
         """

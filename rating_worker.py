@@ -126,10 +126,11 @@ class RatingWorker:
             return 'blocked'
 
         # Priority 1: Process searches (need video_id before we can rate)
-        pending_searches = self.db.list_pending_searches(limit=1)
-        if pending_searches:
-            logger.info(f"RatingWorker: Processing search for '{pending_searches[0]['ha_title']}'")
-            self._process_search(pending_searches[0])
+        # Use atomic claim to prevent race conditions
+        search_job = self.db.claim_pending_search()
+        if search_job:
+            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
+            self._process_search(search_job)
             return 'success'
 
         # Priority 2: Process ratings

@@ -130,12 +130,17 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
 
     Returns:
         dict: Response data with success status and message
+
+    Raises:
+        ValueError: If rating_type is invalid
+        Exception: If queue is full
     """
     try:
         # Update local database first (so UI shows change immediately)
         _db.record_rating_local(video_id, rating_type)
 
         # Add to queue for background worker processing
+        # This may raise Exception if queue is full
         _db.enqueue_rating(video_id, rating_type)
 
         # Record metrics
@@ -152,9 +157,23 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
             'rating': rating_type
         }
 
+    except ValueError as e:
+        # Invalid rating type
+        logger.error(f"Invalid rating type for {video_id}: {e}")
+        return {
+            'success': False,
+            'message': str(e),
+            'queued': False
+        }
+
     except Exception as e:
+        # Queue full or other error
         logger.error(f"Failed to queue rating for {video_id}: {e}")
-        raise
+        return {
+            'success': False,
+            'message': str(e),
+            'queued': False
+        }
 
 
 def rate_video(rating_type: str) -> Tuple[Response, int]:
@@ -208,25 +227,40 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             # Queue rating
             result = enqueue_rating_unified(yt_video_id, rating_type, video_title)
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | RATING-QUEUED")
+
+            # Check if queuing failed
+            if not result.get('success'):
+                return jsonify(result), 503  # Service Unavailable
+
             return jsonify(result), 202
 
         else:
             # Not in cache - queue search with rating callback
-            search_id = _db.enqueue_search(ha_media, callback_rating=rating_type)
-            title = ha_media.get('title', 'Unknown')
-            artist = ha_media.get('artist', '')
-            media_info = format_media_info(title, artist)
+            try:
+                search_id = _db.enqueue_search(ha_media, callback_rating=rating_type)
+                title = ha_media.get('title', 'Unknown')
+                artist = ha_media.get('artist', '')
+                media_info = format_media_info(title, artist)
 
-            user_action_logger.info(f"{rating_type.upper()} | {media_info} | SEARCH+RATING-QUEUED")
-            logger.info(f"Queued search for '{title}' with {rating_type} callback (search_id: {search_id})")
+                user_action_logger.info(f"{rating_type.upper()} | {media_info} | SEARCH+RATING-QUEUED")
+                logger.info(f"Queued search for '{title}' with {rating_type} callback (search_id: {search_id})")
 
-            return jsonify({
-                'success': True,
-                'message': f'Search and rating queued. Will process shortly when quota available.',
-                'queued': True,
-                'search_queued': True,
-                'rating': rating_type
-            }), 202
+                return jsonify({
+                    'success': True,
+                    'message': f'Search and rating queued. Will process shortly when quota available.',
+                    'queued': True,
+                    'search_queued': True,
+                    'rating': rating_type
+                }), 202
+
+            except Exception as e:
+                # Queue full or other error
+                logger.error(f"Failed to queue search: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': f'Failed to queue search: {str(e)}',
+                    'queued': False
+                }), 503  # Service Unavailable
 
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
