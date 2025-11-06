@@ -135,6 +135,27 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_search_cache_title ON search_results_cache(yt_title);
     """
 
+    SEARCH_QUEUE_SCHEMA = """
+        CREATE TABLE IF NOT EXISTS search_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ha_title TEXT NOT NULL,
+            ha_artist TEXT,
+            ha_album TEXT,
+            ha_content_id TEXT,
+            ha_duration INTEGER,
+            ha_app_name TEXT,
+            status TEXT DEFAULT 'pending',
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            attempts INTEGER DEFAULT 0,
+            last_attempt TIMESTAMP,
+            last_error TEXT,
+            found_video_id TEXT,
+            callback_rating TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_search_queue_status ON search_queue(status, requested_at);
+        CREATE INDEX IF NOT EXISTS idx_search_queue_content_id ON search_queue(ha_content_id);
+    """
+
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -171,6 +192,7 @@ class DatabaseConnection:
                     self._conn.executescript(self.API_CALL_LOG_SCHEMA)
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
                     self._conn.executescript(self.SEARCH_RESULTS_CACHE_SCHEMA)
+                    self._conn.executescript(self.SEARCH_QUEUE_SCHEMA)
 
                     # Create indexes
                     self._conn.execute(

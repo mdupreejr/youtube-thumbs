@@ -437,19 +437,20 @@ stats_refresher.start()
 atexit.register(stats_refresher.stop)
 logger.info("Stats refresher started successfully")
 
-# Initialize rating worker for background queue processing (checks every minute)
+# Initialize rating worker for background queue processing (smart sleep intervals)
 logger.info("Initializing rating worker...")
 from rating_worker import init_rating_worker
 rating_worker = init_rating_worker(
     db=db,
     youtube_api_getter=get_youtube_api,
     quota_guard=quota_guard,
-    poll_interval=60  # Check queue every minute (pauses when quota exhausted)
+    search_wrapper=_search_wrapper,
+    poll_interval=60  # Base interval (overridden by smart sleep: 1h/30s/60s)
 )
 logger.info("Starting rating worker...")
 rating_worker.start()
 atexit.register(rating_worker.stop)
-logger.info("Rating worker started successfully")
+logger.info("Rating worker started successfully (smart sleep: 1h blocked / 30s processed / 60s empty)")
 
 # ============================================================================
 # BLUEPRINT REGISTRATION

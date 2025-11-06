@@ -159,8 +159,9 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
 
 def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Response, int]:
     """
-    Simplified queue-based handler for rating videos.
-    All ratings are queued for background worker processing (no immediate YouTube API calls).
+    Unified queue-based handler for rating videos.
+    Checks cache first, then queues search+rating if needed.
+    All YouTube API calls happen in background worker.
 
     Args:
         rating_type: Type of rating ('like' or 'dislike')
@@ -169,9 +170,7 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
     from helpers.rating_helpers import (
         check_rate_limit,
         validate_current_media,
-        check_youtube_content,
-        find_or_search_video,
-        update_database_for_rating
+        check_youtube_content
     )
 
     logger.info(f"{rating_type} request received")
@@ -193,39 +192,48 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
         if youtube_check_response:
             return youtube_check_response
 
-        # Step 4: Find or search for video
-        video, err_resp = find_or_search_video(
-            ha_media,
-            _cache_wrapper,
-            _search_wrapper,
-            rating_type,
-            format_media_info,
-            error_response
-        )
-        if err_resp:
-            return err_resp
+        # Step 4: Check cache first (no API call)
+        video = _cache_wrapper(ha_media)
 
-        # Step 5: Update database
-        yt_video_id = update_database_for_rating(_db, video, ha_media)
-        video_title = video['title']
-        artist = ha_media.get('artist', '')
-        media_info = format_media_info(video_title, artist)
+        if video and video.get('id'):
+            # Found in cache - queue rating directly
+            yt_video_id = video['id']
+            video_title = video.get('title', 'Unknown')
+            artist = ha_media.get('artist', '')
+            media_info = format_media_info(video_title, artist)
 
-        # Step 6: Check if already rated
-        existing_rating = _db.get_video(yt_video_id)
-        if existing_rating and existing_rating.get('rating') == rating_type:
-            user_action_logger.info(f"{rating_type.upper()} | ALREADY-RATED | {media_info}")
+            # Check if already rated
+            existing_rating = _db.get_video(yt_video_id)
+            if existing_rating and existing_rating.get('rating') == rating_type:
+                user_action_logger.info(f"{rating_type.upper()} | ALREADY-RATED | {media_info}")
+                return jsonify({
+                    'success': True,
+                    'message': f'Already rated as {rating_type}',
+                    'already_rated': True
+                }), 200
+
+            # Queue rating
+            result = enqueue_rating_unified(yt_video_id, rating_type, video_title)
+            user_action_logger.info(f"{rating_type.upper()} | {media_info} | RATING-QUEUED")
+            return jsonify(result), 202
+
+        else:
+            # Not in cache - queue search with rating callback
+            search_id = _db.enqueue_search(ha_media, callback_rating=rating_type)
+            title = ha_media.get('title', 'Unknown')
+            artist = ha_media.get('artist', '')
+            media_info = format_media_info(title, artist)
+
+            user_action_logger.info(f"{rating_type.upper()} | {media_info} | SEARCH+RATING-QUEUED")
+            logger.info(f"Queued search for '{title}' with {rating_type} callback (search_id: {search_id})")
+
             return jsonify({
                 'success': True,
-                'message': f'Already rated as {rating_type}',
-                'already_rated': True
-            }), 200
-
-        # Step 7: Queue rating for background worker (no immediate submission)
-        result = enqueue_rating_unified(yt_video_id, rating_type, video_title)
-        user_action_logger.info(f"{rating_type.upper()} | {media_info} | QUEUED")
-
-        return jsonify(result), 202
+                'message': f'Search and rating queued. Will process shortly when quota available.',
+                'queued': True,
+                'search_queued': True,
+                'rating': rating_type
+            }), 202
 
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")

@@ -179,3 +179,126 @@ class PendingOperations:
                     yt_video_id,
                     level="error"
                 )
+
+    def enqueue_search(self, media: Dict[str, Any], callback_rating: Optional[str] = None) -> int:
+        """
+        Queue a video search request for background processing.
+
+        Args:
+            media: Media information from Home Assistant
+            callback_rating: Optional rating to apply after search completes ('like' or 'dislike')
+
+        Returns:
+            Search queue ID
+        """
+        timestamp = self._timestamp('')
+        with self._lock:
+            try:
+                with self._conn:
+                    cur = self._conn.execute(
+                        """
+                        INSERT INTO search_queue (
+                            ha_title, ha_artist, ha_album, ha_content_id,
+                            ha_duration, ha_app_name, status, requested_at,
+                            callback_rating
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                        """,
+                        (
+                            media.get('title'),
+                            media.get('artist'),
+                            media.get('album'),
+                            media.get('content_id'),
+                            media.get('duration'),
+                            media.get('app_name', 'YouTube'),
+                            timestamp,
+                            callback_rating
+                        ),
+                    )
+                    return cur.lastrowid
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to enqueue search for %s",
+                    media.get('title'),
+                    level="error"
+                )
+                return None
+
+    def list_pending_searches(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Query pending search requests from search_queue.
+        Returns searches where status='pending'.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT id, ha_title, ha_artist, ha_album, ha_content_id,
+                       ha_duration, ha_app_name, status, requested_at,
+                       attempts, last_error, callback_rating
+                FROM search_queue
+                WHERE status = 'pending'
+                ORDER BY requested_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_search_complete(self, search_id: int, found_video_id: str) -> None:
+        """
+        Mark search as complete and record the found video ID.
+
+        Args:
+            search_id: Search queue ID
+            found_video_id: The YouTube video ID that was found
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        UPDATE search_queue
+                        SET status = 'completed',
+                            found_video_id = ?,
+                            last_attempt = ?
+                        WHERE id = ?
+                        """,
+                        (found_video_id, self._timestamp(''), search_id),
+                    )
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to mark search complete for ID %s",
+                    search_id,
+                    level="error"
+                )
+
+    def mark_search_failed(self, search_id: int, error: str) -> None:
+        """
+        Increment search attempts and record error.
+
+        Args:
+            search_id: Search queue ID
+            error: Error message
+        """
+        with self._lock:
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        """
+                        UPDATE search_queue
+                        SET attempts = attempts + 1,
+                            last_error = ?,
+                            last_attempt = ?
+                        WHERE id = ?
+                        """,
+                        (error, self._timestamp(''), search_id),
+                    )
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to mark search failed for ID %s",
+                    search_id,
+                    level="error"
+                )

@@ -13,17 +13,20 @@ from logger import logger, rating_logger
 
 class RatingWorker:
     """
-    Background worker that processes the rating queue automatically.
+    Background worker that processes search and rating queues automatically.
 
-    All YouTube rating submissions go through this worker, which:
-    - Checks quota availability every minute
-    - Processes one rating per cycle
+    All YouTube API operations go through this worker, which:
+    - Processes searches first, then ratings
+    - Handles one operation per cycle
+    - Uses smart sleep intervals:
+      * 1 hour when quota blocked
+      * 30 seconds after processing an item
+      * 60 seconds when queue is empty
     - Retries failures automatically
     - Runs continuously in background thread
-    - Pauses when quota exhausted (quota_guard handles cooldown)
     """
 
-    def __init__(self, db, youtube_api_getter, quota_guard, poll_interval: int = 60):
+    def __init__(self, db, youtube_api_getter, quota_guard, search_wrapper, poll_interval: int = 60):
         """
         Initialize the rating worker.
 
@@ -31,18 +34,20 @@ class RatingWorker:
             db: Database instance
             youtube_api_getter: Function that returns YouTube API instance
             quota_guard: Quota manager instance
-            poll_interval: Seconds between queue checks (default: 60 = 1 minute)
+            search_wrapper: Function to perform YouTube searches
+            poll_interval: Base seconds between checks (overridden by smart sleep)
         """
         self.db = db
         self.youtube_api_getter = youtube_api_getter
         self.quota_guard = quota_guard
+        self.search_wrapper = search_wrapper
         self.poll_interval = poll_interval
 
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._running = False
 
-        logger.info(f"RatingWorker initialized (poll interval: {poll_interval}s)")
+        logger.info(f"RatingWorker initialized (base poll interval: {poll_interval}s, smart sleep enabled)")
 
     def start(self) -> None:
         """Start the background worker thread."""
@@ -77,49 +82,114 @@ class RatingWorker:
         return self._running and self._thread and self._thread.is_alive()
 
     def _worker_loop(self) -> None:
-        """Main worker loop that runs continuously."""
-        logger.info("RatingWorker loop started")
+        """Main worker loop with smart sleep intervals."""
+        logger.info("RatingWorker loop started (smart sleep: 1h blocked / 30s processed / 60s empty)")
 
         while not self._stop_event.is_set():
             try:
-                self._process_queue_batch()
+                status = self._process_next_item()
+
+                # Smart sleep based on status
+                if status == 'blocked':
+                    sleep_time = 3600  # 1 hour when quota blocked
+                    logger.debug("RatingWorker: Quota blocked, sleeping 1 hour")
+                elif status == 'success':
+                    sleep_time = 30  # 30 seconds after processing
+                    logger.debug("RatingWorker: Item processed, sleeping 30 seconds")
+                else:  # 'empty'
+                    sleep_time = 60  # 60 seconds when queue empty
+                    logger.debug("RatingWorker: Queue empty, sleeping 60 seconds")
+
             except Exception as e:
                 logger.error(f"RatingWorker error in processing loop: {e}")
-                # Continue running despite errors
+                sleep_time = 60  # Sleep 60s on error, then retry
 
             # Sleep in small increments to allow quick shutdown
-            for _ in range(self.poll_interval):
+            for _ in range(sleep_time):
                 if self._stop_event.is_set():
                     break
                 time.sleep(1)
 
         logger.info("RatingWorker loop exited")
 
-    def _process_queue_batch(self) -> None:
-        """Process one pending rating from the queue."""
+    def _process_next_item(self) -> str:
+        """
+        Process next item from queues (searches first, then ratings).
+
+        Returns:
+            'blocked': Quota blocked
+            'success': Item processed
+            'empty': No items in queue
+        """
         # Check quota first - don't waste time querying DB if blocked
         if self.quota_guard.is_blocked():
-            logger.debug("RatingWorker: Quota blocked, skipping queue processing")
-            return
+            return 'blocked'
 
-        # Get next pending rating from queue (just one)
-        pending_jobs = self.db.list_pending_ratings(limit=1)
-        if not pending_jobs:
-            logger.debug("RatingWorker: No pending ratings in queue")
-            return
+        # Priority 1: Process searches (need video_id before we can rate)
+        pending_searches = self.db.list_pending_searches(limit=1)
+        if pending_searches:
+            logger.info(f"RatingWorker: Processing search for '{pending_searches[0]['ha_title']}'")
+            self._process_search(pending_searches[0])
+            return 'success'
 
-        # Get YouTube API instance
+        # Priority 2: Process ratings
+        pending_ratings = self.db.list_pending_ratings(limit=1)
+        if pending_ratings:
+            logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
+            # Get YouTube API instance
+            try:
+                yt_api = self.youtube_api_getter()
+                if not yt_api:
+                    logger.error("RatingWorker: YouTube API not available")
+                    return 'empty'
+            except Exception as e:
+                logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
+                return 'empty'
+
+            self._process_single_rating(yt_api, pending_ratings[0])
+            return 'success'
+
+        # Nothing to process
+        return 'empty'
+
+    def _process_search(self, job) -> None:
+        """Process a single search request."""
+        search_id = job['id']
+        ha_media = {
+            'title': job['ha_title'],
+            'artist': job['ha_artist'],
+            'album': job['ha_album'],
+            'content_id': job['ha_content_id'],
+            'duration': job['ha_duration'],
+            'app_name': job['ha_app_name']
+        }
+
         try:
-            yt_api = self.youtube_api_getter()
-            if not yt_api:
-                logger.error("RatingWorker: YouTube API not available")
-                return
-        except Exception as e:
-            logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
-            return
+            # Perform search using wrapper
+            video = self.search_wrapper(ha_media)
 
-        # Process the single rating
-        self._process_single_rating(yt_api, pending_jobs[0])
+            if video and video.get('id'):
+                # Search succeeded
+                video_id = video['id']
+                logger.info(f"RatingWorker: Search found video {video_id} for '{job['ha_title']}'")
+
+                # Mark search as complete
+                self.db.mark_search_complete(search_id, video_id)
+
+                # If there's a callback rating, enqueue it
+                if job.get('callback_rating'):
+                    self.db.enqueue_rating(video_id, job['callback_rating'])
+                    logger.info(f"RatingWorker: Enqueued {job['callback_rating']} rating for {video_id}")
+
+            else:
+                # Search failed (no results)
+                self.db.mark_search_failed(search_id, "No matching video found")
+                logger.warning(f"RatingWorker: No video found for '{job['ha_title']}'")
+
+        except Exception as e:
+            # Search error
+            self.db.mark_search_failed(search_id, str(e))
+            logger.error(f"RatingWorker: Search failed for '{job['ha_title']}': {e}")
 
     def _process_single_rating(self, yt_api, job) -> None:
         """Process a single rating."""
@@ -155,7 +225,7 @@ class RatingWorker:
 _rating_worker: Optional[RatingWorker] = None
 
 
-def init_rating_worker(db, youtube_api_getter, quota_guard, poll_interval: int = 60) -> RatingWorker:
+def init_rating_worker(db, youtube_api_getter, quota_guard, search_wrapper, poll_interval: int = 60) -> RatingWorker:
     """
     Initialize the global rating worker.
 
@@ -163,13 +233,14 @@ def init_rating_worker(db, youtube_api_getter, quota_guard, poll_interval: int =
         db: Database instance
         youtube_api_getter: Function that returns YouTube API instance
         quota_guard: Quota manager instance
-        poll_interval: Seconds between queue checks
+        search_wrapper: Function to perform YouTube searches
+        poll_interval: Base seconds between checks (overridden by smart sleep)
 
     Returns:
         Initialized RatingWorker instance
     """
     global _rating_worker
-    _rating_worker = RatingWorker(db, youtube_api_getter, quota_guard, poll_interval)
+    _rating_worker = RatingWorker(db, youtube_api_getter, quota_guard, search_wrapper, poll_interval)
     return _rating_worker
 
 
