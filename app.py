@@ -644,12 +644,20 @@ except Exception as e:
     logger.error(f"Failed to initialize YouTube API: {str(e)}")
     logger.error("Please ensure credentials.json exists and run the OAuth flow")
 
-# Run startup health checks
-run_startup_checks(ha_api, yt_api, db, quota_guard)
+# Run startup health checks (wrapped in try-except to prevent app crashes)
+try:
+    run_startup_checks(ha_api, yt_api, db, quota_guard)
+except Exception as e:
+    logger.error(f"Startup health checks failed: {str(e)}")
+    logger.error(traceback.format_exc())
+    logger.warning("App starting despite health check failures - some features may not work")
 
 # Clear stats cache on startup to prevent stale data issues
-logger.info("Clearing stats cache...")
-db.invalidate_stats_cache()
+try:
+    logger.info("Clearing stats cache...")
+    db.invalidate_stats_cache()
+except Exception as e:
+    logger.error(f"Failed to clear stats cache: {str(e)}")
 
 logger.info("YouTube Thumbs application initialized and ready")
 
