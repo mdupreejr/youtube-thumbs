@@ -7,6 +7,14 @@ from typing import Optional, Any, Callable
 from functools import wraps
 from logger import logger
 
+# Try to import HttpError at module level for better performance
+try:
+    from googleapiclient.errors import HttpError
+    _HTTPERROR_AVAILABLE = True
+except ImportError:
+    HttpError = None  # type: ignore
+    _HTTPERROR_AVAILABLE = False
+
 
 class YouTubeThumbsError(Exception):
     """Base exception for all YouTube Thumbs errors."""
@@ -46,27 +54,31 @@ def _extract_clean_error_message(exc: Exception) -> str:
     Returns:
         Clean error message string
     """
-    # Try to import HttpError to check type safely
-    try:
-        from googleapiclient.errors import HttpError
-        is_http_error = isinstance(exc, HttpError)
-    except ImportError:
-        # googleapiclient not available, fall back to type name check
+    # Check if this is an HttpError using cached import result
+    if _HTTPERROR_AVAILABLE and isinstance(exc, HttpError):
+        is_http_error = True
+    else:
+        # Fallback to type name check if googleapiclient not available
         is_http_error = type(exc).__name__ == 'HttpError'
     
     if is_http_error:
         try:
             # Try to extract error from content attribute
             content = getattr(exc, 'content', None)
+            content_str = None  # Decoded string content for parsing
+            
             if isinstance(content, bytes):
                 try:
-                    content = content.decode('utf-8')
+                    content_str = content.decode('utf-8')
                 except UnicodeDecodeError:
-                    content = None
+                    # Cannot decode bytes content, will try other extraction methods
+                    pass
+            elif isinstance(content, str):
+                content_str = content
             
-            if isinstance(content, str):
+            if content_str:
                 try:
-                    payload = json.loads(content)
+                    payload = json.loads(content_str)
                     error_payload = payload.get('error', {})
                     
                     # Extract the first error message if available
