@@ -216,15 +216,25 @@ cleanup() {
         bashio::log.info "Stopping sqlite_web (PID ${SQLITE_WEB_PID})"
         kill "${SQLITE_WEB_PID}" >/dev/null 2>&1 || true
     fi
+    if [ -n "${QUEUE_WORKER_PID}" ]; then
+        bashio::log.info "Stopping queue worker (PID ${QUEUE_WORKER_PID})"
+        kill "${QUEUE_WORKER_PID}" >/dev/null 2>&1 || true
+    fi
 }
 
 trap cleanup EXIT
 
 bashio::log.info "Running startup health checks..."
 
+# Start the queue worker as a separate background process
+# This processes ratings and searches one at a time, respecting quota limits
+bashio::log.info "Starting queue worker process..."
+python3 queue_worker.py >> /config/youtube_thumbs/queue_worker.log 2>&1 &
+QUEUE_WORKER_PID=$!
+bashio::log.info "Queue worker started (PID ${QUEUE_WORKER_PID})"
+
 # Start the Flask application with Gunicorn (production WSGI server)
-# IMPORTANT: Using 1 worker to ensure only ONE RatingWorker background thread runs
-# Multiple workers would create multiple background threads, all hitting YouTube API simultaneously
+# Using 1 worker with 4 threads for HTTP request handling
 bashio::log.info "Starting Flask application with Gunicorn..."
 gunicorn \
     --bind "${HOST}:${PORT}" \
