@@ -223,11 +223,13 @@ trap cleanup EXIT
 bashio::log.info "Running startup health checks..."
 
 # Start the Flask application with Gunicorn (production WSGI server)
+# IMPORTANT: Using 1 worker to ensure only ONE RatingWorker background thread runs
+# Multiple workers would create multiple background threads, all hitting YouTube API simultaneously
 bashio::log.info "Starting Flask application with Gunicorn..."
 gunicorn \
     --bind "${HOST}:${PORT}" \
-    --workers 4 \
-    --threads 2 \
+    --workers 1 \
+    --threads 4 \
     --worker-class gthread \
     --timeout 120 \
     --access-logfile - \

@@ -23,6 +23,11 @@ def handle_youtube_error(context: str, return_value: Any = None):
         def wrapper(self, *args, **kwargs):
             try:
                 return func(self, *args, **kwargs)
+            except QuotaExceededError:
+                # CRITICAL: Re-raise QuotaExceededError immediately without suppression
+                # This must be caught BEFORE the generic Exception handler
+                # Worker thread needs to catch this to trigger 1-hour sleep
+                raise
             except HttpError as e:
                 # Check if it's a quota error
                 detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
