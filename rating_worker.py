@@ -17,10 +17,10 @@ class RatingWorker:
 
     All YouTube API operations go through this worker, which:
     - Processes ratings first (lightweight), then searches (heavier quota usage)
-    - Batch processing: up to 5 ratings + 5 searches per cycle
-    - Uses smart sleep intervals:
+    - SLOW MODE: 1 item per minute for troubleshooting
+    - Sleep intervals:
       * 1 hour when quota blocked
-      * 30 seconds after processing an item
+      * 60 seconds after processing an item
       * 60 seconds when queue is empty
     - Retries failures automatically
     - Runs continuously in background thread
@@ -114,7 +114,7 @@ class RatingWorker:
 
     def _worker_loop(self) -> None:
         """Main worker loop with smart sleep intervals."""
-        logger.info("RatingWorker loop started (smart sleep: 1h blocked / 30s processed / 60s empty)")
+        logger.info("RatingWorker loop started (SLOW MODE: 1 item per minute for troubleshooting)")
 
         while not self._stop_event.is_set():
             try:
@@ -129,8 +129,8 @@ class RatingWorker:
                     sleep_time = 3600  # 1 hour when quota blocked
                     logger.debug("RatingWorker: Quota blocked, sleeping 1 hour")
                 elif status == 'success':
-                    sleep_time = 30  # 30 seconds after processing
-                    logger.debug("RatingWorker: Item processed, sleeping 30 seconds")
+                    sleep_time = 60  # 60 seconds after processing (slow for troubleshooting)
+                    logger.debug("RatingWorker: Item processed, sleeping 60 seconds")
                 else:  # 'empty'
                     sleep_time = 60  # 60 seconds when queue empty
                     logger.debug("RatingWorker: Queue empty, sleeping 60 seconds")
@@ -149,69 +149,51 @@ class RatingWorker:
 
     def _process_next_item(self) -> str:
         """
-        Process next batch of items from queues (ratings first, then searches).
-        Ratings are lightweight, searches use more quota, so prioritize ratings.
-        Processes up to 5 ratings and 5 searches per cycle for better throughput.
+        Process next item from queues (ratings first, then searches).
+        Processes 1 item per cycle for careful troubleshooting.
 
         Returns:
             'blocked': Quota blocked
-            'success': Item(s) processed
+            'success': Item processed
             'empty': No items in queue
         """
         # Check quota first - don't waste time querying DB if blocked
         if self.quota_guard.is_blocked():
             return 'blocked'
 
-        items_processed = 0
-        BATCH_SIZE = 5
-
-        # Priority 1: Process ratings (lightweight API calls)
-        # Process up to BATCH_SIZE ratings per cycle
-        yt_api = None
-        for _ in range(BATCH_SIZE):
-            pending_ratings = self.db.list_pending_ratings(limit=1)
-            if not pending_ratings:
-                break  # No more ratings
-
-            # Get YouTube API instance once (reuse for all ratings in batch)
-            if not yt_api:
-                try:
-                    yt_api = self.youtube_api_getter()
-                    if not yt_api:
-                        logger.error("RatingWorker: YouTube API not available")
-                        break
-                except Exception as e:
-                    logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
-                    break
+        # Priority 1: Process one rating (lightweight API call)
+        pending_ratings = self.db.list_pending_ratings(limit=1)
+        if pending_ratings:
+            try:
+                yt_api = self.youtube_api_getter()
+                if not yt_api:
+                    logger.error("RatingWorker: YouTube API not available")
+                    return 'empty'
+            except Exception as e:
+                logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
+                return 'empty'
 
             logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
             self._process_single_rating(yt_api, pending_ratings[0])
-            items_processed += 1
 
-            # Small delay between items
-            time.sleep(2)
-
-        # Priority 2: Process searches (heavier API calls, only after ratings done)
-        # Process up to BATCH_SIZE searches per cycle
-        for _ in range(BATCH_SIZE):
-            # Use atomic claim to prevent race conditions
-            search_job = self.db.claim_pending_search()
-            if not search_job:
-                break  # No more searches
-
-            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
-            self._process_search(search_job)
-            items_processed += 1
-
-            # Small delay between items to avoid hammering API
-            time.sleep(2)
-
-        # Return status based on what was processed
-        if items_processed > 0:
-            # Update activity timestamp when items are processed
+            # Update activity timestamp
             with self._lock:
                 self._last_activity = time.time()
-            logger.info(f"RatingWorker: Processed {items_processed} items this cycle")
+
+            logger.info("RatingWorker: Processed 1 rating this cycle")
+            return 'success'
+
+        # Priority 2: Process one search (only if no ratings pending)
+        search_job = self.db.claim_pending_search()
+        if search_job:
+            logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
+            self._process_search(search_job)
+
+            # Update activity timestamp
+            with self._lock:
+                self._last_activity = time.time()
+
+            logger.info("RatingWorker: Processed 1 search this cycle")
             return 'success'
 
         # Nothing to process
