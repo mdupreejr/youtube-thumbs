@@ -2,6 +2,7 @@
 Rating routes for video rating functionality.
 Extracted from app.py for better organization.
 """
+import re
 import traceback
 from typing import Tuple, Optional, Dict, Any
 from flask import Blueprint, request, jsonify, Response, redirect
@@ -14,6 +15,55 @@ from helpers.request_helpers import get_real_ip
 from constants import MAX_BATCH_SIZE
 
 bp = Blueprint('rating', __name__)
+
+
+def safe_redirect(tab='rating', page='1'):
+    """
+    SECURITY: Create a safe redirect URL with validated parameters.
+
+    This prevents open redirect vulnerabilities by:
+    1. Validating ingress_path format
+    2. Ensuring page is numeric
+    3. Restricting tab to known values
+    4. Always using relative URLs
+
+    Args:
+        tab: Tab to redirect to (default: 'rating')
+        page: Page number (default: '1')
+
+    Returns:
+        Flask redirect response
+    """
+    # SECURITY: Validate and sanitize ingress path
+    raw_ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    ingress_path = ''
+    if raw_ingress_path:
+        # Only allow alphanumeric, hyphens, underscores, and forward slashes
+        if re.match(r'^/[a-zA-Z0-9/_-]*$', raw_ingress_path):
+            ingress_path = raw_ingress_path
+        else:
+            logger.warning(f"Invalid ingress path in redirect rejected: {raw_ingress_path}")
+
+    # SECURITY: Validate tab is one of allowed values
+    allowed_tabs = {'rating', 'stats', 'logs', 'database', 'system'}
+    if tab not in allowed_tabs:
+        logger.warning(f"Invalid tab in redirect rejected: {tab}")
+        tab = 'rating'
+
+    # SECURITY: Validate page is numeric
+    try:
+        page_num = int(page)
+        if page_num < 1:
+            page = '1'
+        else:
+            page = str(page_num)
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid page in redirect rejected: {page}")
+        page = '1'
+
+    # Build safe relative URL
+    safe_url = f"{ingress_path}/?tab={tab}&page={page}"
+    return redirect(safe_url)
 
 # Global references (set by init function)
 _db = None
@@ -368,17 +418,17 @@ def rate_song_form() -> Response:
 
         if not song_id or not rating:
             logger.error("Missing song_id or rating in form submission")
-            return redirect(f"{ingress_path}/?tab=rating&page={page}")
+            return safe_redirect('rating', page)
 
         # SECURITY: Validate video ID format
         is_valid, _ = validate_youtube_video_id(song_id)
         if not is_valid:
             logger.warning(f"Invalid video ID format: {song_id} from {get_real_ip()}")
-            return redirect(f"{ingress_path}/?tab=rating&page={page}")
+            return safe_redirect('rating', page)
 
         if rating not in ['like', 'dislike', 'skip']:
             logger.error(f"Invalid rating value: {rating}")
-            return redirect(f"{ingress_path}/?tab=rating&page={page}")
+            return safe_redirect('rating', page)
 
         # Skip ratings don't actually rate, just move to next
         if rating != 'skip':
@@ -395,15 +445,14 @@ def rate_song_form() -> Response:
                 logger.warning(f"Rating failed for {song_id}: status {status_code}")
 
         # Redirect back to rating tab with same page
-        return redirect(f"{ingress_path}/?tab=rating&page={page}")
+        return safe_redirect('rating', page)
 
     except Exception as e:
         logger.error(f"Error processing rating form: {e}")
         logger.error(traceback.format_exc())
         # Redirect back even on error
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
         page = request.form.get('page', '1')
-        return redirect(f"{ingress_path}/?tab=rating&page={page}")
+        return safe_redirect('rating', page)
 
 
 @bp.route('/api/unrated')

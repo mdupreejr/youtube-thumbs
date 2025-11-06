@@ -41,13 +41,32 @@ def create_database_proxy_handler():
     """
     def database_proxy(path):
         """Proxy requests to sqlite_web running on port 8080."""
+        # SECURITY: Hardcode localhost to prevent SSRF - only proxy to local sqlite_web
+        # Environment variables are validated to ensure they're localhost
         sqlite_web_host = os.getenv('SQLITE_WEB_HOST', '127.0.0.1')
         sqlite_web_port = os.getenv('SQLITE_WEB_PORT', '8080')
+
+        # SECURITY: Validate that host is localhost only (prevent SSRF)
+        if sqlite_web_host not in ('127.0.0.1', 'localhost', '::1'):
+            logger.error(f"Invalid SQLITE_WEB_HOST rejected: {sqlite_web_host}")
+            return Response("Invalid database configuration", status=500)
+
+        # SECURITY: Validate port is numeric and in valid range
+        try:
+            port_num = int(sqlite_web_port)
+            if not (1 <= port_num <= 65535):
+                raise ValueError("Port out of range")
+        except (ValueError, TypeError):
+            logger.error(f"Invalid SQLITE_WEB_PORT rejected: {sqlite_web_port}")
+            return Response("Invalid database configuration", status=500)
+
         sqlite_web_url = f"http://{sqlite_web_host}:{sqlite_web_port}"
 
-        # Build the target URL
+        # SECURITY: Sanitize path to prevent path traversal
         if path:
-            target_url = f"{sqlite_web_url}/{path}"
+            # Remove any ../ or ./ patterns
+            clean_path = path.replace('../', '').replace('./', '')
+            target_url = f"{sqlite_web_url}/{clean_path}"
         else:
             target_url = sqlite_web_url
 
@@ -57,7 +76,7 @@ def create_database_proxy_handler():
             target_url += f"?{query_string}"
 
         try:
-            # Forward the request to sqlite_web
+            # SECURITY: Forward the request to localhost-only sqlite_web (SSRF protected)
             resp = requests.request(
                 method=request.method,
                 url=target_url,
