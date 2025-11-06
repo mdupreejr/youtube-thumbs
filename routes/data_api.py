@@ -397,7 +397,6 @@ def retry_pending_videos() -> Response:
     import time
     from helpers.search_helpers import search_and_match_video
     from helpers.cache_helpers import find_cached_video
-    from quota_manager import get_quota_manager as get_quota_guard
 
     try:
         # Get batch size from request (default: 5, max: 50)
@@ -419,14 +418,7 @@ def retry_pending_videos() -> Response:
                 'message': 'No pending videos with quota_exceeded reason found'
             })
 
-        # Check quota status
-        quota_guard = get_quota_guard()
-        quota_blocked = quota_guard.is_blocked() if quota_guard else False
-
-        if quota_blocked:
-            logger.warning("Manual retry attempted while quota is blocked")
-
-        # Process each video
+        # Process each video (quota errors will be raised as QuotaExceededError)
         resolved = 0
         failed = 0
         not_found = 0
@@ -460,16 +452,10 @@ def retry_pending_videos() -> Response:
                     resolved += 1
                     logger.info(f"Resolved from YouTube: {ha_title}")
                 else:
-                    # Search returned None - could be quota blocked OR genuinely not found
-                    if quota_blocked:
-                        # Don't mark as not_found if quota is blocked - keep as quota_exceeded
-                        logger.info(f"Quota blocked - keeping {ha_title} as quota_exceeded")
-                        failed += 1
-                    else:
-                        # Genuinely not found (quota is OK but no match found)
-                        db.mark_pending_not_found(ha_content_id)
-                        not_found += 1
-                        logger.info(f"Not found: {ha_title}")
+                    # Search returned None - genuinely not found
+                    db.mark_pending_not_found(ha_content_id)
+                    not_found += 1
+                    logger.info(f"Not found: {ha_title}")
 
                 # Delay between requests to avoid hammering API
                 time.sleep(2)
@@ -480,11 +466,8 @@ def retry_pending_videos() -> Response:
 
         processed = len(pending_videos)
 
-        # Build message based on quota status
-        if quota_blocked:
-            message = f"Quota exceeded - cannot retry. Processed {processed} videos: {resolved} resolved from cache, {failed} still pending (quota blocked)"
-        else:
-            message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
+        # Build message
+        message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
 
         # Invalidate stats cache if any videos were resolved
         if resolved > 0 or not_found > 0:
@@ -497,7 +480,6 @@ def retry_pending_videos() -> Response:
             'resolved': resolved,
             'failed': failed,
             'not_found': not_found,
-            'quota_blocked': quota_blocked,
             'message': message
         })
 

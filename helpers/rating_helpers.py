@@ -10,12 +10,6 @@ from .video_helpers import prepare_video_upsert
 from .response_helpers import error_response, success_response
 
 
-def _get_quota_guard():
-    """Lazy import of quota_guard to avoid circular dependency."""
-    from quota_manager import get_quota_manager
-    return get_quota_manager()
-
-
 def check_rate_limit(rate_limiter, rating_type: str, error_response_func) -> Optional[Tuple[Response, int]]:
     """
     Check rate limiting and return error response if limit exceeded.
@@ -107,39 +101,7 @@ def find_or_search_video(
     video = find_cached_func(ha_media)
 
     if not video:
-        # Check if quota is blocked
-        should_skip, _ = _get_quota_guard().check_quota_or_skip("locate video for rating", rating_type)
-        if should_skip:
-            # Can't search now due to quota, but we can queue this media for later matching
-            # This allows the user to rate songs even when quota is exhausted
-            from database import get_database
-            db = get_database()
-
-            # Add to pending videos so it can be matched when quota is restored
-            db.upsert_pending_media(ha_media, reason='quota_exceeded')
-
-            title = ha_media.get('title', 'Unknown')
-            artist = ha_media.get('artist', 'Unknown')
-            media_info = format_media_info_func(title, artist)
-
-            logger.info(
-                "Quota blocked - cannot search for video now. Added to pending: %s",
-                media_info
-            )
-            rating_logger.info(f"{rating_type.upper()} | PENDING | {media_info} | Quota blocked, queued for later matching")
-
-            error_response = (
-                jsonify({
-                    "success": False,
-                    "error": "Quota exceeded - video will be matched and rated when quota is restored",
-                    "queued_for_matching": True,
-                    "pending_reason": "quota_exceeded"
-                }),
-                503,
-            )
-            return None, error_response
-
-        # Search for video
+        # Search for video (if quota is exceeded, search will raise QuotaExceededError)
         video = search_and_match_func(ha_media)
 
     # Still not found
@@ -220,31 +182,11 @@ def handle_quota_blocked_rating(
     queue_rating_func
 ) -> Optional[Tuple[Response, int]]:
     """
-    Handle rating when quota is blocked.
+    DEPRECATED: This function is no longer needed with queue-based architecture.
+    All ratings go through the queue, and quota errors are handled by the worker.
 
-    Args:
-        yt_video_id: YouTube video ID
-        rating_type: Type of rating
-        media_info: Formatted media info for logging
-        queue_rating_func: Function to queue the rating
-
-    Returns:
-        Response tuple if quota blocked, None otherwise
+    Kept for backwards compatibility but returns None (no-op).
     """
-    should_skip, _ = _get_quota_guard().check_quota_or_skip("rate video", yt_video_id, rating_type)
-    if should_skip:
-        guard_status = _get_quota_guard().status()
-        logger.warning(
-            "Queuing %s request for %s due to quota cooldown",
-            rating_type,
-            yt_video_id,
-        )
-        return queue_rating_func(
-            yt_video_id,
-            rating_type,
-            media_info,
-            guard_status.get('message', 'quota cooldown'),
-        )
     return None
 
 
@@ -275,20 +217,7 @@ def execute_rating(
     # Enqueue the rating first to populate yt_rating_* columns
     db.enqueue_rating(yt_video_id, rating_type)
 
-    # Check quota one more time before attempting rating
-    # (quota might have been exhausted during _sync_pending_ratings)
-    should_skip, _ = _get_quota_guard().check_quota_or_skip("execute rating", yt_video_id, rating_type)
-    if should_skip:
-        logger.info(f"Quota blocked during execute_rating for {yt_video_id}, already queued")
-        db.mark_pending_rating(yt_video_id, False, "Quota blocked")
-        return queue_rating_func(
-            yt_video_id,
-            rating_type,
-            media_info,
-            "Quota blocked",
-            record_attempt=False  # Already marked as failed above
-        )
-
+    # Attempt rating (if quota exceeded, API will raise QuotaExceededError)
     if yt_api.set_video_rating(yt_video_id, rating_type):
         logger.info(f"Successfully rated video {yt_video_id} {rating_type}")
         user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | SUCCESS")

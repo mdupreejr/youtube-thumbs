@@ -767,16 +767,16 @@ class YouTubeAPI:
         results = {}
 
         # Process ratings one by one - QuotaExceededError will propagate to caller
-        for video_id, rating in ratings:
+        for idx, (video_id, rating) in enumerate(ratings):
             try:
                 success = self.set_video_rating(video_id, rating)
                 results[video_id] = success
             except QuotaExceededError:
-                # Quota exceeded - mark remaining as failed and re-raise
+                # Quota exceeded - mark current and remaining as failed and re-raise
                 results[video_id] = False
-                for remaining_vid, _ in ratings:
-                    if remaining_vid not in results:
-                        results[remaining_vid] = False
+                # Mark only the remaining unprocessed items as failed
+                for remaining_vid, _ in ratings[idx + 1:]:
+                    results[remaining_vid] = False
                 raise
 
         return results

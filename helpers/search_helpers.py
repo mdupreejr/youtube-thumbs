@@ -7,12 +7,6 @@ from logger import logger
 from metrics_tracker import metrics
 
 
-def _get_quota_guard():
-    """Lazy import of quota_guard to avoid circular dependency."""
-    from quota_manager import get_quota_manager
-    return get_quota_manager()
-
-
 def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
     """
     Validate that required fields for searching are present.
@@ -56,11 +50,7 @@ def should_skip_search(db, title: str, duration: int, artist: Optional[str] = No
         logger.debug("Skipping search for '%s' - recently marked as not found", title)
         return True
 
-    # Check if quota is blocked
-    should_skip, _ = _get_quota_guard().check_quota_or_skip("YouTube search", title)
-    if should_skip:
-        return True
-
+    # No quota checks needed - if quota is exceeded, search will raise QuotaExceededError
     return False
 
 

@@ -59,7 +59,7 @@ def test_youtube() -> Response:
     logger.debug("=== /test/youtube endpoint called ===")
     try:
         yt_api = _get_youtube_api()
-        success, message = _check_youtube_api(yt_api, _quota_guard, _db)
+        success, message = _check_youtube_api(yt_api, None, _db)  # No quota_guard needed
         logger.debug(f"YouTube test result: success={success}, message={message}")
         response = jsonify({"success": success, "message": message})
         logger.debug(f"Returning JSON response: {response.get_json()}")
@@ -121,22 +121,14 @@ def health() -> Response:
     It provides basic status information for UI polling without expensive operations.
     For full diagnostics with thread recovery, use /status endpoint instead.
     """
-    # Quick non-blocking checks only - no thread restarts
-    guard_status = _quota_guard.status()
-    prober_healthy = _quota_prober.is_healthy()
-
-    # Simple health score without expensive metric calculations
-    # Base score of 100, deduct for issues
+    # Simple health score based on metrics only
     health_score = 100
     warnings = []
 
-    if not prober_healthy:
-        warnings.append("Quota prober is not running")
-        health_score -= 15
+    # Check basic system health (could add more checks here)
+    # For now, just report healthy if no major issues
 
-    if guard_status.get('blocked'):
-        overall_status = "cooldown"
-    elif health_score >= 70:
+    if health_score >= 70:
         overall_status = "healthy"
     elif health_score >= 40:
         overall_status = "degraded"
@@ -147,11 +139,6 @@ def health() -> Response:
         "status": overall_status,
         "health_score": health_score,
         "warnings": warnings,
-        "quota_guard": guard_status,
-        "quota_prober": {
-            "healthy": prober_healthy,
-            "enabled": _quota_prober.enabled,
-        },
         "timestamp": time.time()
     }), 200
 

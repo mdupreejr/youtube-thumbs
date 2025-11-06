@@ -234,8 +234,13 @@ class RatingWorker:
                 self.db.mark_search_failed(search_id, "No matching video found")
                 logger.warning(f"RatingWorker: No video found for '{job['ha_title']}'")
 
+        except QuotaExceededError:
+            # Quota exceeded - re-raise to trigger 1-hour sleep
+            self.db.mark_search_failed(search_id, "Quota exceeded - will retry")
+            logger.warning(f"RatingWorker: Quota exceeded during search for '{job['ha_title']}'")
+            raise
         except Exception as e:
-            # Search error
+            # Other search errors
             self.db.mark_search_failed(search_id, str(e))
             logger.error(f"RatingWorker: Search failed for '{job['ha_title']}': {e}")
 
@@ -256,7 +261,13 @@ class RatingWorker:
             else:
                 self.db.mark_pending_rating(video_id, False, "YouTube API returned False")
                 logger.warning(f"RatingWorker: YouTube API rejected rating for {video_id}")
+        except QuotaExceededError:
+            # Quota exceeded - re-raise to trigger 1-hour sleep
+            self.db.mark_pending_rating(video_id, False, "Quota exceeded - will retry")
+            logger.warning(f"RatingWorker: Quota exceeded while rating {video_id}")
+            raise
         except Exception as e:
+            # Other errors
             self.db.mark_pending_rating(video_id, False, str(e))
             logger.error(f"RatingWorker: Failed to rate {video_id}: {e}")
 

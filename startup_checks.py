@@ -65,7 +65,7 @@ def check_home_assistant_api(ha_api) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
+def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
     """Test YouTube API authentication and quota."""
     try:
         logger.info("=" * 60)
@@ -90,30 +90,6 @@ def check_youtube_api(yt_api, quota_guard=None, db=None) -> Tuple[bool, str]:
                 quota_used_24h = summary.get('total_quota_cost', 0)
             except Exception as e:
                 logger.debug(f"Could not fetch API usage stats: {e}")
-
-        # Check quota guard before making API call
-        if quota_guard and quota_guard.is_blocked():
-            logger.warning("⚠ YouTube API quota exceeded (cooldown active)")
-            logger.warning("  Skipping API test to avoid further quota consumption")
-            status = quota_guard.status()
-            cooldown_remaining = status.get('remaining_seconds', 0)
-            hours = cooldown_remaining // 3600
-            minutes = (cooldown_remaining % 3600) // 60
-
-            # Get quota exceeded timestamp
-            state = quota_guard._load_state()
-            quota_exceeded_at = state.get('set_at', 'Unknown') if state else 'Unknown'
-
-            msg_parts = [
-                f"⚠️ Quota cooldown active",
-                f"Time remaining: {hours}h {minutes}m",
-                f"Quota exceeded at: {quota_exceeded_at}",
-                f"",
-                f"API usage (last 24h):",
-                f"  • Calls: {api_calls_24h}",
-                f"  • Quota used: {quota_used_24h:,} / 10,000"
-            ]
-            return False, "\n".join(msg_parts)
 
         # Try a simple API call to verify authentication
         logger.info("Testing YouTube API authentication...")
@@ -305,7 +281,7 @@ def check_database(db) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def run_startup_checks(ha_api, yt_api, db, quota_guard=None) -> bool:
+def run_startup_checks(ha_api, yt_api, db) -> bool:
     """Run all startup checks and report status."""
     logger.info("")
     logger.info("░" * 60)
@@ -322,7 +298,7 @@ def run_startup_checks(ha_api, yt_api, db, quota_guard=None) -> bool:
     all_ok = all_ok and ha_ok
 
     # Check YouTube API
-    yt_ok, yt_msg = check_youtube_api(yt_api, quota_guard, db)
+    yt_ok, yt_msg = check_youtube_api(yt_api, db)
     results.append(("YouTube API", yt_ok, yt_msg))
     all_ok = all_ok and yt_ok
 
