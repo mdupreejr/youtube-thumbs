@@ -24,9 +24,9 @@ def handle_youtube_error(context: str, return_value: Any = None):
             try:
                 return func(self, *args, **kwargs)
             except QuotaExceededError:
-                # CRITICAL: Re-raise QuotaExceededError immediately without suppression
-                # This must be caught BEFORE the generic Exception handler
-                # Worker thread needs to catch this to trigger 1-hour sleep
+                # CRITICAL: Re-raise QuotaExceededError immediately without logging
+                # Worker thread will log ONE clear message when it catches this
+                # No need to log here - would create duplicate error messages
                 raise
             except HttpError as e:
                 # Check if it's a quota error
@@ -34,7 +34,8 @@ def handle_youtube_error(context: str, return_value: Any = None):
                 is_quota_error = detail is not None
                 if is_quota_error:
                     # Raise QuotaExceededError - worker will catch and sleep
-                    raise QuotaExceededError(f"YouTube quota exceeded during {context}: {detail}")
+                    # Don't include detail (contains HTML) - worker will log clean message
+                    raise QuotaExceededError("YouTube quota exceeded")
 
                 # Build error message with context
                 error_msg = f"YouTube API error in {context}"
@@ -49,6 +50,7 @@ def handle_youtube_error(context: str, return_value: Any = None):
                     log_traceback=not is_quota_error  # Skip traceback for quota errors
                 )
             except Exception as e:
+                # Should never reach here for QuotaExceededError (caught above)
                 error_msg = f"Unexpected error in {context}"
                 if args:
                     error_msg += f" | {args[0]}"

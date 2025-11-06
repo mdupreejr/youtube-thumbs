@@ -137,7 +137,7 @@ class RatingWorker:
             except QuotaExceededError as e:
                 # Catch QuotaExceededError first (more specific than Exception)
                 # This ensures quota errors always trigger 1-hour sleep even if they escape from _process_next_item
-                logger.warning(f"RatingWorker: Quota exceeded in worker loop: {e}")
+                logger.warning("YouTube quota exceeded - worker sleeping for 1 hour")
                 sleep_time = 3600  # 1 hour
             except Exception as e:
                 logger.error(f"RatingWorker error in processing loop: {e}")
@@ -241,8 +241,8 @@ class RatingWorker:
 
         except QuotaExceededError:
             # Quota exceeded - re-raise to trigger 1-hour sleep
+            # Don't log here - main loop will log ONE clear message
             self.db.mark_search_failed(search_id, "Quota exceeded - will retry")
-            logger.warning(f"RatingWorker: Quota exceeded during search for '{job['ha_title']}'")
             raise
         except Exception as e:
             # Other search errors
@@ -268,8 +268,8 @@ class RatingWorker:
                 logger.warning(f"RatingWorker: YouTube API rejected rating for {video_id}")
         except QuotaExceededError:
             # Quota exceeded - re-raise to trigger 1-hour sleep
+            # Don't log here - main loop will log ONE clear message
             self.db.mark_pending_rating(video_id, False, "Quota exceeded - will retry")
-            logger.warning(f"RatingWorker: Quota exceeded while rating {video_id}")
             raise
         except Exception as e:
             # Other errors

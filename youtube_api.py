@@ -599,7 +599,7 @@ class YouTubeAPI:
             is_quota_error = detail is not None
             if is_quota_error:
                 # Raise exception - worker will catch and sleep for 1 hour
-                raise QuotaExceededError(f"YouTube quota exceeded during search: {detail}")
+                raise QuotaExceededError("YouTube quota exceeded")
 
             # Track failed API call
             if _db:
@@ -666,7 +666,8 @@ class YouTubeAPI:
             detail = self._quota_error_detail(e)
             if detail:
                 # Raise exception - worker will catch and sleep for 1 hour
-                raise QuotaExceededError(f"YouTube quota exceeded during set_video_rating: {detail}")
+                # Don't include detail (contains HTML) - worker will log clean message
+                raise QuotaExceededError("YouTube quota exceeded")
 
             # Non-quota error
             logger.error(f"Failed to rate video {yt_video_id}: {e}")
@@ -739,7 +740,7 @@ class YouTubeAPI:
                 is_quota_error = detail is not None
                 if is_quota_error:
                     # Raise exception - worker will catch and sleep for 1 hour
-                    raise QuotaExceededError(f"YouTube quota exceeded during batch_get_videos: {detail}")
+                    raise QuotaExceededError("YouTube quota exceeded")
                 log_and_suppress(
                     e,
                     f"YouTube API error fetching batch of videos",
