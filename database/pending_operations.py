@@ -350,6 +350,70 @@ class PendingOperations:
                     level="error"
                 )
 
+    def mark_search_complete_with_callback(self, search_id: int, found_video_id: str, callback_rating: Optional[str] = None) -> None:
+        """
+        Atomically mark search as complete and optionally enqueue callback rating.
+        Both operations happen in single transaction to prevent data loss.
+
+        Args:
+            search_id: Search queue ID
+            found_video_id: The YouTube video ID that was found
+            callback_rating: Optional rating to enqueue ('like' or 'dislike')
+        """
+        timestamp = self._timestamp('')
+        with self._lock:
+            try:
+                with self._conn:
+                    # Mark search complete
+                    self._conn.execute(
+                        """
+                        UPDATE search_queue
+                        SET status = 'completed',
+                            found_video_id = ?,
+                            last_attempt = ?
+                        WHERE id = ?
+                        """,
+                        (found_video_id, timestamp, search_id),
+                    )
+
+                    # If callback rating specified, enqueue it in same transaction
+                    if callback_rating:
+                        # Validate rating
+                        if callback_rating not in ['like', 'dislike']:
+                            raise ValueError(f"Invalid callback rating: {callback_rating}")
+
+                        # Check rating queue limit (same as enqueue_rating)
+                        cur = self._conn.execute(
+                            "SELECT COUNT(*) as count FROM video_ratings WHERE rating_queue_pending IS NOT NULL"
+                        )
+                        pending_count = cur.fetchone()['count']
+                        if pending_count >= 100:  # MAX_PENDING_RATINGS
+                            logger.warning(f"Rating queue full, cannot enqueue callback rating for {found_video_id}")
+                            # Don't fail the search complete, just skip rating
+                            return
+
+                        # Enqueue the rating
+                        self._conn.execute(
+                            """
+                            UPDATE video_ratings
+                            SET rating_queue_pending = ?,
+                                rating_queue_requested_at = ?,
+                                rating_queue_attempts = 0,
+                                rating_queue_last_error = NULL,
+                                rating_queue_last_attempt = NULL
+                            WHERE yt_video_id = ?
+                            """,
+                            (callback_rating, timestamp, found_video_id),
+                        )
+
+            except sqlite3.DatabaseError as exc:
+                log_and_suppress(
+                    exc,
+                    "Failed to complete search with callback for ID %s",
+                    search_id,
+                    level="error"
+                )
+
     def mark_search_failed(self, search_id: int, error: str) -> None:
         """
         Increment search attempts and record error.

@@ -1,21 +1,25 @@
 import time
+import threading
 from collections import deque
 from typing import Tuple, Dict, Any
 import os
 from logger import logger
 
 class RateLimiter:
-    """Rate limiter to prevent API abuse."""
-    
+    """Thread-safe rate limiter to prevent API abuse."""
+
     def __init__(self) -> None:
         self.per_minute = self._get_limit('RATE_LIMIT_PER_MINUTE', 10)
         self.per_hour = self._get_limit('RATE_LIMIT_PER_HOUR', 100)
         self.per_day = self._get_limit('RATE_LIMIT_PER_DAY', 500)
-        
+
         # Dedicated queues per window to keep operations O(1)
         self.minute_requests = deque()
         self.hour_requests = deque()
         self.day_requests = deque()
+
+        # Thread lock to protect deque access from multiple Flask threads
+        self._lock = threading.Lock()
     
     @staticmethod
     def _get_limit(env_name: str, default: int) -> int:
@@ -62,66 +66,68 @@ class RateLimiter:
     
     def check_and_add_request(self) -> Tuple[bool, str]:
         """
-        Check if request is allowed under rate limits.
+        Thread-safe check if request is allowed under rate limits.
         Returns (allowed: bool, reason: str)
         """
-        current_time = time.time()
-        
-        minute_count, hour_count, day_count = self._counts(current_time)
-        
-        # Check limits
-        if minute_count >= self.per_minute:
-            retry = self._retry_after(self.minute_requests, 60, current_time)
-            logger.warning(
-                "Rate limit exceeded (%s/min). Window count=%s; retry in ~%ss",
-                self.per_minute,
-                minute_count,
-                retry,
-            )
-            return False, f"Rate limit exceeded: {self.per_minute} requests per minute (retry in {retry}s)"
+        with self._lock:
+            current_time = time.time()
 
-        if hour_count >= self.per_hour:
-            retry = self._retry_after(self.hour_requests, 3600, current_time)
-            logger.warning(
-                "Rate limit exceeded (%s/hr). Window count=%s; retry in ~%ss",
-                self.per_hour,
-                hour_count,
-                retry,
-            )
-            return False, f"Rate limit exceeded: {self.per_hour} requests per hour (retry in {retry}s)"
+            minute_count, hour_count, day_count = self._counts(current_time)
 
-        if day_count >= self.per_day:
-            retry = self._retry_after(self.day_requests, 86400, current_time)
-            logger.warning(
-                "Rate limit exceeded (%s/day). Window count=%s; retry in ~%ss",
-                self.per_day,
-                day_count,
-                retry,
-            )
-            return False, f"Rate limit exceeded: {self.per_day} requests per day (retry in {retry}s)"
-        
-        # Add request timestamp to each queue
-        self.minute_requests.append(current_time)
-        self.hour_requests.append(current_time)
-        self.day_requests.append(current_time)
-        
-        return True, "OK"
+            # Check limits
+            if minute_count >= self.per_minute:
+                retry = self._retry_after(self.minute_requests, 60, current_time)
+                logger.warning(
+                    "Rate limit exceeded (%s/min). Window count=%s; retry in ~%ss",
+                    self.per_minute,
+                    minute_count,
+                    retry,
+                )
+                return False, f"Rate limit exceeded: {self.per_minute} requests per minute (retry in {retry}s)"
+
+            if hour_count >= self.per_hour:
+                retry = self._retry_after(self.hour_requests, 3600, current_time)
+                logger.warning(
+                    "Rate limit exceeded (%s/hr). Window count=%s; retry in ~%ss",
+                    self.per_hour,
+                    hour_count,
+                    retry,
+                )
+                return False, f"Rate limit exceeded: {self.per_hour} requests per hour (retry in {retry}s)"
+
+            if day_count >= self.per_day:
+                retry = self._retry_after(self.day_requests, 86400, current_time)
+                logger.warning(
+                    "Rate limit exceeded (%s/day). Window count=%s; retry in ~%ss",
+                    self.per_day,
+                    day_count,
+                    retry,
+                )
+                return False, f"Rate limit exceeded: {self.per_day} requests per day (retry in {retry}s)"
+
+            # Add request timestamp to each queue
+            self.minute_requests.append(current_time)
+            self.hour_requests.append(current_time)
+            self.day_requests.append(current_time)
+
+            return True, "OK"
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get current rate limit statistics."""
-        current_time = time.time()
-        minute_count, hour_count, day_count = self._counts(current_time)
+        """Thread-safe get current rate limit statistics."""
+        with self._lock:
+            current_time = time.time()
+            minute_count, hour_count, day_count = self._counts(current_time)
 
-        return {
-            "last_minute": minute_count,
-            "last_hour": hour_count,
-            "last_day": day_count,
-            "limits": {
-                "per_minute": self.per_minute,
-                "per_hour": self.per_hour,
-                "per_day": self.per_day
+            return {
+                "last_minute": minute_count,
+                "last_hour": hour_count,
+                "last_day": day_count,
+                "limits": {
+                    "per_minute": self.per_minute,
+                    "per_hour": self.per_hour,
+                    "per_day": self.per_day
+                }
             }
-        }
 
 # Create global rate limiter instance
 rate_limiter = RateLimiter()

@@ -114,40 +114,65 @@ class RatingWorker:
 
     def _process_next_item(self) -> str:
         """
-        Process next item from queues (searches first, then ratings).
+        Process next batch of items from queues (searches first, then ratings).
+        Processes up to 5 searches and 5 ratings per cycle for better throughput.
 
         Returns:
             'blocked': Quota blocked
-            'success': Item processed
+            'success': Item(s) processed
             'empty': No items in queue
         """
         # Check quota first - don't waste time querying DB if blocked
         if self.quota_guard.is_blocked():
             return 'blocked'
 
+        items_processed = 0
+        BATCH_SIZE = 5
+
         # Priority 1: Process searches (need video_id before we can rate)
-        # Use atomic claim to prevent race conditions
-        search_job = self.db.claim_pending_search()
-        if search_job:
+        # Process up to BATCH_SIZE searches per cycle
+        for _ in range(BATCH_SIZE):
+            # Use atomic claim to prevent race conditions
+            search_job = self.db.claim_pending_search()
+            if not search_job:
+                break  # No more searches
+
             logger.info(f"RatingWorker: Processing search for '{search_job['ha_title']}'")
             self._process_search(search_job)
-            return 'success'
+            items_processed += 1
+
+            # Small delay between items to avoid hammering API
+            time.sleep(2)
 
         # Priority 2: Process ratings
-        pending_ratings = self.db.list_pending_ratings(limit=1)
-        if pending_ratings:
-            logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
-            # Get YouTube API instance
-            try:
-                yt_api = self.youtube_api_getter()
-                if not yt_api:
-                    logger.error("RatingWorker: YouTube API not available")
-                    return 'empty'
-            except Exception as e:
-                logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
-                return 'empty'
+        # Process up to BATCH_SIZE ratings per cycle
+        yt_api = None
+        for _ in range(BATCH_SIZE):
+            pending_ratings = self.db.list_pending_ratings(limit=1)
+            if not pending_ratings:
+                break  # No more ratings
 
+            # Get YouTube API instance once (reuse for all ratings in batch)
+            if not yt_api:
+                try:
+                    yt_api = self.youtube_api_getter()
+                    if not yt_api:
+                        logger.error("RatingWorker: YouTube API not available")
+                        break
+                except Exception as e:
+                    logger.error(f"RatingWorker: Failed to get YouTube API: {e}")
+                    break
+
+            logger.info(f"RatingWorker: Processing rating for video {pending_ratings[0]['yt_video_id']}")
             self._process_single_rating(yt_api, pending_ratings[0])
+            items_processed += 1
+
+            # Small delay between items
+            time.sleep(2)
+
+        # Return status based on what was processed
+        if items_processed > 0:
+            logger.info(f"RatingWorker: Processed {items_processed} items this cycle")
             return 'success'
 
         # Nothing to process
@@ -174,13 +199,13 @@ class RatingWorker:
                 video_id = video['id']
                 logger.info(f"RatingWorker: Search found video {video_id} for '{job['ha_title']}'")
 
-                # Mark search as complete
-                self.db.mark_search_complete(search_id, video_id)
+                # Atomically mark search complete and enqueue callback rating (if present)
+                # Both operations in single transaction to prevent data loss on crash
+                callback_rating = job.get('callback_rating')
+                self.db.mark_search_complete_with_callback(search_id, video_id, callback_rating)
 
-                # If there's a callback rating, enqueue it
-                if job.get('callback_rating'):
-                    self.db.enqueue_rating(video_id, job['callback_rating'])
-                    logger.info(f"RatingWorker: Enqueued {job['callback_rating']} rating for {video_id}")
+                if callback_rating:
+                    logger.info(f"RatingWorker: Enqueued {callback_rating} rating for {video_id}")
 
             else:
                 # Search failed (no results)
