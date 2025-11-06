@@ -110,6 +110,24 @@ class Database:
     def mark_pending_rating(self, yt_video_id, success, error=None):
         return self._pending_ops.mark_pending_rating(yt_video_id, success, error)
 
+    def enqueue_search(self, media, callback_rating=None):
+        return self._pending_ops.enqueue_search(media, callback_rating)
+
+    def list_pending_searches(self, limit=10):
+        return self._pending_ops.list_pending_searches(limit)
+
+    def claim_pending_search(self):
+        return self._pending_ops.claim_pending_search()
+
+    def mark_search_complete(self, search_id, found_video_id):
+        return self._pending_ops.mark_search_complete(search_id, found_video_id)
+
+    def mark_search_complete_with_callback(self, search_id, found_video_id, callback_rating=None):
+        return self._pending_ops.mark_search_complete_with_callback(search_id, found_video_id, callback_rating)
+
+    def mark_search_failed(self, search_id, error):
+        return self._pending_ops.mark_search_failed(search_id, error)
+
     # Not found cache operations (v1.64.0: consolidated into video_ratings table)
     def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
         """
