@@ -46,8 +46,6 @@ export RATE_LIMIT_PER_MINUTE=$(bashio::config 'rate_limit_per_minute')
 export RATE_LIMIT_PER_HOUR=$(bashio::config 'rate_limit_per_hour')
 export RATE_LIMIT_PER_DAY=$(bashio::config 'rate_limit_per_day')
 export LOG_LEVEL=$(bashio::config 'log_level')
-export ENABLE_HISTORY_TRACKER=$(bashio::config 'history_tracker_enabled')
-export HISTORY_POLL_INTERVAL=$(bashio::config 'history_poll_interval')
 export PENDING_VIDEO_RETRY_ENABLED=$(bashio::config 'pending_video_retry_enabled')
 export PENDING_VIDEO_RETRY_BATCH_SIZE=$(bashio::config 'pending_video_retry_batch_size')
 
@@ -86,7 +84,6 @@ bashio::log.info "Quota cooldown: ${YTT_QUOTA_COOLDOWN_SECONDS}s"
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 bashio::log.info "Rate limits: ${RATE_LIMIT_PER_MINUTE}/min, ${RATE_LIMIT_PER_HOUR}/hr, ${RATE_LIMIT_PER_DAY}/day"
 bashio::log.info "Log level: ${LOG_LEVEL}"
-bashio::log.info "History tracker: enabled=${ENABLE_HISTORY_TRACKER}, interval=${HISTORY_POLL_INTERVAL}s"
 bashio::log.info "Pending retry: enabled=${PENDING_VIDEO_RETRY_ENABLED}, batch_size=${PENDING_VIDEO_RETRY_BATCH_SIZE}"
 
 # Check what files exist and where
