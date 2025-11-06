@@ -2,6 +2,7 @@
 Standardized error handling utilities for consistent error management.
 """
 
+import json
 from typing import Optional, Any, Callable
 from functools import wraps
 from logger import logger
@@ -32,6 +33,68 @@ class ConfigurationError(YouTubeThumbsError):
     pass
 
 
+def _extract_clean_error_message(exc: Exception) -> str:
+    """
+    Extract a clean, human-readable error message from an exception.
+    
+    For HttpError exceptions from Google API, this extracts the actual error
+    message instead of returning HTML error pages.
+    
+    Args:
+        exc: The exception to extract message from
+        
+    Returns:
+        Clean error message string
+    """
+    # Check if this is an HttpError from googleapiclient
+    exc_type_name = type(exc).__name__
+    if exc_type_name == 'HttpError':
+        try:
+            # Try to extract error from content attribute
+            content = getattr(exc, 'content', None)
+            if isinstance(content, bytes):
+                try:
+                    content = content.decode('utf-8')
+                except Exception:
+                    content = None
+            
+            if isinstance(content, str):
+                try:
+                    payload = json.loads(content)
+                    error_payload = payload.get('error', {})
+                    
+                    # Extract the first error message if available
+                    errors = error_payload.get('errors', [])
+                    if errors and isinstance(errors, list):
+                        first_error = errors[0]
+                        message = first_error.get('message')
+                        if message:
+                            return message
+                    
+                    # Fallback to main error message
+                    message = error_payload.get('message')
+                    if message:
+                        return message
+                except json.JSONDecodeError:
+                    pass
+            
+            # Try to get status and reason from resp attribute
+            resp = getattr(exc, 'resp', None)
+            if resp:
+                status = getattr(resp, 'status', None)
+                reason = getattr(resp, 'reason', None)
+                if status and reason:
+                    return f"HTTP {status}: {reason}"
+                elif reason:
+                    return reason
+        except Exception:
+            # If extraction fails, fall through to default
+            pass
+    
+    # For all other exceptions or if extraction failed, use str()
+    return str(exc)
+
+
 def log_and_suppress(
     exc: Exception,
     message: str,
@@ -55,7 +118,8 @@ def log_and_suppress(
         The specified return_value
     """
     log_func = getattr(logger, level, logger.error)
-    log_func(f"{message}: {exc}", *args)
+    clean_error_msg = _extract_clean_error_message(exc)
+    log_func(f"{message}: {clean_error_msg}", *args)
     if log_traceback:
         logger.debug("Exception details", exc_info=True)
     return return_value
@@ -82,11 +146,12 @@ def log_and_reraise(
         The original exception or as_type if specified
     """
     log_func = getattr(logger, level, logger.error)
-    log_func(f"{message}: {exc}", *args)
+    clean_error_msg = _extract_clean_error_message(exc)
+    log_func(f"{message}: {clean_error_msg}", *args)
     logger.debug("Exception details", exc_info=True)
 
     if as_type:
-        raise as_type(f"{message}: {exc}") from exc
+        raise as_type(f"{message}: {clean_error_msg}") from exc
     raise
 
 
