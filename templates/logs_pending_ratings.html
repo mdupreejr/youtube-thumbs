@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Pending Ratings Queue</title>
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    <a href="{{ ingress_path }}/logs" class="active">Logs</a>
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+        </header>
+
+        <div class="card">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button">
+                    Rated Songs
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button">
+                    Matches
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button">
+                    Recent
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button">
+                    Errors
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=quota_prober" class="tab-button">
+                    Quota Prober
+                </a>
+                <a href="{{ ingress_path }}/logs/api-calls" class="tab-button">
+                    API Calls
+                </a>
+                <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button active">
+                    Pending Ratings
+                </a>
+            </div>
+
+            <h2 style="margin: 20px 0 10px 0;">Pending Ratings Queue</h2>
+            <p class="info-text">
+                Ratings queued due to YouTube API quota limits. These will be automatically synced when quota is restored.
+            </p>
+
+            {% if pending_ratings %}
+            <p class="info-text" style="margin-top: 10px;">
+                <strong>{{ pending_ratings|length }} pending rating{{ 's' if pending_ratings|length != 1 else '' }}</strong>
+            </p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Video ID</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Rating</th>
+                            <th>Queued At</th>
+                            <th>Attempts</th>
+                            <th>Last Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in pending_ratings %}
+                        <tr>
+                            <td>
+                                {% if item.yt_video_id %}
+                                <a href="https://youtube.com/watch?v={{ item.yt_video_id }}" target="_blank" rel="noopener noreferrer">
+                                    {{ item.yt_video_id[:11] }}...
+                                </a>
+                                {% else %}
+                                <em>N/A</em>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.ha_title or 'Unknown' }}</td>
+                            <td>{{ item.ha_artist or '—' }}</td>
+                            <td>
+                                {% if item.rating == 'like' %}
+                                <span style="color: #10b981;">👍 Like</span>
+                                {% elif item.rating == 'dislike' %}
+                                <span style="color: #ef4444;">👎 Dislike</span>
+                                {% else %}
+                                {{ item.rating }}
+                                {% endif %}
+                            </td>
+                            <td>{{ item.requested_at or '—' }}</td>
+                            <td style="text-align: center;">{{ item.attempts or 0 }}</td>
+                            <td>
+                                {% if item.last_error %}
+                                <span style="color: #ef4444; font-size: 0.9em;">{{ item.last_error[:50] }}...</span>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <p><strong>How it works:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>When YouTube API quota is exceeded, ratings are queued instead of discarded</li>
+                    <li>Every time you manually rate a video, the system attempts to sync pending ratings</li>
+                    <li>Batch processing handles up to 20 pending ratings at a time for efficiency</li>
+                    <li>Ratings remain queued until successfully submitted to YouTube</li>
+                </ul>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    ✓ No pending ratings in queue
+                </p>
+                <p style="text-align: center; color: #94a3b8; font-size: 0.9em;">
+                    All ratings have been successfully submitted to YouTube.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -95,6 +95,43 @@ def api_calls_log():
         return "<h1>Error loading API call logs</h1>", 500
 
 
+@bp.route('/logs/pending-ratings')
+def pending_ratings_log():
+    """Display pending ratings queue."""
+    ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
+    try:
+        # Get all pending ratings (no pagination needed, usually small list)
+        pending_jobs = _db.list_pending_ratings(limit=1000)
+
+        # Enrich with video details from database
+        enriched_ratings = []
+        for job in pending_jobs:
+            video_id = job['yt_video_id']
+            # Get video details from database
+            video = _db.get_video_by_id(video_id)
+
+            enriched_ratings.append({
+                'yt_video_id': video_id,
+                'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
+                'ha_artist': video.get('ha_artist') if video else None,
+                'rating': job['rating'],
+                'requested_at': job['requested_at'],
+                'attempts': job['attempts'],
+                'last_error': job.get('last_error')
+            })
+
+        return render_template(
+            'logs_pending_ratings.html',
+            ingress_path=ingress_path,
+            pending_ratings=enriched_ratings
+        )
+
+    except Exception as e:
+        logger.error(f"Error displaying pending ratings: {e}")
+        return "<h1>Error loading pending ratings</h1>", 500
+
+
 def parse_error_log(
     period_filter: str = 'all',
     level_filter: str = 'all',
