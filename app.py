@@ -251,11 +251,11 @@ def handle_exception(e):
         if debug_mode:
             # SECURITY: Stack trace exposure is acceptable in debug mode only
             # Debug mode should NEVER be enabled in production (check DEBUG env var)
+            # Do not expose stack trace; only log it on the server
             return jsonify({
                 'success': False,
                 'error': str(e),
-                'type': type(e).__name__,
-                'traceback': traceback.format_exc()  # nosec - debug mode only
+                'type': type(e).__name__
             }), 500
         else:
             return jsonify({
