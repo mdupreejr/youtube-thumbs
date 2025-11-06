@@ -17,7 +17,6 @@ _quota_guard = None
 _quota_prober = None
 _get_youtube_api = None
 _db = None
-_rate_limiter = None
 _metrics = None
 _check_home_assistant_api = None
 _check_youtube_api = None
@@ -29,7 +28,6 @@ def init_system_routes(
     quota_prober,
     get_youtube_api_func,
     database,
-    rate_limiter,
     metrics_tracker,
     check_home_assistant_api_func,
     check_youtube_api_func,
@@ -37,7 +35,7 @@ def init_system_routes(
 ):
     """Initialize system routes with dependencies."""
     global _ha_api, _quota_guard, _quota_prober, _get_youtube_api, _db
-    global _rate_limiter, _metrics, _check_home_assistant_api
+    global _metrics, _check_home_assistant_api
     global _check_youtube_api, _check_database
 
     _ha_api = ha_api
@@ -45,7 +43,6 @@ def init_system_routes(
     _quota_prober = quota_prober
     _get_youtube_api = get_youtube_api_func
     _db = database
-    _rate_limiter = rate_limiter
     _metrics = metrics_tracker
     _check_home_assistant_api = check_home_assistant_api_func
     _check_youtube_api = check_youtube_api_func
@@ -56,22 +53,6 @@ def init_system_routes(
 # DECORATORS
 # ============================================================================
 
-def require_rate_limit(f):
-    """
-    SECURITY: Decorator to apply rate limiting to API endpoints.
-    Returns 429 Too Many Requests if rate limit is exceeded.
-    """
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        allowed, reason = _rate_limiter.check_and_add_request()
-        if not allowed:
-            logger.warning(f"Rate limit exceeded for {get_real_ip()} on {request.path}")
-            if request.path.startswith('/api/'):
-                return jsonify({'success': False, 'error': reason}), 429
-            return reason, 429
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 # ============================================================================
@@ -79,7 +60,6 @@ def require_rate_limit(f):
 # ============================================================================
 
 @bp.route('/test/youtube')
-@require_rate_limit
 def test_youtube() -> Response:
     """Test YouTube API connectivity and quota status."""
     logger.debug("=== /test/youtube endpoint called ===")
@@ -98,7 +78,6 @@ def test_youtube() -> Response:
 
 
 @bp.route('/test/ha')
-@require_rate_limit
 def test_ha() -> Response:
     """Test Home Assistant API connectivity."""
     logger.debug("=== /test/ha endpoint called ===")
@@ -116,7 +95,6 @@ def test_ha() -> Response:
 
 
 @bp.route('/test/db')
-@require_rate_limit
 def test_db() -> Response:
     """Test database connectivity and integrity."""
     logger.debug("=== /test/db endpoint called ===")
@@ -195,7 +173,6 @@ def status() -> Response:
     Query Parameters:
         format: 'json' (default) or 'html' for formatted view
     """
-    stats = _rate_limiter.get_stats()
     guard_status = _quota_guard.status()
 
     # Check quota prober health and attempt recovery if needed
@@ -226,7 +203,6 @@ def status() -> Response:
         "status": overall_status,
         "health_score": health_score,
         "warnings": warnings,
-        "rate_limiter": stats,
         "quota_guard": guard_status,
         "quota_prober": {
             "healthy": prober_healthy,

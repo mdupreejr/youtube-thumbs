@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 from logger import logger, user_action_logger, rating_logger
-from rate_limiter import rate_limiter
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
@@ -62,22 +61,6 @@ def _sanitize_log_value(value: str, max_length: int = 50) -> str:
         value = value[:max_length] + '...'
     return value
 
-def require_rate_limit(f):
-    """
-    SECURITY: Decorator to apply rate limiting to API endpoints.
-    Returns 429 Too Many Requests if rate limit is exceeded.
-    """
-    from functools import wraps
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        allowed, reason = rate_limiter.check_and_add_request()
-        if not allowed:
-            logger.warning(f"Rate limit exceeded for {request.remote_addr} on {request.path}")
-            if request.path.startswith('/api/'):
-                return jsonify({'success': False, 'error': reason}), 429
-            return reason, 429
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 app = Flask(__name__)
@@ -467,7 +450,6 @@ app.register_blueprint(stats_bp)
 # Initialize and register rating blueprint
 init_rating_routes(
     database=db,
-    rate_limiter=rate_limiter,
     quota_guard=quota_guard,
     csrf=csrf,
     ha_api=ha_api,
@@ -494,7 +476,6 @@ init_system_routes(
     quota_prober=quota_prober,
     get_youtube_api_func=get_youtube_api,
     database=db,
-    rate_limiter=rate_limiter,
     metrics_tracker=metrics,
     check_home_assistant_api_func=check_home_assistant_api,
     check_youtube_api_func=check_youtube_api,

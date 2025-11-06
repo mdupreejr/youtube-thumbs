@@ -67,7 +67,6 @@ def safe_redirect(tab='rating', page='1'):
 
 # Global references (set by init function)
 _db = None
-_rate_limiter = None
 _quota_guard = None
 _csrf = None
 _ha_api = None
@@ -79,7 +78,6 @@ _cache_wrapper = None
 
 def init_rating_routes(
     database,
-    rate_limiter,
     quota_guard,
     csrf: CSRFProtect,
     ha_api,
@@ -90,11 +88,10 @@ def init_rating_routes(
     cache_wrapper_func
 ):
     """Initialize rating routes with dependencies."""
-    global _db, _rate_limiter, _quota_guard, _csrf, _ha_api, _get_youtube_api, _metrics
+    global _db, _quota_guard, _csrf, _ha_api, _get_youtube_api, _metrics
     global _is_youtube_content, _search_wrapper, _cache_wrapper
 
     _db = database
-    _rate_limiter = rate_limiter
     _quota_guard = quota_guard
     _csrf = csrf
     _ha_api = ha_api
