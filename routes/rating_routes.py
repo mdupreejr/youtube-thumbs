@@ -114,101 +114,53 @@ def format_media_info(title: str, artist: str) -> str:
     return f'"{title}" by {artist}' if artist else f'"{title}"'
 
 
-def _queue_rating_request(
-    yt_video_id: str,
-    rating_type: str,
-    media_info: str,
-    reason: str,
-    record_attempt: bool = False,
-) -> Tuple[Response, int]:
-    """Queue a rating request for later processing."""
-    _db.enqueue_rating(yt_video_id, rating_type)
-    if record_attempt:
-        _db.mark_pending_rating(yt_video_id, False, reason)
-    _db.record_rating_local(yt_video_id, rating_type)
-    _metrics.record_rating(success=False, queued=True)
-    user_action_logger.info(f"{rating_type.upper()} | {media_info} | ID: {yt_video_id} | QUEUED - {reason}")
-    rating_logger.info(f"{rating_type.upper()} | QUEUED | {media_info} | ID: {yt_video_id} | Reason: {reason}")
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": f"Queued {rating_type} request; will sync when YouTube API is available ({reason}).",
-                "video_id": yt_video_id,
-                "queued": True,
-            }
-        ),
-        202,
-    )
+# ============================================================================
+# UNIFIED QUEUE-BASED RATING SYSTEM
+# ============================================================================
 
-
-def _sync_pending_ratings(yt_api: Any, batch_size: int = 20) -> None:
+def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "Unknown") -> dict:
     """
-    Sync pending ratings using batch operations for efficiency.
-    Processes up to batch_size pending ratings, using batch API calls where possible.
+    Unified function to queue a rating. ALL ratings go through this function.
+    No immediate YouTube API submission - everything goes to queue for worker processing.
+
+    Args:
+        video_id: YouTube video ID
+        rating_type: 'like' or 'dislike'
+        video_title: Video title for logging
+
+    Returns:
+        dict: Response data with success status and message
     """
-    # Validate batch size (YouTube API supports max 50 IDs per videos.list call)
-    batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
+    try:
+        # Update local database first (so UI shows change immediately)
+        _db.record_rating_local(video_id, rating_type)
 
-    should_skip, _ = _quota_guard.check_quota_or_skip("sync pending ratings")
-    if should_skip:
-        return
+        # Add to queue for background worker processing
+        _db.enqueue_rating(video_id, rating_type)
 
-    # Get more pending ratings to process in batch
-    pending_jobs = _db.list_pending_ratings(limit=batch_size)
-    if not pending_jobs:
-        return
+        # Record metrics
+        _metrics.record_rating(success=False, queued=True)
 
-    # Prepare batch ratings
-    ratings_to_process = []
-    for job in pending_jobs:
-        should_skip, _ = _quota_guard.check_quota_or_skip("batch rating processing")
-        if should_skip:
-            break
-        ratings_to_process.append((job['yt_video_id'], job['rating']))
+        # Log the queuing
+        rating_logger.info(f"{rating_type.upper()} | QUEUED | {video_title} | ID: {video_id}")
+        logger.info(f"Queued {rating_type} for {video_id} (will process within 1 hour)")
 
-    if not ratings_to_process:
-        return
+        return {
+            'success': True,
+            'message': f'Rating queued. Will sync to YouTube within 1 hour.',
+            'queued': True,
+            'rating': rating_type
+        }
 
-    # Use batch operations if we have multiple ratings
-    if len(ratings_to_process) > 1:
-        logger.info(f"Processing batch of {len(ratings_to_process)} pending ratings")
-
-        # Batch process the ratings
-        results = yt_api.batch_set_ratings(ratings_to_process)
-
-        # Update database based on results
-        for video_id, rating in ratings_to_process:
-            success = results.get(video_id, False)
-            if success:
-                _db.record_rating(video_id, rating)
-                _db.mark_pending_rating(video_id, True)
-                _metrics.record_rating(success=True, queued=False)
-                rating_logger.info(f"{rating.upper()} | SYNCED | queued video {video_id}")
-            else:
-                _db.mark_pending_rating(video_id, False, "Batch rating failed")
-                _metrics.record_rating(success=False, queued=False)
-                logger.warning(f"Failed to sync rating for {video_id}")
-    else:
-        # Single rating, use regular method
-        video_id, rating = ratings_to_process[0]
-        media_info = f"queued video {video_id}"
-        try:
-            if yt_api.set_video_rating(video_id, rating):
-                _db.record_rating(video_id, rating)
-                _db.mark_pending_rating(video_id, True)
-                rating_logger.info(f"{rating.upper()} | SYNCED | {media_info}")
-            else:
-                _db.mark_pending_rating(video_id, False, "YouTube API returned False")
-        except Exception as exc:  # pragma: no cover - defensive
-            _db.mark_pending_rating(video_id, False, str(exc))
-            logger.error("Failed to sync pending rating for %s: %s", video_id, exc)
+    except Exception as e:
+        logger.error(f"Failed to queue rating for {video_id}: {e}")
+        raise
 
 
 def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Response, int]:
     """
-    Refactored handler for rating videos with improved organization.
-    Delegates to helper functions for better maintainability.
+    Simplified queue-based handler for rating videos.
+    All ratings are queued for background worker processing (no immediate YouTube API calls).
 
     Args:
         rating_type: Type of rating ('like' or 'dislike')
@@ -219,10 +171,7 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
         validate_current_media,
         check_youtube_content,
         find_or_search_video,
-        update_database_for_rating,
-        check_already_rated,
-        handle_quota_blocked_rating,
-        execute_rating
+        update_database_for_rating
     )
 
     logger.info(f"{rating_type} request received")
@@ -263,33 +212,20 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
         media_info = format_media_info(video_title, artist)
 
         # Step 6: Check if already rated
-        already_rated_response = check_already_rated(_db, yt_video_id, rating_type, media_info, video_title)
-        if already_rated_response:
-            return already_rated_response
+        existing_rating = _db.get_video(yt_video_id)
+        if existing_rating and existing_rating.get('rating') == rating_type:
+            user_action_logger.info(f"{rating_type.upper()} | ALREADY-RATED | {media_info}")
+            return jsonify({
+                'success': True,
+                'message': f'Already rated as {rating_type}',
+                'already_rated': True
+            }), 200
 
-        # Step 7: Handle quota blocking
-        quota_blocked_response = handle_quota_blocked_rating(
-            yt_video_id,
-            rating_type,
-            media_info,
-            _queue_rating_request
-        )
-        if quota_blocked_response:
-            return quota_blocked_response
+        # Step 7: Queue rating for background worker (no immediate submission)
+        result = enqueue_rating_unified(yt_video_id, rating_type, video_title)
+        user_action_logger.info(f"{rating_type.upper()} | {media_info} | QUEUED")
 
-        # Step 8: Sync pending ratings and execute rating
-        yt_api = _get_youtube_api()
-        _sync_pending_ratings(yt_api)
-
-        return execute_rating(
-            yt_api,
-            yt_video_id,
-            rating_type,
-            media_info,
-            video_title,
-            _db,
-            _queue_rating_request
-        )
+        return jsonify(result), 202
 
     except Exception as e:
         logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
@@ -300,8 +236,8 @@ def rate_video(rating_type: str, skip_rate_limit: bool = False) -> Tuple[Respons
 
 def rate_song_direct(video_id: str, rating_type: str) -> Response:
     """
-    Directly rate a video by ID without checking current media.
-    Used for bulk rating interface.
+    Simplified queue-based direct rating by video ID.
+    Used for bulk rating interface. All ratings are queued for background worker.
     """
     try:
         # SECURITY: Validate all inputs before expensive operations
@@ -332,43 +268,9 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
                 'already_rated': True
             })
 
-        # Update local database first
-        _db.record_rating_local(video_id, rating_type)
-
-        # Try to rate on YouTube (if not in quota block)
-        should_skip, _ = _quota_guard.check_quota_or_skip("rate video on YouTube", video_id, rating_type)
-        if should_skip:
-            # Queue for later sync
-            _db.enqueue_rating(video_id, rating_type)
-            _metrics.record_rating(success=False, queued=True)
-            rating_logger.info(f"{rating_type.upper()} | QUEUED | {title} | ID: {video_id} | Quota blocked")
-            return jsonify({
-                'success': True,
-                'message': f'Queued {rating_type} (quota blocked)',
-                'queued': True
-            })
-
-        # Rate on YouTube API
-        yt_api = _get_youtube_api()
-        if yt_api.set_video_rating(video_id, rating_type):
-            _db.record_rating(video_id, rating_type)
-            _metrics.record_rating(success=True, queued=False)
-            rating_logger.info(f"{rating_type.upper()} | SUCCESS | {title} | ID: {video_id}")
-            return jsonify({
-                'success': True,
-                'message': f'Rated as {rating_type}',
-                'queued': False
-            })
-        else:
-            # Failed but queued
-            _db.enqueue_rating(video_id, rating_type)
-            _metrics.record_rating(success=False, queued=True)
-            rating_logger.info(f"{rating_type.upper()} | QUEUED | {title} | ID: {video_id} | API returned false")
-            return jsonify({
-                'success': True,
-                'message': f'Queued {rating_type} (API failed)',
-                'queued': True
-            })
+        # Queue rating for background worker (no immediate submission)
+        result = enqueue_rating_unified(video_id, rating_type, title)
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error rating video {video_id}: {e}")
