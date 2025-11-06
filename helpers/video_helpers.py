@@ -4,7 +4,7 @@ Helper functions for video operations.
 import hashlib
 import re
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source: str = 'ha_live') -> Dict[str, Any]:
@@ -167,3 +167,55 @@ def get_content_hash(title: Optional[str], duration: Optional[int], artist: Opti
 
     # Return SHA-256 hash
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
+def format_videos_for_display(videos: List[Dict], base_fields: List[str] = None, additional_fields: List[str] = None) -> List[Dict]:
+    """
+    Format video list for template display with standard title/artist extraction.
+    Eliminates duplicate formatting loops across stats routes.
+
+    Args:
+        videos: List of video dicts from database
+        base_fields: Base fields to include from video dict (default: ['yt_video_id', 'play_count', 'date_last_played'])
+        additional_fields: Additional fields to copy from video dict (e.g., ['pending_reason', 'yt_match_attempts'])
+
+    Returns:
+        List of formatted video dicts with 'title' and 'artist' extracted
+
+    Examples:
+        # For rated videos (liked/disliked)
+        >>> videos = [{'ha_title': 'Song', 'yt_video_id': 'abc', 'play_count': 5}]
+        >>> formatted = format_videos_for_display(videos)
+        >>> formatted[0]['title']
+        'Song'
+
+        # For pending videos with additional fields
+        >>> videos = [{'ha_title': 'Song', 'pending_reason': 'not_found', 'yt_match_attempts': 3}]
+        >>> formatted = format_videos_for_display(videos,
+        ...     base_fields=['play_count', 'date_added'],
+        ...     additional_fields=['pending_reason', 'yt_match_attempts'])
+    """
+    # Default base fields for rated videos
+    if base_fields is None:
+        base_fields = ['yt_video_id', 'play_count', 'date_last_played']
+
+    formatted = []
+    for video in videos:
+        # Always include title and artist
+        formatted_video = {
+            'title': get_video_title(video),
+            'artist': get_video_artist(video)
+        }
+
+        # Add base fields
+        for field in base_fields:
+            formatted_video[field] = video.get(field, 0 if 'count' in field else None)
+
+        # Add additional fields if specified
+        if additional_fields:
+            for field in additional_fields:
+                formatted_video[field] = video.get(field)
+
+        formatted.append(formatted_video)
+
+    return formatted

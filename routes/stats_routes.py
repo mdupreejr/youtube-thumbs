@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, Response
 from logger import logger
-from helpers.video_helpers import get_video_title, get_video_artist
+from helpers.video_helpers import get_video_title, get_video_artist, format_videos_for_display
 from helpers.time_helpers import format_relative_time
 from helpers.validation_helpers import validate_page_param
 from helpers.response_helpers import error_response
@@ -142,17 +142,7 @@ def stats_liked_page() -> str:
         result = _db.get_rated_videos('like', page=page, per_page=50)
 
         # Format videos
-        formatted_videos = []
-        for video in result['videos']:
-            title = get_video_title(video)
-            artist = get_video_artist(video)
-            formatted_videos.append({
-                'title': title,
-                'artist': artist,
-                'yt_video_id': video.get('yt_video_id'),
-                'play_count': video.get('play_count', 0),
-                'date_last_played': video.get('date_last_played')
-            })
+        formatted_videos = format_videos_for_display(result['videos'])
 
         return render_template('stats_rated.html',
                              ingress_path=ingress_path,
@@ -181,17 +171,7 @@ def stats_disliked_page() -> str:
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
 
         # Format videos
-        formatted_videos = []
-        for video in result['videos']:
-            title = get_video_title(video)
-            artist = get_video_artist(video)
-            formatted_videos.append({
-                'title': title,
-                'artist': artist,
-                'yt_video_id': video.get('yt_video_id'),
-                'play_count': video.get('play_count', 0),
-                'date_last_played': video.get('date_last_played')
-            })
+        formatted_videos = format_videos_for_display(result['videos'])
 
         return render_template('stats_rated.html',
                              ingress_path=ingress_path,
@@ -220,18 +200,11 @@ def stats_pending_page() -> str:
         result = _db.get_all_pending_videos(page=page, per_page=50)
 
         # Format videos
-        formatted_videos = []
-        for video in result['videos']:
-            title = get_video_title(video)
-            artist = get_video_artist(video)
-            formatted_videos.append({
-                'title': title,
-                'artist': artist,
-                'pending_reason': video.get('pending_reason', 'unknown'),
-                'play_count': video.get('play_count', 0),
-                'date_added': video.get('date_added'),
-                'yt_match_attempts': video.get('yt_match_attempts', 0)
-            })
+        formatted_videos = format_videos_for_display(
+            result['videos'],
+            base_fields=['play_count', 'date_added'],
+            additional_fields=['pending_reason', 'yt_match_attempts']
+        )
 
         return render_template('stats_pending.html',
                              ingress_path=ingress_path,
@@ -258,18 +231,11 @@ def stats_not_found_page() -> str:
         result = _db.get_not_found_videos(page=page, per_page=50)
 
         # Format videos
-        formatted_videos = []
-        for video in result['videos']:
-            title = get_video_title(video)
-            artist = get_video_artist(video)
-            formatted_videos.append({
-                'title': title,
-                'artist': artist,
-                'yt_video_id': video.get('yt_video_id'),
-                'play_count': video.get('play_count', 0),
-                'date_added': video.get('date_added'),
-                'yt_match_attempts': video.get('yt_match_attempts', 0)
-            })
+        formatted_videos = format_videos_for_display(
+            result['videos'],
+            base_fields=['yt_video_id', 'play_count', 'date_added'],
+            additional_fields=['yt_match_attempts']
+        )
 
         return render_template('stats_not_found.html',
                              ingress_path=ingress_path,

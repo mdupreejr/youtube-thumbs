@@ -8,6 +8,7 @@ import traceback
 from flask import Blueprint, request, jsonify, Response
 from logger import logger
 from helpers.request_helpers import get_real_ip
+from helpers.api_helpers import test_endpoint
 
 bp = Blueprint('system', __name__)
 
@@ -56,53 +57,20 @@ def init_system_routes(
 @bp.route('/test/youtube')
 def test_youtube() -> Response:
     """Test YouTube API connectivity and quota status."""
-    logger.debug("=== /test/youtube endpoint called ===")
-    try:
-        yt_api = _get_youtube_api()
-        success, message = _check_youtube_api(yt_api, None, _db)  # No quota_guard needed
-        logger.debug(f"YouTube test result: success={success}, message={message}")
-        response = jsonify({"success": success, "message": message})
-        logger.debug(f"Returning JSON response: {response.get_json()}")
-        return response
-    except Exception as e:
-        logger.error(f"=== ERROR in /test/youtube endpoint ===")
-        logger.error(f"Exception: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": "Error testing YouTube API connection"})
+    yt_api = _get_youtube_api()
+    return test_endpoint('youtube', _check_youtube_api, yt_api, None, _db)
 
 
 @bp.route('/test/ha')
 def test_ha() -> Response:
     """Test Home Assistant API connectivity."""
-    logger.debug("=== /test/ha endpoint called ===")
-    try:
-        success, message = _check_home_assistant_api(_ha_api)
-        logger.debug(f"HA test result: success={success}, message={message}")
-        response = jsonify({"success": success, "message": message})
-        logger.debug(f"Returning JSON response: {response.get_json()}")
-        return response
-    except Exception as e:
-        logger.error(f"=== ERROR in /test/ha endpoint ===")
-        logger.error(f"Exception: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": "Error testing Home Assistant connection"})
+    return test_endpoint('ha', _check_home_assistant_api, _ha_api)
 
 
 @bp.route('/test/db')
 def test_db() -> Response:
     """Test database connectivity and integrity."""
-    logger.debug("=== /test/db endpoint called ===")
-    try:
-        success, message = _check_database(_db)
-        logger.debug(f"DB test result: success={success}, message={message}")
-        response = jsonify({"success": success, "message": message})
-        logger.debug(f"Returning JSON response: {response.get_json()}")
-        return response
-    except Exception as e:
-        logger.error(f"=== ERROR in /test/db endpoint ===")
-        logger.error(f"Exception: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({"success": False, "message": "Error testing database connection"})
+    return test_endpoint('db', _check_database, _db)
 
 
 # ============================================================================

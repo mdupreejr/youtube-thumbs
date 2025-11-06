@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, Response
 from logger import logger
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
+from helpers.api_helpers import stats_endpoint, simple_stats_endpoint, api_endpoint
 from constants import MAX_BATCH_SIZE
 
 # Create blueprint
@@ -27,175 +28,112 @@ def init_data_api_routes(database):
 
 
 @bp.route('/stats/most-played', methods=['GET'])
+@stats_endpoint('get_most_played', limit_default=10, limit_max=100,
+                error_message='Failed to retrieve most played statistics')
 def get_most_played_stats() -> Response:
     """Get most played songs for statistics dashboard."""
-    try:
-        limit, error = validate_limit_param(request.args, default=10, max_value=100)
-        if error:
-            return error
-        videos = db.get_most_played(limit)
-        return jsonify({'success': True, 'data': videos})
-    except Exception as e:
-        logger.error(f"Error getting most played stats: {e}")
-        return error_response('Failed to retrieve most played statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/top-channels', methods=['GET'])
+@stats_endpoint('get_top_channels', limit_default=10, limit_max=100,
+                error_message='Failed to retrieve top channels statistics')
 def get_top_channels_stats() -> Response:
     """Get top channels/artists for statistics dashboard."""
-    try:
-        limit, error = validate_limit_param(request.args, default=10, max_value=100)
-        if error:
-            return error
-        channels = db.get_top_channels(limit)
-        return jsonify({'success': True, 'data': channels})
-    except Exception as e:
-        logger.error(f"Error getting top channels stats: {e}")
-        return error_response('Failed to retrieve top channels statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/rating-distribution', methods=['GET'])
+@simple_stats_endpoint('get_ratings_breakdown',
+                       error_message='Failed to retrieve rating distribution')
 def get_rating_distribution() -> Response:
     """Get rating distribution for pie chart."""
-    try:
-        distribution = db.get_ratings_breakdown()
-        return jsonify({'success': True, 'data': distribution})
-    except Exception as e:
-        logger.error(f"Error getting rating distribution: {e}")
-        return error_response('Failed to retrieve rating distribution', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/summary', methods=['GET'])
+@simple_stats_endpoint('get_stats_summary',
+                       error_message='Failed to retrieve summary statistics')
 def get_stats_summary() -> Response:
     """Get summary statistics for dashboard."""
-    try:
-        summary = db.get_stats_summary()
-        return jsonify({
-            'success': True,
-            'data': summary
-        })
-    except Exception as e:
-        logger.error(f"Error getting stats summary: {e}")
-        return error_response( 'Failed to retrieve summary statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/top-rated', methods=['GET'])
+@stats_endpoint('get_top_rated', limit_default=10, limit_max=100,
+                error_message='An error occurred processing your request')
 def get_top_rated_api() -> Response:
     """Get top rated videos."""
-    try:
-        limit, error = validate_limit_param(request.args, default=10, max_value=100)
-        if error:
-            return error
-
-        videos = db.get_top_rated(limit)
-        return jsonify({'success': True, 'data': videos})
-    except Exception as e:
-        logger.error(f"Error getting top rated: {e}")
-        return error_response( 'An error occurred processing your request', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/recent', methods=['GET'])
+@stats_endpoint('get_recent_activity', limit_default=20, limit_max=100,
+                error_message='An error occurred processing your request')
 def get_recent_activity_api() -> Response:
     """Get recent activity."""
-    try:
-        limit, error = validate_limit_param(request.args, default=20, max_value=100)
-        if error:
-            return error
-
-        videos = db.get_recent_activity(limit)
-        return jsonify({'success': True, 'data': videos})
-    except Exception as e:
-        logger.error(f"Error getting recent activity: {e}")
-        return error_response( 'An error occurred processing your request', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/categories', methods=['GET'])
+@simple_stats_endpoint('get_category_breakdown',
+                       error_message='Failed to retrieve category statistics')
 def get_category_stats() -> Response:
     """Get category breakdown."""
-    try:
-        categories = db.get_category_breakdown()
-        return jsonify({'success': True, 'data': categories})
-    except Exception as e:
-        logger.error(f"Error getting category stats: {e}")
-        return error_response( 'Failed to retrieve category statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/timeline', methods=['GET'])
+@api_endpoint('get_plays_by_period',
+              custom_params_builder=lambda args: (args.get('period', 'daily') if args.get('period') in ['hourly', 'daily', 'weekly', 'monthly'] else 'daily',),
+              error_message='Failed to retrieve timeline statistics')
 def get_timeline_stats() -> Response:
     """Get play timeline data."""
-    try:
-        period = request.args.get('period', 'daily')
-
-        if period not in ['hourly', 'daily', 'weekly', 'monthly']:
-            period = 'daily'
-
-        timeline = db.get_plays_by_period(period)
-        return jsonify({'success': True, 'data': timeline})
-    except Exception as e:
-        logger.error(f"Error getting timeline stats: {e}")
-        return error_response( 'Failed to retrieve timeline statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/api-usage', methods=['GET'])
+@api_endpoint('get_api_usage_stats',
+              custom_params_builder=lambda args: (max(1, min(int(args.get('days', 7)), 90)),),
+              error_message='Failed to retrieve API usage statistics')
 def get_api_usage_stats() -> Response:
     """Get API usage statistics."""
-    try:
-        from datetime import datetime, timedelta
-
-        # Default to last 7 days
-        days = int(request.args.get('days', 7))
-        days = max(1, min(days, 90))  # Enforce bounds: 1-90
-
-        usage = db.get_api_usage_stats(days)
-        return jsonify({'success': True, 'data': usage})
-    except Exception as e:
-        logger.error(f"Error getting API usage stats: {e}")
-        return error_response( 'Failed to retrieve API usage statistics', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/api-usage/daily', methods=['GET'])
+@api_endpoint('get_daily_api_usage',
+              custom_params_builder=lambda args: (max(1, min(int(args.get('days', 30)), 90)),),
+              error_message='Failed to retrieve daily API usage')
 def get_daily_api_usage() -> Response:
     """Get daily API usage breakdown."""
-    try:
-        days = int(request.args.get('days', 30))
-        days = max(1, min(days, 90))
-
-        usage = db.get_daily_api_usage(days)
-        return jsonify({'success': True, 'data': usage})
-    except Exception as e:
-        logger.error(f"Error getting daily API usage: {e}")
-        return error_response( 'Failed to retrieve daily API usage', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/stats/api-usage/hourly', methods=['GET'])
+@simple_stats_endpoint('get_hourly_api_usage',
+                       error_message='Failed to retrieve hourly API usage')
 def get_hourly_api_usage() -> Response:
     """Get hourly API usage pattern."""
-    try:
-        usage = db.get_hourly_api_usage()
-        return jsonify({'success': True, 'data': usage})
-    except Exception as e:
-        logger.error(f"Error getting hourly API usage: {e}")
-        return error_response( 'Failed to retrieve hourly API usage', 500)
+    pass  # Decorator handles everything
+
+
+def _build_play_history_params(args):
+    """Build parameters for play history endpoint."""
+    limit, error = validate_limit_param(args, default=50, max_value=500)
+    if error:
+        limit = 50
+    offset = max(0, int(args.get('offset', 0)))
+    return (limit, offset)
 
 
 @bp.route('/history/plays', methods=['GET'])
+@api_endpoint('get_play_history',
+              custom_params_builder=_build_play_history_params,
+              error_message='Failed to retrieve play history')
 def get_play_history_api() -> Response:
     """Get play history."""
-    try:
-        limit, error = validate_limit_param(request.args, default=50, max_value=500)
-        if error:
-            return error
-
-        offset = int(request.args.get('offset', 0))
-        offset = max(0, offset)
-
-        history = db.get_play_history(limit, offset)
-        return jsonify({'success': True, 'data': history})
-    except ValueError:
-        return error_response( 'Invalid offset parameter', 400)
-    except Exception as e:
-        logger.error(f"Error getting play history: {e}")
-        return error_response( 'Failed to retrieve play history', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/history/search', methods=['GET'])
@@ -220,74 +158,52 @@ def search_history_api() -> Response:
 
 
 @bp.route('/insights/patterns', methods=['GET'])
+@simple_stats_endpoint('get_listening_patterns',
+                       error_message='Failed to retrieve listening patterns')
 def get_listening_patterns() -> Response:
     """Get listening patterns."""
-    try:
-        patterns = db.get_listening_patterns()
-        return jsonify({'success': True, 'data': patterns})
-    except Exception as e:
-        logger.error(f"Error getting listening patterns: {e}")
-        return error_response( 'Failed to retrieve listening patterns', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/insights/trends', methods=['GET'])
+@api_endpoint('get_discovery_stats',
+              custom_params_builder=lambda args: (max(1, min(int(args.get('days', 30)), 365)),),
+              error_message='Failed to retrieve discovery insights')
 def get_discovery_insights() -> Response:
     """Get discovery insights and trends."""
-    try:
-        period_days = int(request.args.get('days', 30))
-        period_days = max(1, min(period_days, 365))
-
-        insights = db.get_discovery_stats(period_days)
-        return jsonify({'success': True, 'data': insights})
-    except ValueError:
-        return error_response( 'Invalid days parameter', 400)
-    except Exception as e:
-        logger.error(f"Error getting discovery insights: {e}")
-        return error_response( 'Failed to retrieve discovery insights', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/analytics/correlation', methods=['GET'])
+@simple_stats_endpoint('get_correlation_stats',
+                       error_message='Failed to retrieve correlation analysis')
 def get_correlation_analysis() -> Response:
     """Get correlation analysis between different metrics."""
-    try:
-        data = db.get_correlation_stats()
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        logger.error(f"Error getting correlation analysis: {e}")
-        return error_response( 'Failed to retrieve correlation analysis', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/analytics/retention', methods=['GET'])
+@simple_stats_endpoint('get_retention_analysis',
+                       error_message='Failed to retrieve retention analysis')
 def get_retention_analysis() -> Response:
     """Get retention analysis."""
-    try:
-        data = db.get_retention_analysis()
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        logger.error(f"Error getting retention analysis: {e}")
-        return error_response( 'Failed to retrieve retention analysis', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/analytics/duration', methods=['GET'])
+@simple_stats_endpoint('get_duration_analysis',
+                       error_message='Failed to retrieve duration analysis')
 def get_duration_analysis() -> Response:
     """Get duration analysis."""
-    try:
-        data = db.get_duration_analysis()
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        logger.error(f"Error getting duration analysis: {e}")
-        return error_response( 'Failed to retrieve duration analysis', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/analytics/source', methods=['GET'])
+@simple_stats_endpoint('get_source_breakdown',
+                       error_message='Failed to retrieve source breakdown')
 def get_source_breakdown() -> Response:
     """Get source breakdown analysis."""
-    try:
-        data = db.get_source_breakdown()
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        logger.error(f"Error getting source breakdown: {e}")
-        return error_response( 'Failed to retrieve source breakdown', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/explorer/filter', methods=['POST'])
@@ -307,45 +223,44 @@ def filter_videos_api() -> Response:
 
 
 @bp.route('/explorer/channels', methods=['GET'])
+@simple_stats_endpoint('get_all_channels',
+                       error_message='Failed to retrieve channels')
 def get_all_channels_api() -> Response:
     """Get all channels."""
-    try:
-        channels = db.get_all_channels()
-        return jsonify({'success': True, 'data': channels})
-    except Exception as e:
-        logger.error(f"Error getting channels: {e}")
-        return error_response( 'Failed to retrieve channels', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/explorer/categories', methods=['GET'])
+@simple_stats_endpoint('get_all_categories',
+                       error_message='Failed to retrieve categories')
 def get_all_categories_api() -> Response:
     """Get all categories."""
-    try:
-        categories = db.get_all_categories()
-        return jsonify({'success': True, 'data': categories})
-    except Exception as e:
-        logger.error(f"Error getting categories: {e}")
-        return error_response( 'Failed to retrieve categories', 500)
+    pass  # Decorator handles everything
+
+
+def _build_recommendations_params(args):
+    """Build parameters for recommendations endpoint."""
+    # Validate strategy
+    strategy = args.get('strategy', 'likes')
+    if strategy not in ['likes', 'played', 'discover']:
+        strategy = 'likes'
+
+    # Validate limit
+    limit, error = validate_limit_param(args, default=10, max_value=50)
+    if error:
+        # This shouldn't happen with proper validation, but default to 10
+        limit = 10
+
+    return (strategy, limit)
 
 
 @bp.route('/recommendations', methods=['GET'])
+@api_endpoint('get_recommendations',
+              custom_params_builder=_build_recommendations_params,
+              error_message='An error occurred processing your request')
 def get_recommendations_api() -> Response:
     """Get video recommendations."""
-    try:
-        based_on = request.args.get('strategy', 'likes')
-        limit, error = validate_limit_param(request.args, default=10, max_value=50)
-        if error:
-            return error
-
-        # Validate strategy
-        if based_on not in ['likes', 'played', 'discover']:
-            based_on = 'likes'
-
-        recommendations = db.get_recommendations(based_on, limit)
-        return jsonify({'success': True, 'data': recommendations})
-    except Exception as e:
-        logger.error(f"Error getting recommendations: {e}")
-        return error_response( 'An error occurred processing your request', 500)
+    pass  # Decorator handles everything
 
 
 @bp.route('/pending/status', methods=['GET'])
