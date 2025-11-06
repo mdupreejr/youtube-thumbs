@@ -4,11 +4,13 @@ Extracted from app.py to improve code organization and reduce function complexit
 """
 from typing import Optional, Dict, Any, List
 from logger import logger
-from quota_manager import get_quota_manager
 from metrics_tracker import metrics
 
-# Get quota manager instance (backwards compatible with quota_guard)
-quota_guard = get_quota_manager()
+
+def _get_quota_guard():
+    """Lazy import of quota_guard to avoid circular dependency."""
+    from quota_manager import get_quota_manager
+    return get_quota_manager()
 
 
 def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
@@ -55,7 +57,7 @@ def should_skip_search(db, title: str, duration: int, artist: Optional[str] = No
         return True
 
     # Check if quota is blocked
-    should_skip, _ = quota_guard.check_quota_or_skip("YouTube search", title)
+    should_skip, _ = _get_quota_guard().check_quota_or_skip("YouTube search", title)
     if should_skip:
         return True
 

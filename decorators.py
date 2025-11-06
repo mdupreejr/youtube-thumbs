@@ -5,11 +5,7 @@ from functools import wraps
 from typing import Any, Callable
 from googleapiclient.errors import HttpError
 from logger import logger
-from quota_manager import get_quota_manager
 from error_handler import log_and_suppress
-
-# Get quota manager instance (backwards compatible with quota_guard)
-quota_guard = get_quota_manager()
 
 
 def handle_youtube_error(context: str, return_value: Any = None):
@@ -27,6 +23,10 @@ def handle_youtube_error(context: str, return_value: Any = None):
             try:
                 return func(self, *args, **kwargs)
             except HttpError as e:
+                # Lazy import to avoid circular dependency
+                from quota_manager import get_quota_manager
+                quota_guard = get_quota_manager()
+
                 # Check if it's a quota error
                 detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
                 is_quota_error = detail is not None

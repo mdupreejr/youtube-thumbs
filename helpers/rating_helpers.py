@@ -5,13 +5,15 @@ Extracted from app.py to improve code organization and reduce function complexit
 from typing import Tuple, Optional, Dict, Any
 from flask import jsonify, Response
 from logger import logger, user_action_logger, rating_logger
-from quota_manager import get_quota_manager
 from metrics_tracker import metrics
 from .video_helpers import prepare_video_upsert
 from .response_helpers import error_response, success_response
 
-# Get quota manager instance (backwards compatible with quota_guard)
-quota_guard = get_quota_manager()
+
+def _get_quota_guard():
+    """Lazy import of quota_guard to avoid circular dependency."""
+    from quota_manager import get_quota_manager
+    return get_quota_manager()
 
 
 def check_rate_limit(rate_limiter, rating_type: str) -> Optional[Tuple[Response, int]]:
@@ -101,7 +103,7 @@ def find_or_search_video(
 
     if not video:
         # Check if quota is blocked
-        should_skip, _ = quota_guard.check_quota_or_skip("locate video for rating", rating_type)
+        should_skip, _ = _get_quota_guard().check_quota_or_skip("locate video for rating", rating_type)
         if should_skip:
             # Can't search now due to quota, but we can queue this media for later matching
             # This allows the user to rate songs even when quota is exhausted
@@ -224,9 +226,9 @@ def handle_quota_blocked_rating(
     Returns:
         Response tuple if quota blocked, None otherwise
     """
-    should_skip, _ = quota_guard.check_quota_or_skip("rate video", yt_video_id, rating_type)
+    should_skip, _ = _get_quota_guard().check_quota_or_skip("rate video", yt_video_id, rating_type)
     if should_skip:
-        guard_status = quota_guard.status()
+        guard_status = _get_quota_guard().status()
         logger.warning(
             "Queuing %s request for %s due to quota cooldown",
             rating_type,
@@ -270,7 +272,7 @@ def execute_rating(
 
     # Check quota one more time before attempting rating
     # (quota might have been exhausted during _sync_pending_ratings)
-    should_skip, _ = quota_guard.check_quota_or_skip("execute rating", yt_video_id, rating_type)
+    should_skip, _ = _get_quota_guard().check_quota_or_skip("execute rating", yt_video_id, rating_type)
     if should_skip:
         logger.info(f"Quota blocked during execute_rating for {yt_video_id}, already queued")
         db.mark_pending_rating(yt_video_id, False, "Quota blocked")
