@@ -57,7 +57,7 @@
 
 ---
 
-### ✅ Phase 3: Quota System Unification (v3.14.0 → v3.16.0)
+### ✅ Phase 3: Quota System Simplification (v3.14.0 → v3.17.0)
 
 **Problem:** Hundreds of API calls during quota exceeded periods
 - YouTube API quota dashboard showing 144+ calls/day just for probing
@@ -81,21 +81,23 @@
 2. Background thread wakes every 30 minutes to check if should probe
 3. Probes hourly with minimal API call (1 quota unit)
 4. Automatically clears block and retries pending videos when quota restored
-5. Maintains exponential backoff (2h → 4h → 8h → 16h → 24h)
+5. **v3.17.0**: Removed exponential backoff - simple hourly checks only
 
 **Impact:**
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | Probe cost | 6+ quota units | 1 quota unit | **83% reduction** |
 | Daily probe quota | 144+ units | 24 units | **83% reduction** |
-| Architecture | 2 classes (687 lines) | 1 class (737 lines) | Unified |
+| Architecture | 2 classes (687 lines) | 1 class (477 lines) | Unified & simplified |
 | Thread checks | Every 5 minutes | Every 30 minutes | Less overhead |
+| Complexity | Exponential backoff, attempt tracking | Simple hourly check | **Much simpler** |
 
 **Fixes:**
 - ✅ Resolves hundreds of API calls issue (144+ → 24 per day)
 - ✅ Simpler architecture (2 classes → 1 class)
 - ✅ More efficient probing (6+ units → 1 unit)
-- ✅ Maintains all existing functionality
+- ✅ Removed unnecessary complexity (exponential backoff, cooldown periods)
+- ✅ Simple hourly check - when quota restores, system resumes immediately
 
 ---
 

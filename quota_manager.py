@@ -1,26 +1,20 @@
 """
 Unified YouTube API Quota Manager
 
-Combines circuit breaker (quota_guard) and recovery detector (quota_prober)
-into a single, efficient quota management system.
-
-Features:
-- Blocks all API calls when quota is exceeded (circuit breaker)
-- Periodically probes for quota restoration (recovery detector)
-- Exponential backoff: 2h → 4h → 8h → 16h → 24h
-- Automatic retry of pending videos after recovery
-- Persistent state across restarts
-- Lightweight probe function (1 quota unit per probe)
+Simple quota management system that:
+- Blocks all API calls when quota is exceeded
+- Checks once per hour if quota is restored (minimal 1-unit API call)
+- Automatically resumes when quota available
+- No exponential backoff, no cooldown periods - just hourly checks
 """
 
-import fcntl
 import json
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional
 
 from logger import logger
 from constants import FALSE_VALUES
@@ -34,11 +28,7 @@ def _is_truthy(value: Optional[str]) -> bool:
 
 
 class QuotaManager:
-    """Unified quota manager combining circuit breaker and recovery detector."""
-
-    # Exponential backoff periods in seconds: 2h → 4h → 8h → 16h → 24h
-    BACKOFF_PERIODS = [7200, 14400, 28800, 57600, 86400]
-    BASE_SUCCESS_THRESHOLD = 10
+    """Simple quota manager with hourly recovery checks."""
 
     def __init__(
         self,
@@ -52,7 +42,7 @@ class QuotaManager:
         probe_interval: int = 3600,  # Probe every hour
     ) -> None:
         """
-        Initialize unified quota manager.
+        Initialize quota manager.
 
         Args:
             youtube_api_getter: Function that returns YouTube API instance
@@ -75,7 +65,6 @@ class QuotaManager:
         self.enabled = True  # For backwards compatibility with quota_prober
 
         # State file for persistence
-        self.base_cooldown_seconds = self._resolve_cooldown()
         quota_path = os.getenv('YTT_QUOTA_GUARD_FILE', '/config/youtube_thumbs/quota_guard.json')
         self.state_file = Path(quota_path)
         try:
@@ -94,91 +83,7 @@ class QuotaManager:
         # Maybe force unlock on startup
         self._maybe_force_unlock()
 
-        logger.info("QuotaManager initialized (check: %ds, probe: %ds)", check_interval, probe_interval)
-
-    @staticmethod
-    def _resolve_cooldown() -> int:
-        """Resolve base cooldown period from environment variable."""
-        raw = os.getenv('YTT_QUOTA_COOLDOWN_SECONDS', '7200')  # Default to 2 hours
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning("Invalid YTT_QUOTA_COOLDOWN_SECONDS '%s'; defaulting to 7200", raw)
-            return 7200
-        return max(value, 60)
-
-    def _calculate_backoff_seconds(self, attempt_number: int) -> int:
-        """Calculate exponential backoff based on attempt number."""
-        if attempt_number <= 0:
-            return self.base_cooldown_seconds
-
-        # Use predefined backoff periods
-        index = min(attempt_number - 1, len(self.BACKOFF_PERIODS) - 1)
-        backoff_seconds = self.BACKOFF_PERIODS[index]
-
-        # Allow override from environment
-        if self.base_cooldown_seconds > backoff_seconds:
-            return self.base_cooldown_seconds
-
-        return backoff_seconds
-
-    def _get_adaptive_threshold(self, attempt_number: int) -> int:
-        """Calculate adaptive success threshold based on attempt number."""
-        if attempt_number <= 2:
-            return self.BASE_SUCCESS_THRESHOLD
-        elif attempt_number <= 4:
-            return 5
-        else:
-            return 3
-
-    def _should_decay_attempts(self, state: Dict[str, Any]) -> bool:
-        """Check if attempts should decay due to prolonged quiescence."""
-        set_at = state.get('set_at')
-        if not set_at:
-            return False
-
-        try:
-            set_time = datetime.strptime(set_at, '%Y-%m-%dT%H:%M:%SZ')
-            hours_since_set = (datetime.utcnow() - set_time).total_seconds() / 3600
-
-            # Decay attempts if blocked for over 6 hours without new failures
-            if hours_since_set > 6:
-                return True
-
-            # Auto-reset if blocked for over 48 hours
-            if hours_since_set > 48:
-                logger.info("Auto-resetting quota manager after 48 hours of lockout")
-                return True
-
-        except (ValueError, TypeError) as exc:
-            logger.debug("Failed to parse set_at timestamp: %s", exc)
-
-        return False
-
-    def _apply_attempt_decay(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply attempt decay to reduce lockout duration over time."""
-        if self._should_decay_attempts(state):
-            current_attempts = state.get('attempt_number', 0)
-            if current_attempts > 0:
-                set_time = datetime.strptime(state['set_at'], '%Y-%m-%dT%H:%M:%SZ')
-                hours_elapsed = (datetime.utcnow() - set_time).total_seconds() / 3600
-                decay_amount = int(hours_elapsed / 6)  # 1 attempt per 6 hours
-
-                new_attempts = max(0, current_attempts - decay_amount)
-                if new_attempts != current_attempts:
-                    logger.info(
-                        "Decaying attempt counter from %d to %d after %.1f hours of inactivity",
-                        current_attempts, new_attempts, hours_elapsed
-                    )
-                    state['attempt_number'] = new_attempts
-
-                # Full reset after 48 hours
-                if hours_elapsed > 48:
-                    state['attempt_number'] = 0
-                    state['success_count'] = 0
-                    logger.info("Auto-reset quota manager after 48 hours")
-
-        return state
+        logger.info("QuotaManager initialized (probe every %ds with minimal API call)", probe_interval)
 
     def _load_state(self) -> Optional[Dict[str, Any]]:
         """Load state from disk."""
@@ -219,39 +124,11 @@ class QuotaManager:
             else:
                 logger.info("YTT_FORCE_QUOTA_UNLOCK set but no state file present")
 
-    def _state_with_remaining(self) -> Tuple[Optional[Dict[str, Any]], int]:
-        """Get state and calculate remaining cooldown seconds."""
-        state = self._load_state()
-        if not state:
-            return None, 0
-
-        blocked_until = state.get('blocked_until_epoch')
-        if not blocked_until:
-            logger.warning(
-                "QuotaManager state missing 'blocked_until_epoch'; clearing %s",
-                self.state_file,
-            )
-            self._clear_state()
-            return None, 0
-
-        remaining = int(blocked_until - time.time())
-        if remaining <= 0:
-            logger.info(
-                "Quota cooldown expired at %s UTC; clearing state file %s",
-                state.get('blocked_until_iso', 'unknown'),
-                self.state_file,
-            )
-            self._clear_state()
-            return None, 0
-
-        return state, remaining
-
     def _probe_youtube_api(self) -> bool:
         """
         Lightweight probe to test if YouTube API is accessible.
 
         Uses videos().list() with a known video ID - only 1 quota unit.
-        Much more efficient than search_video_globally() which uses 6+ units.
 
         Returns:
             True if quota is available, False if still exceeded
@@ -399,7 +276,7 @@ class QuotaManager:
                         logger.info("QuotaManager: Testing if YouTube quota is restored...")
 
                         if self._probe_youtube_api():
-                            logger.info("✅ Quota restored! Clearing cooldown and resuming operations")
+                            logger.info("✅ Quota restored! Clearing block and resuming operations")
                             self.reset(reason="quota_restored_via_probe")
 
                             # Retry pending videos
@@ -454,32 +331,30 @@ class QuotaManager:
 
     def is_blocked(self) -> bool:
         """Check if quota is currently blocked."""
-        state, remaining = self._state_with_remaining()
-        return bool(state and remaining > 0)
+        state = self._load_state()
+        return state is not None and state.get('blocked', False)
 
     def blocked_until_iso(self) -> Optional[str]:
-        """Get ISO timestamp when quota block expires."""
-        status = self.status()
-        return status.get('blocked_until') if status.get('blocked') else None
+        """Get ISO timestamp when quota block expires (always None - no time-based blocks)."""
+        return None
 
     def remaining_seconds(self) -> int:
-        """Get remaining cooldown seconds."""
-        return self.status().get('remaining_seconds', 0)
+        """Get remaining cooldown seconds (always 0 - no time-based cooldown)."""
+        return 0
 
     def block_message(self) -> str:
         """Get human-readable block message."""
-        return self.status().get('message', "YouTube quota available")
+        if self.is_blocked():
+            return "YouTube quota exceeded. Checking hourly for restoration."
+        return "YouTube quota available"
 
     def describe_block(self) -> str:
         """Get detailed block description."""
         if not self.is_blocked():
-            return "No quota cooldown in effect"
-        status = self.status()
-        remaining = status.get('remaining_seconds', 0)
-        blocked_until = status.get('blocked_until')
-        return f"Cooldown active until {blocked_until} UTC ({remaining // 3600}h remaining)."
+            return "No quota block in effect"
+        return "YouTube quota exceeded. Checking hourly for restoration."
 
-    def check_quota_or_skip(self, operation_name: str, *args) -> Tuple[bool, str]:
+    def check_quota_or_skip(self, operation_name: str, *args) -> tuple:
         """
         Check if quota is blocked and log skip message if so.
 
@@ -489,44 +364,13 @@ class QuotaManager:
             - (True, reason) if quota is blocked (skip operation)
         """
         if self.is_blocked():
-            # Build descriptive message
-            def sanitize_arg(arg) -> str:
-                """Sanitize argument for logging to prevent sensitive data leakage."""
-                if isinstance(arg, (int, float, bool)):
-                    return str(arg)
-                elif isinstance(arg, str):
-                    if len(arg) > 20:
-                        return f"<string:{len(arg)} chars>"
-                    return f"<string:{len(arg)} chars>"
-                else:
-                    return f"<{type(arg).__name__}>"
-
-            args_str = ", ".join(sanitize_arg(arg) for arg in args) if args else ""
-            if args_str:
-                logger.info(
-                    "Quota cooldown active; skipping %s with %d arg(s): %s",
-                    operation_name,
-                    len(args),
-                    self.describe_block()
-                )
-            else:
-                logger.info(
-                    "Quota cooldown active; skipping %s: %s",
-                    operation_name,
-                    self.describe_block()
-                )
+            logger.info("Quota blocked; skipping %s: %s", operation_name, self.describe_block())
             return True, self.describe_block()
         return False, ""
 
     def status(self) -> Dict[str, Any]:
         """Get current quota status."""
-        state, remaining = self._state_with_remaining()
-
-        # Apply attempt decay when checking status
-        if state:
-            state = self._apply_attempt_decay(state)
-
-        blocked = bool(state and remaining > 0)
+        blocked = self.is_blocked()
         if not blocked:
             return {
                 "blocked": False,
@@ -534,125 +378,45 @@ class QuotaManager:
                 "remaining_seconds": 0,
                 "reason": None,
                 "detail": None,
-                "attempt_number": 0,
-                "success_count": 0,
                 "message": "YouTube quota available",
             }
 
-        reason = state.get('reason', 'quotaExceeded')
-        blocked_until = state.get('blocked_until_iso', 'unknown time')
-        attempt_number = state.get('attempt_number', 1)
-        success_count = state.get('success_count', 0)
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
+        state = self._load_state()
         return {
             "blocked": True,
-            "blocked_until": blocked_until,
-            "remaining_seconds": remaining,
-            "reason": reason,
+            "blocked_until": None,  # No time-based blocks
+            "remaining_seconds": 0,  # No countdown
+            "reason": state.get('reason', 'quotaExceeded'),
             "detail": state.get('detail'),
-            "attempt_number": attempt_number,
-            "success_count": success_count,
-            "message": (
-                f"YouTube quota exhausted ({reason}). "
-                f"Attempt {attempt_number}, cooldown active for {hours}h{minutes:02d}m; "
-                f"access resumes at {blocked_until} UTC."
-            ),
+            "message": "YouTube quota exceeded. Checking hourly for restoration.",
         }
 
     def record_success(self) -> None:
-        """Record a successful API call and potentially reset attempts."""
-        try:
-            with self.state_file.open('r+', encoding='utf-8') as handle:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-                try:
-                    handle.seek(0)
-                    state = json.load(handle)
-
-                    # Increment success count
-                    success_count = state.get('success_count', 0) + 1
-                    state['success_count'] = success_count
-
-                    # Check if we should reset attempts using adaptive threshold
-                    attempt_number = state.get('attempt_number', 0)
-                    threshold = self._get_adaptive_threshold(attempt_number)
-                    if success_count >= threshold:
-                        logger.info(
-                            "QuotaManager: %d successful API calls recorded, resetting attempt counter from %d",
-                            success_count,
-                            state.get('attempt_number', 0)
-                        )
-                        state['attempt_number'] = 0
-                        state['success_count'] = 0
-
-                    # Write back to file
-                    handle.seek(0)
-                    json.dump(state, handle, indent=2)
-                    handle.truncate()
-                except (json.JSONDecodeError, OSError) as e:
-                    logger.error("Failed to update success count: %s", e)
-                finally:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        except FileNotFoundError:
-            return
-        except OSError as exc:
-            logger.error("Failed to record success: %s", exc)
+        """Record a successful API call (no-op in simplified version)."""
+        pass
 
     def trip(self, reason: str, context: Optional[str] = None, detail: Optional[str] = None) -> None:
-        """Trip the circuit breaker with exponential backoff."""
-        now = datetime.utcnow()
-        existing = self._load_state() or {}
-
-        # Apply attempt decay before processing new trip
-        existing = self._apply_attempt_decay(existing)
-
-        # Only increment attempt if previous cooldown has expired
-        existing_epoch = existing.get('blocked_until_epoch', 0)
-        if existing_epoch > now.timestamp():
-            attempt_number = existing.get('attempt_number', 1)
-            logger.info(
-                "Quota error during existing cooldown (attempt %d), maintaining backoff period",
-                attempt_number
-            )
-        else:
-            attempt_number = existing.get('attempt_number', 0) + 1
-
-        cooldown_seconds = self._calculate_backoff_seconds(attempt_number)
-
-        block_until = now + timedelta(seconds=cooldown_seconds)
-        existing_epoch = existing.get('blocked_until_epoch', 0)
-
-        # If already blocked and the existing block is longer, keep it
-        if existing_epoch and existing_epoch > block_until.timestamp():
-            block_until = datetime.utcfromtimestamp(existing_epoch)
-            cooldown_seconds = int(existing_epoch - now.timestamp())
+        """Block API calls due to quota exceeded."""
+        now = datetime.now(timezone.utc)
 
         state = {
+            "blocked": True,
             "reason": reason or "quotaExceeded",
             "context": context,
             "detail": detail,
-            "blocked_until_epoch": block_until.timestamp(),
-            "blocked_until_iso": block_until.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            "cooldown_seconds": cooldown_seconds,
-            "attempt_number": attempt_number,
-            "success_count": 0,
-            "set_at": now.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "blocked_at": now.strftime('%Y-%m-%dT%H:%M:%SZ'),
         }
         self._save_state(state)
 
-        backoff_info = f" (attempt {attempt_number}, exponential backoff)" if attempt_number > 1 else ""
         logger.error(
-            "YouTube quota exceeded (%s)%s. Blocking API usage for %s seconds (until %s UTC). Context: %s | Detail: %s",
+            "YouTube quota exceeded (%s). Blocking API calls and checking hourly for restoration. Context: %s | Detail: %s",
             state["reason"],
-            backoff_info,
-            state["cooldown_seconds"],
-            state["blocked_until_iso"],
             context or "n/a",
             detail or "n/a",
         )
 
     def reset(self, reason: Optional[str] = None) -> None:
-        """Manually clear the cooldown."""
+        """Clear the quota block."""
         self._clear_state()
         with self._lock:
             self._last_probe_time = 0
