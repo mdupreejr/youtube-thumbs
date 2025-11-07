@@ -80,14 +80,39 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
             logger.error("✗ YouTube client not authenticated")
             return False, "Not authenticated"
 
-        # Get 24-hour API usage from database if available
+        # Get detailed API usage from database if available
         api_calls_24h = 0
         quota_used_24h = 0
+        failed_calls_24h = 0
+        by_method = []
+        last_quota_error = None
+
         if db:
             try:
-                summary = db.get_api_call_summary(hours=24)
+                # Get 24-hour summary with detailed breakdown
+                from datetime import datetime, timedelta
+                summary_data = db.get_api_call_summary(hours=24)
+                summary = summary_data.get('summary', {})
                 api_calls_24h = summary.get('total_calls', 0)
-                quota_used_24h = summary.get('total_quota_cost', 0)
+                quota_used_24h = summary.get('total_quota', 0) or 0
+                failed_calls_24h = summary.get('failed_calls', 0) or 0
+                by_method = summary_data.get('by_method', [])
+
+                # Find last quota error
+                with db._lock:
+                    cursor = db._conn.execute(
+                        """
+                        SELECT timestamp, error_message, api_method, quota_cost
+                        FROM api_call_log
+                        WHERE success = 0
+                          AND (error_message LIKE '%quota%' OR error_message LIKE '%Quota%')
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                        """,
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        last_quota_error = dict(row)
             except Exception as e:
                 logger.debug(f"Could not fetch API usage stats: {e}")
 
@@ -107,15 +132,35 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
             if 'items' in response:
                 logger.info("✓ YouTube API authenticated and working")
                 logger.info("  API calls available - quota OK")
-                quota_remaining = 10000 - quota_used_24h
+                quota_remaining = max(0, 10000 - quota_used_24h)
+
                 msg_parts = [
                     "✓ API authenticated and working",
                     "",
-                    f"API usage (last 24h):",
-                    f"  • Calls: {api_calls_24h}",
-                    f"  • Quota used: {quota_used_24h:,} / 10,000",
-                    f"  • Quota remaining: ~{quota_remaining:,}"
+                    f"API usage (last 24h):"
                 ]
+
+                if api_calls_24h > 0:
+                    msg_parts.append(f"  • Total calls: {api_calls_24h:,}")
+                    msg_parts.append(f"  • Quota used: {quota_used_24h:,} / 10,000")
+                    msg_parts.append(f"  • Quota remaining: ~{quota_remaining:,}")
+
+                    if failed_calls_24h > 0:
+                        msg_parts.append(f"  • Failed calls: {failed_calls_24h}")
+
+                    # Show top methods by quota usage
+                    if by_method:
+                        msg_parts.append("")
+                        msg_parts.append("Top API methods by quota:")
+                        for i, method in enumerate(by_method[:3]):
+                            quota = method.get('quota_used', 0) or 0
+                            calls = method.get('call_count', 0)
+                            method_name = method.get('api_method', 'unknown')
+                            msg_parts.append(f"  • {method_name}: {calls} calls ({quota:,} quota)")
+                else:
+                    msg_parts.append("  • No API calls in last 24 hours")
+                    msg_parts.append("  • Daily quota: 10,000 units")
+
                 return True, "\n".join(msg_parts)
             else:
                 logger.warning("⚠ YouTube API returned unexpected response")
@@ -133,13 +178,62 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
             if 'quota' in error_str.lower():
                 logger.error("✗ YouTube API quota exceeded")
                 logger.error("  Wait for quota reset or increase your quota in Google Cloud Console")
+
                 msg_parts = [
                     "❌ Quota exceeded",
-                    "",
-                    f"API usage (last 24h):",
-                    f"  • Calls: {api_calls_24h}",
-                    f"  • Quota used: {quota_used_24h:,} / 10,000"
+                    ""
                 ]
+
+                # Show when quota was exceeded
+                if last_quota_error:
+                    from helpers.time_helpers import format_relative_time
+                    error_time = last_quota_error.get('timestamp')
+                    if error_time:
+                        try:
+                            if isinstance(error_time, str):
+                                error_dt = datetime.fromisoformat(error_time.replace('Z', '+00:00'))
+                            else:
+                                error_dt = error_time
+                            relative_time = format_relative_time(error_dt)
+                            msg_parts.append(f"Last quota error: {relative_time}")
+                            msg_parts.append(f"  ({error_dt.strftime('%Y-%m-%d %H:%M:%S UTC')})")
+                            msg_parts.append("")
+                        except:
+                            pass
+
+                # Show API usage breakdown
+                msg_parts.append(f"API usage (last 24h):")
+                msg_parts.append(f"  • Total calls: {api_calls_24h:,}")
+                msg_parts.append(f"  • Quota used: {quota_used_24h:,} / 10,000")
+                msg_parts.append(f"  • Failed calls: {failed_calls_24h}")
+
+                # Show breakdown by method
+                if by_method:
+                    msg_parts.append("")
+                    msg_parts.append("Quota usage by method:")
+                    for method in by_method[:5]:
+                        quota = method.get('quota_used', 0) or 0
+                        calls = method.get('call_count', 0)
+                        method_name = method.get('api_method', 'unknown')
+                        msg_parts.append(f"  • {method_name}: {calls} calls ({quota:,} quota)")
+
+                # Show quota reset info
+                from datetime import datetime, timezone
+                import pytz
+                now_utc = datetime.now(timezone.utc)
+                pacific = pytz.timezone('America/Los_Angeles')
+                now_pacific = now_utc.astimezone(pacific)
+
+                # Quota resets at midnight Pacific time
+                tomorrow_pacific = (now_pacific + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                time_until_reset = tomorrow_pacific - now_pacific
+                hours_until = int(time_until_reset.total_seconds() / 3600)
+                minutes_until = int((time_until_reset.total_seconds() % 3600) / 60)
+
+                msg_parts.append("")
+                msg_parts.append(f"Quota resets in: {hours_until}h {minutes_until}m")
+                msg_parts.append(f"  (Midnight Pacific Time)")
+
                 return False, "\n".join(msg_parts)
             elif 'invalid' in error_str.lower() and 'credentials' in error_str.lower():
                 logger.error("✗ YouTube API credentials invalid or expired")
