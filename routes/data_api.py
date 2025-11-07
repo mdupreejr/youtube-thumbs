@@ -305,20 +305,16 @@ def get_pending_status() -> Response:
 @bp.route('/pending/retry', methods=['POST'])
 def retry_pending_videos() -> Response:
     """
-    Manually trigger retry of pending videos with quota_exceeded reason.
-    Processes videos in batches to avoid overwhelming the YouTube API.
+    Queue pending videos for retry via the queue worker.
+    Does NOT make direct API calls - all work is delegated to the queue worker.
     API endpoint called from JavaScript - CSRF will be exempted in app.py.
     """
-    import time
-    from helpers.search_helpers import search_and_match_video
     from helpers.cache_helpers import find_cached_video
 
     try:
         # Get batch size from request (default: 5, max: 50)
         batch_size = int(request.args.get('batch_size', 5))
         batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
-
-        # Note: Rate limiting removed for manual retry button - user controls when to retry
 
         # Get pending videos with quota_exceeded reason
         pending_videos = db.get_pending_videos(limit=batch_size, reason_filter='quota_exceeded')
@@ -327,74 +323,62 @@ def retry_pending_videos() -> Response:
             return jsonify({
                 'success': True,
                 'processed': 0,
-                'resolved': 0,
-                'failed': 0,
-                'not_found': 0,
+                'queued': 0,
+                'cached': 0,
                 'message': 'No pending videos with quota_exceeded reason found'
             })
 
-        # Process each video (quota errors will be raised as QuotaExceededError)
-        resolved = 0
-        failed = 0
-        not_found = 0
+        # Process each video - check cache ONLY, queue the rest
+        queued = 0
+        cached = 0
 
         for video in pending_videos:
+            ha_title = video.get('ha_title', 'Unknown')
+            ha_artist = video.get('ha_artist', 'Unknown')
+            ha_duration = video.get('ha_duration')
+            ha_content_id = video.get('ha_content_id')
+
+            logger.info(f"Pending retry: Processing '{ha_title}' by {ha_artist}")
+
+            # Try cache first (no API call)
+            cached_video = find_cached_video(db, {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration})
+            if cached_video:
+                db.resolve_pending_video(ha_content_id, cached_video)
+                cached += 1
+                logger.info(f"Resolved from cache: {ha_title}")
+                continue
+
+            # Not in cache - queue it for background worker to search
             try:
-                ha_title = video.get('ha_title', 'Unknown')
-                ha_artist = video.get('ha_artist', 'Unknown')
-                ha_duration = video.get('ha_duration')
-                ha_content_id = video.get('ha_content_id')
-
-                logger.info(f"Manual retry: Processing '{ha_title}' by {ha_artist}")
-
-                # Try cache first
-                cached_video = find_cached_video(db, {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration})
-                if cached_video:
-                    db.resolve_pending_video(ha_content_id, cached_video)
-                    resolved += 1
-                    logger.info(f"Resolved from cache: {ha_title}")
-                    continue
-
-                # Search YouTube
-                ha_media = {'title': ha_title, 'artist': ha_artist, 'duration': ha_duration}
-                from youtube_api import get_youtube_api
-                yt_api = get_youtube_api()
-                video = search_and_match_video(ha_media, yt_api, db)
-
-                if video and video.get('yt_video_id'):
-                    # Found and matched - search_and_match_video returns the video dict directly
-                    db.resolve_pending_video(ha_content_id, video)
-                    resolved += 1
-                    logger.info(f"Resolved from YouTube: {ha_title}")
-                else:
-                    # Search returned None - genuinely not found
-                    db.mark_pending_not_found(ha_content_id)
-                    not_found += 1
-                    logger.info(f"Not found: {ha_title}")
-
-                # Delay between requests to avoid hammering API
-                time.sleep(2)
-
+                ha_media = {
+                    'title': ha_title,
+                    'artist': ha_artist,
+                    'album': video.get('ha_album'),
+                    'duration': ha_duration,
+                    'content_id': ha_content_id,
+                    'app_name': video.get('ha_app_name', 'YouTube Music')
+                }
+                search_id = db.enqueue_search(ha_media, callback_rating=None)
+                queued += 1
+                logger.info(f"Queued search for '{ha_title}' (search_id: {search_id})")
             except Exception as e:
-                logger.error(f"Error processing pending video: {e}")
-                failed += 1
+                logger.error(f"Failed to queue search for '{ha_title}': {e}")
 
         processed = len(pending_videos)
 
         # Build message
-        message = f"Processed {processed} pending videos: {resolved} resolved, {failed} failed, {not_found} not found"
+        message = f"Processed {processed} pending videos: {cached} resolved from cache, {queued} queued for worker processing"
 
-        # Invalidate stats cache if any videos were resolved
-        if resolved > 0 or not_found > 0:
+        # Invalidate stats cache if any videos were resolved from cache
+        if cached > 0:
             db.invalidate_stats_cache()
-            logger.debug("Stats cache invalidated after manual retry")
+            logger.debug("Stats cache invalidated after cache resolution")
 
         return jsonify({
             'success': True,
             'processed': processed,
-            'resolved': resolved,
-            'failed': failed,
-            'not_found': not_found,
+            'cached': cached,
+            'queued': queued,
             'message': message
         })
 
