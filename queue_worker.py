@@ -167,9 +167,9 @@ def process_one_rating(db, yt_api):
     video_id = job['yt_video_id']
     rating = job['rating']
 
-    # Check if quota was exceeded within the last hour
+    # Check if quota was exceeded since last reset (midnight Pacific)
     if check_quota_recently_exceeded(db):
-        logger.debug(f"Skipping rating {video_id} - quota exceeded within last hour")
+        logger.debug(f"Skipping rating {video_id} - quota exceeded since last reset")
         return 'quota_recent'
 
     logger.info(f"Processing rating: {video_id} as {rating}")
@@ -216,11 +216,11 @@ def process_one_search(db, yt_api):
     search_id = job['id']
     title = job['ha_title']
 
-    # Check if quota was exceeded within the last hour
+    # Check if quota was exceeded since last reset (midnight Pacific)
     if check_quota_recently_exceeded(db):
-        logger.debug(f"Skipping search '{title}' - quota exceeded within last hour")
+        logger.debug(f"Skipping search '{title}' - quota exceeded since last reset")
         # Mark as failed so it can be retried later
-        db.mark_search_failed(search_id, "Quota exceeded recently - skipped to avoid wasting quota")
+        db.mark_search_failed(search_id, "Quota exceeded since last reset - skipped to avoid wasting quota")
         return 'quota_recent'
 
     logger.info(f"Processing search: {title}")
