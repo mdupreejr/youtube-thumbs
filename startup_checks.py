@@ -42,15 +42,36 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
         if not yt_api or not yt_api.youtube:
             return False, "Not authenticated"
 
+        # Check queue worker status
+        import os
+        worker_running = False
+        pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
+        if os.path.exists(pid_file):
+            try:
+                with open(pid_file, 'r') as f:
+                    pid = int(f.read().strip())
+                os.kill(pid, 0)  # Check if process exists
+                worker_running = True
+            except (OSError, ValueError):
+                pass
+
         # Check for quota exceeded status
         if db:
             try:
                 from datetime import datetime, timedelta, timezone
 
-                # Get quota usage
+                # Get quota usage and call stats
                 summary_data = db.get_api_call_summary(hours=24)
                 summary = summary_data.get('summary', {})
                 quota_used = summary.get('total_quota', 0) or 0
+                total_calls = summary.get('total_calls', 0) or 0
+
+                # Get queue size
+                with db._lock:
+                    cursor = db._conn.execute(
+                        "SELECT COUNT(*) as count FROM queue WHERE status = 'pending'"
+                    )
+                    queue_size = cursor.fetchone()['count']
 
                 # Find last quota error
                 with db._lock:
@@ -88,7 +109,21 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
                         if error_dt > last_reset_utc:
                             return False, f"Quota exceeded ({quota_used:,}/10,000 used), worker paused until midnight PT"
 
-                return True, f"Authenticated, {quota_used:,}/10,000 quota used (24h)"
+                # Build status message
+                worker_status = "running" if worker_running else "NOT RUNNING"
+                msg_parts = [f"Authenticated, quota: {quota_used:,}/10,000 (24h)"]
+
+                if queue_size > 0 and not worker_running:
+                    msg_parts.append(f"⚠️ WARNING: Queue worker {worker_status}! {queue_size} items pending")
+                elif queue_size > 0:
+                    msg_parts.append(f"Worker: {worker_status}, processing {queue_size} items")
+                else:
+                    msg_parts.append(f"Worker: {worker_status}")
+
+                if total_calls == 0 and queue_size > 0:
+                    msg_parts.append("⚠️ No API calls in 24h but queue has items - check worker logs")
+
+                return True, "\n".join(msg_parts)
 
             except Exception:
                 pass
