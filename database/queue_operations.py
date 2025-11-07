@@ -1,19 +1,232 @@
 """
-Queue statistics and monitoring operations.
-Provides detailed information about rating and search queue activity.
+Unified queue operations for YouTube API tasks.
+All searches and ratings flow through this single queue.
 """
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import sqlite3
 import threading
+import json
 
 
 class QueueOperations:
-    """Handles queue statistics and monitoring operations."""
+    """Handles unified queue operations for searches and ratings."""
 
     def __init__(self, conn: sqlite3.Connection, lock: threading.Lock) -> None:
         self._conn = conn
         self._lock = lock
+
+    # ========================================================================
+    # UNIFIED QUEUE OPERATIONS (NEW)
+    # ========================================================================
+
+    def enqueue(
+        self,
+        item_type: str,
+        payload: Dict[str, Any],
+        priority: int = 2
+    ) -> int:
+        """
+        Add an item to the unified queue.
+
+        Args:
+            item_type: 'search' or 'rating'
+            payload: Dictionary containing all data needed to process the item
+            priority: Lower number = higher priority (ratings=1, searches=2)
+
+        Returns:
+            Queue item ID
+        """
+        if item_type not in ('search', 'rating'):
+            raise ValueError(f"Invalid queue item type: {item_type}")
+
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO queue (type, priority, status, payload, requested_at)
+                VALUES (?, ?, 'pending', ?, CURRENT_TIMESTAMP)
+                """,
+                (item_type, priority, json.dumps(payload))
+            )
+            self._conn.commit()
+            return cursor.lastrowid
+
+    def claim_next(self) -> Optional[Dict[str, Any]]:
+        """
+        Atomically claim the next pending queue item.
+        Returns highest priority (lowest number) pending item.
+
+        Returns:
+            Queue item dict or None if queue is empty
+        """
+        with self._lock:
+            # Get next item ordered by priority (asc), then requested_at (asc)
+            cursor = self._conn.execute(
+                """
+                SELECT * FROM queue
+                WHERE status = 'pending'
+                ORDER BY priority ASC, requested_at ASC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                return None
+
+            item = dict(row)
+
+            # Mark as processing (prevents other workers from claiming it)
+            self._conn.execute(
+                """
+                UPDATE queue
+                SET status = 'processing',
+                    attempts = attempts + 1,
+                    last_attempt = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (item['id'],)
+            )
+            self._conn.commit()
+
+            # Parse JSON payload
+            item['payload'] = json.loads(item['payload'])
+            return item
+
+    def mark_completed(self, queue_id: int) -> None:
+        """Mark a queue item as completed."""
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE queue
+                SET status = 'completed',
+                    completed_at = CURRENT_TIMESTAMP,
+                    last_error = NULL
+                WHERE id = ?
+                """,
+                (queue_id,)
+            )
+            self._conn.commit()
+
+    def mark_failed(self, queue_id: int, error: str) -> None:
+        """
+        Mark a queue item as failed and reset to pending for retry.
+
+        Args:
+            queue_id: Queue item ID
+            error: Error message
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE queue
+                SET status = 'pending',
+                    last_error = ?
+                WHERE id = ?
+                """,
+                (error, queue_id)
+            )
+            self._conn.commit()
+
+    def list_pending(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get all pending queue items.
+
+        Args:
+            limit: Maximum number of items to return
+
+        Returns:
+            List of queue items
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                SELECT * FROM queue
+                WHERE status = 'pending'
+                ORDER BY priority ASC, requested_at ASC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            items = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                item['payload'] = json.loads(item['payload'])
+                items.append(item)
+            return items
+
+    def enqueue_search(
+        self,
+        ha_media: Dict[str, Any],
+        callback_rating: Optional[str] = None
+    ) -> int:
+        """
+        Enqueue a search operation (convenience method).
+
+        Args:
+            ha_media: Home Assistant media info
+            callback_rating: Optional rating to apply after search succeeds
+
+        Returns:
+            Queue item ID
+        """
+        payload = {
+            'ha_title': ha_media.get('title'),
+            'ha_artist': ha_media.get('artist'),
+            'ha_album': ha_media.get('album'),
+            'ha_content_id': ha_media.get('content_id'),
+            'ha_duration': ha_media.get('duration'),
+            'ha_app_name': ha_media.get('app_name'),
+            'callback_rating': callback_rating
+        }
+        return self.enqueue('search', payload, priority=2)
+
+    def enqueue_rating(
+        self,
+        yt_video_id: str,
+        rating: str
+    ) -> int:
+        """
+        Enqueue a rating operation (convenience method).
+
+        Args:
+            yt_video_id: YouTube video ID
+            rating: 'like' or 'dislike'
+
+        Returns:
+            Queue item ID
+        """
+        payload = {
+            'yt_video_id': yt_video_id,
+            'rating': rating
+        }
+        return self.enqueue('rating', payload, priority=1)
+
+    def clear_completed(self, days: int = 7) -> int:
+        """
+        Clean up completed queue items older than N days.
+
+        Args:
+            days: Remove completed items older than this many days
+
+        Returns:
+            Number of items deleted
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                DELETE FROM queue
+                WHERE status = 'completed'
+                  AND completed_at < datetime('now', ? || ' days')
+                """,
+                (f'-{days}',)
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
+    # ========================================================================
+    # LEGACY QUEUE STATISTICS (Will be updated to use unified queue)
+    # ========================================================================
 
     def get_queue_statistics(self) -> Dict[str, Any]:
         """

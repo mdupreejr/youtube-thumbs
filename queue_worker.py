@@ -148,122 +148,95 @@ def check_quota_recently_exceeded(db):
         return False  # If we can't check, allow the attempt
 
 
-def process_one_rating(db, yt_api):
+def process_next_item(db, yt_api):
     """
-    Process ONE rating from the queue.
+    Process the next item from the unified queue (rating or search).
+    The queue automatically prioritizes ratings (priority=1) over searches (priority=2).
 
     Returns:
-        'success': Processed a rating
-        'empty': No ratings in queue
-        'quota': Quota exceeded
+        'success': Processed an item
+        'empty': Queue is empty
+        'quota': Quota exceeded during processing
         'quota_recent': Quota exceeded recently (no attempt made)
     """
-    # Get one pending rating
-    pending = db.list_pending_ratings(limit=1)
-    if not pending:
-        return 'empty'
-
-    job = pending[0]
-    video_id = job['yt_video_id']
-    rating = job['rating']
-
     # Check if quota was exceeded since last reset (midnight Pacific)
     if check_quota_recently_exceeded(db):
-        logger.debug(f"Skipping rating {video_id} - quota exceeded since last reset")
+        logger.debug("Skipping queue processing - quota exceeded since last reset")
         return 'quota_recent'
 
-    logger.info(f"Processing rating: {video_id} as {rating}")
-
-    try:
-        success = yt_api.set_video_rating(video_id, rating)
-        if success:
-            db.record_rating(video_id, rating)
-            db.mark_pending_rating(video_id, True)
-            logger.info(f"Successfully rated {video_id} as {rating}")
-        else:
-            db.mark_pending_rating(video_id, False, "YouTube API returned False")
-            logger.warning(f"YouTube API rejected rating for {video_id}")
-        return 'success'
-
-    except QuotaExceededError:
-        # API call WAS made and quota was exceeded - increment attempts to track actual API calls
-        db.mark_pending_rating(video_id, False, "Quota exceeded - will retry when quota resets")
-        logger.warning(f"YouTube quota exceeded while processing {video_id} (attempt logged)")
-        logger.warning("Worker sleeping for 1 hour before checking quota again")
-        return 'quota'
-
-    except Exception as e:
-        db.mark_pending_rating(video_id, False, str(e))
-        logger.error(f"Failed to rate {video_id}: {e}")
-        return 'success'  # Continue processing other items
-
-
-def process_one_search(db, yt_api):
-    """
-    Process ONE search from the queue.
-
-    Returns:
-        'success': Processed a search
-        'empty': No searches in queue
-        'quota': Quota exceeded
-        'quota_recent': Quota exceeded recently (no attempt made)
-    """
-    # Atomically claim one search
-    job = db.claim_pending_search()
-    if not job:
+    # Claim next item from unified queue
+    item = db.claim_next_queue_item()
+    if not item:
         return 'empty'
 
-    search_id = job['id']
-    title = job['ha_title']
-
-    # Check if quota was exceeded since last reset (midnight Pacific)
-    if check_quota_recently_exceeded(db):
-        logger.debug(f"Skipping search '{title}' - quota exceeded since last reset")
-        # Mark as failed so it can be retried later
-        db.mark_search_failed(search_id, "Quota exceeded since last reset - skipped to avoid wasting quota")
-        return 'quota_recent'
-
-    logger.info(f"Processing search: {title}")
+    queue_id = item['id']
+    item_type = item['type']
+    payload = item['payload']
 
     try:
-        # Build media dict
-        ha_media = {
-            'title': job['ha_title'],
-            'artist': job['ha_artist'],
-            'album': job['ha_album'],
-            'content_id': job['ha_content_id'],
-            'duration': job['ha_duration'],
-            'app_name': job['ha_app_name']
-        }
+        if item_type == 'rating':
+            # Process rating
+            video_id = payload['yt_video_id']
+            rating = payload['rating']
+            logger.info(f"Processing rating: {video_id} as {rating}")
 
-        # Search using the wrapper (includes caching)
-        from helpers.search_helpers import search_and_match_video
-        video = search_and_match_video(ha_media, yt_api, db)
+            success = yt_api.set_video_rating(video_id, rating)
+            if success:
+                db.record_rating(video_id, rating)
+                db.mark_queue_item_completed(queue_id)
+                logger.info(f"✓ Successfully rated {video_id} as {rating}")
+            else:
+                db.mark_queue_item_failed(queue_id, "YouTube API returned False")
+                logger.warning(f"✗ YouTube API rejected rating for {video_id}")
 
-        if video and video.get('yt_video_id'):
-            video_id = video['yt_video_id']
-            logger.info(f"Search found video {video_id} for '{title}'")
+        elif item_type == 'search':
+            # Process search
+            title = payload['ha_title']
+            logger.info(f"Processing search: {title}")
 
-            # Mark search complete and enqueue callback rating if present
-            callback_rating = job.get('callback_rating')
-            db.mark_search_complete_with_callback(search_id, video_id, callback_rating)
+            # Build media dict from payload
+            ha_media = {
+                'title': payload['ha_title'],
+                'artist': payload['ha_artist'],
+                'album': payload['ha_album'],
+                'content_id': payload['ha_content_id'],
+                'duration': payload['ha_duration'],
+                'app_name': payload['ha_app_name']
+            }
 
-            if callback_rating:
-                logger.info(f"Enqueued {callback_rating} rating for {video_id}")
+            # Search using the wrapper (includes caching)
+            from helpers.search_helpers import search_and_match_video
+            video = search_and_match_video(ha_media, yt_api, db)
+
+            if video and video.get('yt_video_id'):
+                video_id = video['yt_video_id']
+                logger.info(f"✓ Search found video {video_id} for '{title}'")
+
+                # If there's a callback rating, enqueue it
+                callback_rating = payload.get('callback_rating')
+                if callback_rating:
+                    db.enqueue_rating(video_id, callback_rating)
+                    logger.info(f"  → Enqueued {callback_rating} rating for {video_id}")
+
+                db.mark_queue_item_completed(queue_id)
+            else:
+                db.mark_queue_item_failed(queue_id, "No matching video found")
+                logger.warning(f"✗ No video found for '{title}'")
+
         else:
-            db.mark_search_failed(search_id, "No matching video found")
-            logger.warning(f"No video found for '{title}'")
+            logger.error(f"Unknown queue item type: {item_type}")
+            db.mark_queue_item_failed(queue_id, f"Unknown item type: {item_type}")
 
         return 'success'
 
     except QuotaExceededError:
-        db.mark_search_failed(search_id, "Quota exceeded - will retry")
-        logger.warning("YouTube quota exceeded - worker sleeping for 1 hour")
+        db.mark_queue_item_failed(queue_id, "Quota exceeded - will retry when quota resets")
+        logger.warning("YouTube quota exceeded during processing")
         return 'quota'
 
     except Exception as e:
-        db.mark_search_failed(search_id, str(e))
-        logger.error(f"Search failed for '{title}': {e}")
+        db.mark_queue_item_failed(queue_id, str(e))
+        logger.error(f"Error processing {item_type}: {e}")
         return 'success'  # Continue processing other items
 
 
@@ -304,9 +277,10 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    logger.info("Queue worker starting (SIMPLE MODE: 1 item per minute)")
+    logger.info("Queue worker starting (UNIFIED QUEUE MODE: 1 item per minute)")
     logger.info("This is a standalone process, not a thread")
     logger.info("ONLY ONE queue worker runs - enforced by PID lock")
+    logger.info("Processing from unified queue (ratings priority=1, searches priority=2)")
 
     # Initialize database and YouTube API
     db = get_database()
@@ -321,8 +295,8 @@ def main():
                 time.sleep(60)
                 continue
 
-            # Priority 1: Process ratings first (lightweight API calls)
-            result = process_one_rating(db, yt_api)
+            # Process next item from unified queue (automatically prioritized)
+            result = process_next_item(db, yt_api)
 
             if result == 'quota' or result == 'quota_recent':
                 # Quota exceeded - sleep until midnight Pacific (quota reset time)
@@ -339,42 +313,23 @@ def main():
                 logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
                 time.sleep(time_until_reset)
                 continue
+
             elif result == 'success':
-                # Processed a rating, sleep 60 seconds
-                logger.debug("Rating processed, sleeping 60 seconds")
+                # Processed an item, sleep 60 seconds before next
+                logger.debug("Item processed, sleeping 60 seconds")
                 time.sleep(60)
                 continue
 
-            # Priority 2: Process searches (only if no ratings pending)
-            result = process_one_search(db, yt_api)
-
-            if result == 'quota' or result == 'quota_recent':
-                # Quota exceeded - sleep until midnight Pacific (quota reset time)
-                next_reset = get_next_quota_reset_time()
-                now = datetime.now(timezone.utc)
-                time_until_reset = (next_reset - now).total_seconds()
-
-                # Add a small buffer to ensure we're past the reset time
-                time_until_reset += 60  # 1 minute buffer
-
-                hours = int(time_until_reset / 3600)
-                minutes = int((time_until_reset % 3600) / 60)
-
-                logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
-                time.sleep(time_until_reset)
-                continue
-            elif result == 'success':
-                # Processed a search, sleep 60 seconds
-                logger.debug("Search processed, sleeping 60 seconds")
+            elif result == 'empty':
+                # Queue is empty, sleep 60 seconds
+                logger.debug("Queue empty, sleeping 60 seconds")
                 time.sleep(60)
                 continue
-
-            # Nothing in queue, sleep 60 seconds
-            logger.debug("Queue empty, sleeping 60 seconds")
-            time.sleep(60)
 
         except Exception as e:
             logger.error(f"Queue worker error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             time.sleep(60)
 
     # Clean up PID file on normal exit

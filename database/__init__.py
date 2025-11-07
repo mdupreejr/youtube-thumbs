@@ -103,31 +103,64 @@ class Database:
     def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
         return self._pending_ops.upsert_pending_media(media, reason)
 
+    # ========================================================================
+    # UNIFIED QUEUE OPERATIONS (NEW - routes to unified queue)
+    # ========================================================================
+
     def enqueue_rating(self, yt_video_id, rating):
-        return self._pending_ops.enqueue_rating(yt_video_id, rating)
+        """Enqueue a rating operation to the unified queue."""
+        return self._queue_ops.enqueue_rating(yt_video_id, rating)
+
+    def enqueue_search(self, media, callback_rating=None):
+        """Enqueue a search operation to the unified queue."""
+        return self._queue_ops.enqueue_search(media, callback_rating)
+
+    def claim_next_queue_item(self):
+        """Claim the next item from the unified queue (for queue worker)."""
+        return self._queue_ops.claim_next()
+
+    def mark_queue_item_completed(self, queue_id):
+        """Mark a queue item as completed."""
+        return self._queue_ops.mark_completed(queue_id)
+
+    def mark_queue_item_failed(self, queue_id, error):
+        """Mark a queue item as failed."""
+        return self._queue_ops.mark_failed(queue_id, error)
+
+    def list_pending_queue_items(self, limit=100):
+        """List all pending items in the unified queue."""
+        return self._queue_ops.list_pending(limit)
+
+    # ========================================================================
+    # LEGACY QUEUE OPERATIONS (for backward compatibility during transition)
+    # ========================================================================
 
     def list_pending_ratings(self, limit=10):
+        """LEGACY: List pending ratings from old queue structure."""
         return self._pending_ops.list_pending_ratings(limit)
 
     def mark_pending_rating(self, yt_video_id, success, error=None):
+        """LEGACY: Mark rating as pending (old queue structure)."""
         return self._pending_ops.mark_pending_rating(yt_video_id, success, error)
 
-    def enqueue_search(self, media, callback_rating=None):
-        return self._pending_ops.enqueue_search(media, callback_rating)
-
     def list_pending_searches(self, limit=10):
+        """LEGACY: List pending searches from old queue structure."""
         return self._pending_ops.list_pending_searches(limit)
 
     def claim_pending_search(self):
+        """LEGACY: Claim search from old queue structure."""
         return self._pending_ops.claim_pending_search()
 
     def mark_search_complete(self, search_id, found_video_id):
+        """LEGACY: Mark search complete in old queue structure."""
         return self._pending_ops.mark_search_complete(search_id, found_video_id)
 
     def mark_search_complete_with_callback(self, search_id, found_video_id, callback_rating=None):
+        """LEGACY: Mark search complete with callback in old queue structure."""
         return self._pending_ops.mark_search_complete_with_callback(search_id, found_video_id, callback_rating)
 
     def mark_search_failed(self, search_id, error):
+        """LEGACY: Mark search failed in old queue structure."""
         return self._pending_ops.mark_search_failed(search_id, error)
 
     # Not found cache operations (v1.64.0: consolidated into video_ratings table)
