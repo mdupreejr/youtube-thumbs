@@ -388,9 +388,14 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE yt_match_pending = 0 AND yt_channel_id IS NOT NULL")
             unique_channels = cursor.fetchone()['count']
 
-            # Count pending ratings queue (v1.50.0: now stored in video_ratings columns)
+            # Count queue items (ratings + searches)
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating_queue_pending IS NOT NULL")
             pending_ratings = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM search_queue WHERE status = 'pending'")
+            pending_searches = cursor.fetchone()['count']
+
+            total_queue = pending_ratings + pending_searches
 
             # Get recent videos (all videos, not just matched)
             cursor = db._conn.execute("""
@@ -417,8 +422,13 @@ def check_database(db) -> Tuple[bool, str]:
         logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
         # Show queue status (the ONLY pending operation)
-        if pending_ratings > 0:
-            logger.info(f"  Queue: {pending_ratings} rating(s) waiting to sync to YouTube")
+        if total_queue > 0:
+            if pending_searches > 0 and pending_ratings > 0:
+                logger.info(f"  Queue: {total_queue} items ({pending_searches} searches, {pending_ratings} ratings)")
+            elif pending_searches > 0:
+                logger.info(f"  Queue: {pending_searches} search(es) waiting for YouTube match")
+            elif pending_ratings > 0:
+                logger.info(f"  Queue: {pending_ratings} rating(s) waiting to sync to YouTube")
 
         if recent_videos:
             logger.info("  Recent plays:")
@@ -445,8 +455,13 @@ def check_database(db) -> Tuple[bool, str]:
             f"Ratings: {liked_videos}👍 {disliked_videos}👎 {unrated_videos}⭐",
             f"Activity: {total_plays:,} plays across {unique_channels} channels"
         ]
-        if pending_ratings > 0:
-            status_parts.append(f"Sync Queue: {pending_ratings} rating{'s' if pending_ratings != 1 else ''} waiting to sync")
+        if total_queue > 0:
+            if pending_searches > 0 and pending_ratings > 0:
+                status_parts.append(f"Queue: {total_queue} items ({pending_searches} searches, {pending_ratings} ratings)")
+            elif pending_searches > 0:
+                status_parts.append(f"Queue: {pending_searches} search{'es' if pending_searches != 1 else ''}")
+            elif pending_ratings > 0:
+                status_parts.append(f"Queue: {pending_ratings} rating{'s' if pending_ratings != 1 else ''}")
 
         return True, "DB OK:\n" + "\n".join(status_parts)
 
