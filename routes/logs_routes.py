@@ -109,7 +109,7 @@ def pending_ratings_log():
         for job in pending_jobs:
             video_id = job['yt_video_id']
             # Get video details from database
-            video = _db.get_video_by_id(video_id)
+            video = _db.get_video(video_id)
 
             enriched_ratings.append({
                 'yt_video_id': video_id,
