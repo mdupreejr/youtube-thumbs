@@ -35,15 +35,64 @@ def signal_handler(signum, frame):
         logger.warning(f"Failed to remove PID file: {e}")
 
 
-def check_quota_recently_exceeded(db):
+def get_last_quota_reset_time():
     """
-    Check if quota was exceeded within the last hour.
+    Calculate when quota last reset (midnight Pacific Time).
+    YouTube API quota resets at midnight Pacific Time (UTC-8 or UTC-7 during DST).
 
     Returns:
-        bool: True if quota exceeded recently, False otherwise
+        datetime: The last quota reset time in UTC
+    """
+    from datetime import datetime, timedelta, timezone
+
+    # Get current time in UTC
+    now_utc = datetime.now(timezone.utc)
+
+    # Convert to Pacific Time (simplified: assume PST = UTC-8)
+    # TODO: Handle PST/PDT transition properly
+    pacific_offset = timedelta(hours=-8)
+    now_pacific = now_utc + pacific_offset
+
+    # Get midnight today in Pacific Time
+    midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Convert back to UTC
+    midnight_today_utc = midnight_today_pacific - pacific_offset
+
+    # If current time is before today's reset, use yesterday's reset
+    if now_utc < midnight_today_utc:
+        last_reset_utc = midnight_today_utc - timedelta(days=1)
+    else:
+        last_reset_utc = midnight_today_utc
+
+    return last_reset_utc
+
+
+def get_next_quota_reset_time():
+    """
+    Calculate when quota will next reset (midnight Pacific Time).
+
+    Returns:
+        datetime: The next quota reset time in UTC
+    """
+    from datetime import datetime, timedelta, timezone
+
+    last_reset = get_last_quota_reset_time()
+    next_reset = last_reset + timedelta(days=1)
+    return next_reset
+
+
+def check_quota_recently_exceeded(db):
+    """
+    Check if quota was exceeded since the last quota reset.
+    YouTube API quota resets at midnight Pacific Time, so any quota error
+    since the last reset means we should skip API calls until the next reset.
+
+    Returns:
+        bool: True if quota exceeded since last reset, False otherwise
     """
     try:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timezone
 
         with db._lock:
             cursor = db._conn.execute(
@@ -73,13 +122,23 @@ def check_quota_recently_exceeded(db):
             else:
                 error_dt = error_time_str
 
-            # Check if error was within last hour
-            now = datetime.now(timezone.utc)
-            time_since_error = now - error_dt.replace(tzinfo=timezone.utc)
+            # Ensure error_dt has timezone
+            if error_dt.tzinfo is None:
+                error_dt = error_dt.replace(tzinfo=timezone.utc)
 
-            if time_since_error < timedelta(hours=1):
-                minutes_ago = int(time_since_error.total_seconds() / 60)
-                logger.info(f"Quota exceeded {minutes_ago} minutes ago - skipping API call attempt")
+            # Get last quota reset time
+            last_reset = get_last_quota_reset_time()
+            next_reset = get_next_quota_reset_time()
+
+            # If quota error occurred AFTER last reset, quota is still exhausted
+            if error_dt > last_reset:
+                now = datetime.now(timezone.utc)
+                time_until_reset = next_reset - now
+                hours_until = int(time_until_reset.total_seconds() / 3600)
+                minutes_until = int((time_until_reset.total_seconds() % 3600) / 60)
+
+                logger.info(f"Quota exceeded since last reset - skipping API call")
+                logger.info(f"Quota will reset in {hours_until}h {minutes_until}m (midnight Pacific Time)")
                 return True
 
             return False
@@ -211,6 +270,7 @@ def process_one_search(db, yt_api):
 def main():
     """Main worker loop - simple and straightforward."""
     global running
+    from datetime import datetime, timezone
 
     # Ensure only ONE queue worker runs at a time
     pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
@@ -264,15 +324,20 @@ def main():
             # Priority 1: Process ratings first (lightweight API calls)
             result = process_one_rating(db, yt_api)
 
-            if result == 'quota':
-                # Sleep 1 hour when quota exceeded (actual API call was made)
-                logger.info("Sleeping for 1 hour due to quota limit")
-                time.sleep(3600)
-                continue
-            elif result == 'quota_recent':
-                # Quota exceeded recently - no API call made, sleep 1 hour
-                logger.info("Quota exceeded within last hour - sleeping 1 hour before retry")
-                time.sleep(3600)
+            if result == 'quota' or result == 'quota_recent':
+                # Quota exceeded - sleep until midnight Pacific (quota reset time)
+                next_reset = get_next_quota_reset_time()
+                now = datetime.now(timezone.utc)
+                time_until_reset = (next_reset - now).total_seconds()
+
+                # Add a small buffer to ensure we're past the reset time
+                time_until_reset += 60  # 1 minute buffer
+
+                hours = int(time_until_reset / 3600)
+                minutes = int((time_until_reset % 3600) / 60)
+
+                logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
+                time.sleep(time_until_reset)
                 continue
             elif result == 'success':
                 # Processed a rating, sleep 60 seconds
@@ -283,15 +348,20 @@ def main():
             # Priority 2: Process searches (only if no ratings pending)
             result = process_one_search(db, yt_api)
 
-            if result == 'quota':
-                # Sleep 1 hour when quota exceeded (actual API call was made)
-                logger.info("Sleeping for 1 hour due to quota limit")
-                time.sleep(3600)
-                continue
-            elif result == 'quota_recent':
-                # Quota exceeded recently - no API call made, sleep 1 hour
-                logger.info("Quota exceeded within last hour - sleeping 1 hour before retry")
-                time.sleep(3600)
+            if result == 'quota' or result == 'quota_recent':
+                # Quota exceeded - sleep until midnight Pacific (quota reset time)
+                next_reset = get_next_quota_reset_time()
+                now = datetime.now(timezone.utc)
+                time_until_reset = (next_reset - now).total_seconds()
+
+                # Add a small buffer to ensure we're past the reset time
+                time_until_reset += 60  # 1 minute buffer
+
+                hours = int(time_until_reset / 3600)
+                minutes = int((time_until_reset % 3600) / 60)
+
+                logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
+                time.sleep(time_until_reset)
                 continue
             elif result == 'success':
                 # Processed a search, sleep 60 seconds

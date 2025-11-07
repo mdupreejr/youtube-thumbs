@@ -128,10 +128,29 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
                     else:
                         error_dt = error_time
 
-                    # If quota error was recent (within last 12 hours), don't attempt API call
+                    # Check if quota error occurred since last quota reset (midnight Pacific Time)
                     from datetime import timedelta, timezone
                     now = datetime.now(timezone.utc)
-                    if (now - error_dt.replace(tzinfo=timezone.utc)) < timedelta(hours=12):
+
+                    # Calculate last quota reset time (midnight Pacific = 08:00 UTC)
+                    now_utc = datetime.now(timezone.utc)
+                    pacific_offset = timedelta(hours=-8)
+                    now_pacific = now_utc + pacific_offset
+                    midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+                    midnight_today_utc = midnight_today_pacific - pacific_offset
+
+                    # If current time is before today's reset, use yesterday's reset
+                    if now_utc < midnight_today_utc:
+                        last_reset_utc = midnight_today_utc - timedelta(days=1)
+                    else:
+                        last_reset_utc = midnight_today_utc
+
+                    # Ensure error_dt has timezone
+                    if error_dt.tzinfo is None:
+                        error_dt = error_dt.replace(tzinfo=timezone.utc)
+
+                    # If quota error occurred AFTER last reset, quota is still exhausted
+                    if error_dt > last_reset_utc:
                         relative_time = format_relative_time(error_dt)
 
                         msg_parts = [
