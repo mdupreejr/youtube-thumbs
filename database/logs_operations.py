@@ -165,10 +165,10 @@ class LogsOperations:
         where_conditions = ["yt_match_pending = 0", "yt_video_id IS NOT NULL"]
         params = []
 
-        # Add period filter
+        # Add period filter - use most recent activity timestamp
         period_timestamp = self._get_period_timestamp(period)
         if period_timestamp:
-            where_conditions.append("date_added >= ?")
+            where_conditions.append("COALESCE(date_last_played, yt_match_last_attempt, date_added) >= ?")
             params.append(period_timestamp)
 
         where_clause = " AND ".join(where_conditions)
@@ -195,15 +195,17 @@ class LogsOperations:
         offset = (page - 1) * limit
 
         with self._lock:
-            # Get match history
+            # Get match history ordered by most recent activity (last played, or last matched if never played)
             # nosec B608 - where_clause built from hardcoded strings with parameterized values
             query = f"""
                 SELECT yt_video_id, ha_title, ha_artist, ha_duration,
-                       yt_title, yt_channel, yt_duration,
-                       date_added, yt_match_attempts, play_count
+                       yt_title, yt_channel, yt_duration, yt_published_at,
+                       date_added, date_last_played, yt_match_last_attempt,
+                       yt_match_attempts, play_count,
+                       COALESCE(date_last_played, yt_match_last_attempt, date_added) as sort_timestamp
                 FROM video_ratings
                 WHERE {where_clause}
-                ORDER BY date_added DESC
+                ORDER BY sort_timestamp DESC
                 LIMIT ? OFFSET ?
             """
             cursor = self._conn.execute(query, params + [limit, offset])

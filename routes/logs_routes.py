@@ -472,8 +472,9 @@ def _handle_matches_tab(page, period_filter):
         # Determine match quality (good if duration diff <= 2 seconds)
         match_quality = 'good' if abs(duration_diff) <= 2 else 'fair'
 
-        # Format relative time
-        time_ago = format_relative_time(match.get('date_added', ''))
+        # Format relative time - use most recent activity (played, matched, or added)
+        activity_timestamp = match.get('date_last_played') or match.get('yt_match_last_attempt') or match.get('date_added')
+        time_ago = format_relative_time(activity_timestamp) if activity_timestamp else 'Unknown'
 
         # Format YouTube published date if available
         yt_published_at = match.get('yt_published_at')
@@ -504,7 +505,8 @@ def _handle_matches_tab(page, period_filter):
             'match_attempts': match.get('yt_match_attempts', 0),
             'play_count': match.get('play_count', 0),
             'time_ago': time_ago,
-            'timestamp': match.get('date_added')
+            'timestamp': activity_timestamp,
+            'date_last_played': match.get('date_last_played')
         })
 
     return {
