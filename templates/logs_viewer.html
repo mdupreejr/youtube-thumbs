@@ -47,7 +47,7 @@
                     API Calls
                 </a>
                 <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button">
-                    Pending Ratings
+                    Queue
                 </a>
             </div>
 
@@ -603,12 +603,12 @@
                 </div>
             </div>
 
-            <!-- Rating Queue Statistics -->
+            <!-- Queue Statistics -->
             <div class="stats-section">
-                <h3>Rating Queue</h3>
+                <h3>Queue</h3>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-label">Pending Ratings</div>
+                        <div class="stat-label">Rating Queue</div>
                         <div class="stat-value">{{ queue_stats.rating_queue.pending }}</div>
                     </div>
                     <div class="stat-card">

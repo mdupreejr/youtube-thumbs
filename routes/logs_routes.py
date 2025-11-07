@@ -97,77 +97,150 @@ def api_calls_log():
 
 @bp.route('/logs/pending-ratings')
 def pending_ratings_log():
-    """Display pending ratings queue."""
+    """Display queue - both search and rating operations."""
     ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
     try:
-        # Get all pending ratings (no pagination needed, usually small list)
-        pending_jobs = _db.list_pending_ratings(limit=1000)
+        # Get all pending searches
+        pending_searches = _db.list_pending_searches(limit=1000)
 
-        # Enrich with video details from database
-        enriched_ratings = []
-        for job in pending_jobs:
-            video_id = job['yt_video_id']
-            # Get video details from database
-            video = _db.get_video(video_id)
+        # Get all pending ratings
+        pending_ratings = _db.list_pending_ratings(limit=1000)
 
-            enriched_ratings.append({
-                'yt_video_id': video_id,
-                'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
-                'ha_artist': video.get('ha_artist') if video else None,
-                'rating': job['rating'],
-                'requested_at': job['requested_at'],
-                'attempts': job['attempts'],
-                'last_error': job.get('last_error')
+        # Format search queue items
+        search_items = []
+        for search in pending_searches:
+            search_items.append({
+                'type': 'search',
+                'id': str(search['id']),
+                'ha_title': search.get('ha_title', 'Unknown'),
+                'ha_artist': search.get('ha_artist'),
+                'operation': 'Search for YouTube match',
+                'callback': f"then rate {search['callback_rating']}" if search.get('callback_rating') else None,
+                'requested_at': search.get('requested_at'),
+                'attempts': search.get('attempts', 0),
+                'last_error': search.get('last_error')
             })
 
+        # Format rating queue items
+        rating_items = []
+        for rating in pending_ratings:
+            video_id = rating['yt_video_id']
+            video = _db.get_video(video_id)
+
+            rating_items.append({
+                'type': 'rating',
+                'id': video_id,
+                'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
+                'ha_artist': video.get('ha_artist') if video else None,
+                'operation': f"Rate as {rating['rating']}",
+                'callback': None,
+                'requested_at': rating.get('requested_at'),
+                'attempts': rating.get('attempts', 0),
+                'last_error': rating.get('last_error')
+            })
+
+        # Combine and sort by requested_at
+        all_items = search_items + rating_items
+        all_items.sort(key=lambda x: x['requested_at'] or '')
+
         return render_template(
-            'logs_pending_ratings.html',
+            'logs_queue.html',
             ingress_path=ingress_path,
-            pending_ratings=enriched_ratings
+            queue_items=all_items
         )
 
     except Exception as e:
-        logger.error(f"Error displaying pending ratings: {e}")
-        return "<h1>Error loading pending ratings</h1>", 500
+        logger.error(f"Error displaying queue: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading queue</h1>", 500
 
 
-@bp.route('/api/pending-rating/<video_id>')
-def get_pending_rating_details(video_id: str):
-    """Get full details for a pending rating including all attempt history."""
+@bp.route('/api/queue-item/<item_type>/<item_id>')
+def get_queue_item_details(item_type: str, item_id: str):
+    """Get full details for a queue item (search or rating)."""
     try:
-        # Get video details
-        video = _db.get_video(video_id)
-        if not video:
-            return jsonify({'success': False, 'error': 'Video not found'}), 404
+        if item_type == 'rating':
+            # Get video details
+            video = _db.get_video(item_id)
+            if not video:
+                logger.error(f"Video not found for rating queue item: {item_id}")
+                return jsonify({'success': False, 'error': f'Video not found: {item_id}'}), 404
 
-        # Check if it has a pending rating
-        if not video.get('rating_queue_pending'):
-            return jsonify({'success': False, 'error': 'No pending rating for this video'}), 404
+            # Check if it has a pending rating
+            if not video.get('rating_queue_pending'):
+                logger.error(f"No pending rating for video: {item_id}")
+                return jsonify({'success': False, 'error': 'No pending rating for this video'}), 404
 
-        # Format the response with all available details
-        details = {
-            'yt_video_id': video_id,
-            'ha_title': video.get('ha_title', 'Unknown'),
-            'ha_artist': video.get('ha_artist', 'Unknown'),
-            'yt_title': video.get('yt_title'),
-            'yt_channel': video.get('yt_channel'),
-            'rating': video.get('rating_queue_pending'),
-            'requested_at': video.get('rating_queue_requested_at'),
-            'attempts': video.get('rating_queue_attempts', 0),
-            'last_attempt': video.get('rating_queue_last_attempt'),
-            'last_error': video.get('rating_queue_last_error'),
-            'current_rating': video.get('rating'),  # What rating is actually set on YouTube
-            'play_count': video.get('play_count', 0),
-            'date_added': video.get('date_added'),
-            'date_last_played': video.get('date_last_played')
-        }
+            # Format the response with all available details
+            details = {
+                'type': 'rating',
+                'yt_video_id': item_id,
+                'ha_title': video.get('ha_title', 'Unknown'),
+                'ha_artist': video.get('ha_artist', 'Unknown'),
+                'yt_title': video.get('yt_title'),
+                'yt_channel': video.get('yt_channel'),
+                'operation': f"Rate as {video.get('rating_queue_pending')}",
+                'rating': video.get('rating_queue_pending'),
+                'requested_at': video.get('rating_queue_requested_at'),
+                'attempts': video.get('rating_queue_attempts', 0),
+                'last_attempt': video.get('rating_queue_last_attempt'),
+                'last_error': video.get('rating_queue_last_error'),
+                'current_rating': video.get('rating'),  # What rating is actually set on YouTube
+                'play_count': video.get('play_count', 0),
+                'date_added': video.get('date_added'),
+                'date_last_played': video.get('date_last_played')
+            }
 
-        return jsonify({'success': True, 'data': details})
+            return jsonify({'success': True, 'data': details})
+
+        elif item_type == 'search':
+            # Get search queue item
+            with _db._lock:
+                cursor = _db._conn.execute(
+                    """
+                    SELECT * FROM search_queue WHERE id = ?
+                    """,
+                    (int(item_id),)
+                )
+                row = cursor.fetchone()
+
+            if not row:
+                logger.error(f"Search queue item not found: {item_id}")
+                return jsonify({'success': False, 'error': f'Search not found: {item_id}'}), 404
+
+            search = dict(row)
+            details = {
+                'type': 'search',
+                'id': item_id,
+                'ha_title': search.get('ha_title', 'Unknown'),
+                'ha_artist': search.get('ha_artist', 'Unknown'),
+                'ha_album': search.get('ha_album'),
+                'ha_duration': search.get('ha_duration'),
+                'ha_app_name': search.get('ha_app_name'),
+                'operation': 'Search for YouTube match',
+                'callback_rating': search.get('callback_rating'),
+                'status': search.get('status'),
+                'requested_at': search.get('requested_at'),
+                'attempts': search.get('attempts', 0),
+                'last_attempt': search.get('last_attempt'),
+                'last_error': search.get('last_error'),
+                'completed_at': search.get('completed_at'),
+                'yt_video_id': search.get('yt_video_id')
+            }
+
+            return jsonify({'success': True, 'data': details})
+
+        else:
+            logger.error(f"Invalid queue item type: {item_type}")
+            return jsonify({'success': False, 'error': f'Invalid item type: {item_type}'}), 400
 
     except Exception as e:
-        logger.error(f"Error getting pending rating details for {video_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error getting queue item details ({item_type}/{item_id}): {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'Internal server error: {str(e)}'}), 500
 
 
 def parse_error_log(

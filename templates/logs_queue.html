@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Queue</title>
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    <a href="{{ ingress_path }}/logs" class="active">Logs</a>
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+        </header>
+
+        <div class="card">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button">
+                    Rated Songs
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button">
+                    Matches
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button">
+                    Recent
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button">
+                    Errors
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=quota_prober" class="tab-button">
+                    Quota Prober
+                </a>
+                <a href="{{ ingress_path }}/logs/api-calls" class="tab-button">
+                    API Calls
+                </a>
+                <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button active">
+                    Queue
+                </a>
+            </div>
+
+            <h2 style="margin: 20px 0 10px 0;">Queue</h2>
+            <p class="info-text">
+                Operations waiting to be processed by the background worker. The worker processes one item at a time to respect API quotas and rate limits.
+            </p>
+
+            {% if queue_items %}
+            <p class="info-text" style="margin-top: 10px;">
+                <strong>{{ queue_items|length }} operation{{ 's' if queue_items|length != 1 else '' }} in queue</strong>
+            </p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Operation</th>
+                            <th>Queued At</th>
+                            <th>Attempts</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in queue_items %}
+                        <tr class="clickable-row" data-item-type="{{ item.type }}" data-item-id="{{ item.id }}" style="cursor: pointer;">
+                            <td>
+                                {% if item.type == 'search' %}
+                                <span style="color: #3b82f6;">🔍 Search</span>
+                                {% else %}
+                                <span style="color: #8b5cf6;">⭐ Rating</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.ha_title or 'Unknown' }}</td>
+                            <td>{{ item.ha_artist or '—' }}</td>
+                            <td>
+                                <strong>{{ item.operation }}</strong>
+                                {% if item.callback %}
+                                <br><span style="font-size: 0.85em; color: #64748b;">{{ item.callback }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.requested_at or '—' }}</td>
+                            <td style="text-align: center;">{{ item.attempts or 0 }}</td>
+                            <td>
+                                {% if item.last_error %}
+                                <span style="color: #ef4444; font-size: 0.9em;">{{ item.last_error[:50] }}...</span>
+                                {% else %}
+                                <span style="color: #10b981;">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <p><strong>How the queue works:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>The background worker processes one operation at a time</li>
+                    <li>Search operations find YouTube videos matching Home Assistant media</li>
+                    <li>Rating operations sync thumbs up/down to YouTube</li>
+                    <li>Failed operations are retried with exponential backoff</li>
+                    <li>The worker automatically pauses when quota is exhausted and resumes when available</li>
+                </ul>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    ✓ Queue is empty
+                </p>
+                <p style="text-align: center; color: #94a3b8; font-size: 0.9em;">
+                    No operations waiting to be processed.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal for queue item details -->
+    <div id="detailModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Queue Item Details</h2>
+            <div id="modalBody" style="margin-top: 20px;">
+                <p style="text-align: center; color: #64748b;">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .clickable-row:hover {
+            background-color: #f1f5f9;
+        }
+
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 700px;
+        }
+
+        .close {
+            color: #94a3b8;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .close:hover {
+            color: #64748b;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .detail-value {
+            color: #1e293b;
+        }
+
+        .error-box {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+
+    <script>
+        const ingressPath = "{{ ingress_path }}";
+
+        // Add click handlers to all rows
+        document.querySelectorAll('.clickable-row').forEach(row => {
+            row.addEventListener('click', function() {
+                const itemType = this.dataset.itemType;
+                const itemId = this.dataset.itemId;
+                showDetails(itemType, itemId);
+            });
+        });
+
+        async function showDetails(itemType, itemId) {
+            const modal = document.getElementById('detailModal');
+            const modalBody = document.getElementById('modalBody');
+
+            // Show modal with loading state
+            modal.style.display = 'block';
+            modalBody.innerHTML = '<p style="text-align: center; color: #64748b;">Loading details...</p>';
+
+            try {
+                const response = await fetch(`${ingressPath}/api/queue-item/${itemType}/${itemId}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    modalBody.innerHTML = `<p style="color: #ef4444;">Error: ${result.error}</p>`;
+                    return;
+                }
+
+                const data = result.data;
+
+                // Build HTML based on item type
+                let html = '<div class="detail-grid">';
+
+                if (data.type === 'rating') {
+                    html += `
+                        <div class="detail-label">Video ID:</div>
+                        <div class="detail-value">
+                            <a href="https://youtube.com/watch?v=${data.yt_video_id}" target="_blank" rel="noopener noreferrer">
+                                ${data.yt_video_id}
+                            </a>
+                        </div>
+
+                        <div class="detail-label">Home Assistant:</div>
+                        <div class="detail-value">
+                            <strong>${data.ha_title}</strong>
+                            ${data.ha_artist ? '<br>' + data.ha_artist : ''}
+                        </div>
+
+                        ${data.yt_title ? `
+                        <div class="detail-label">YouTube:</div>
+                        <div class="detail-value">
+                            <strong>${data.yt_title}</strong>
+                            ${data.yt_channel ? '<br>' + data.yt_channel : ''}
+                        </div>
+                        ` : ''}
+
+                        <div class="detail-label">Operation:</div>
+                        <div class="detail-value">${data.operation}</div>
+
+                        <div class="detail-label">Current Rating:</div>
+                        <div class="detail-value">${data.current_rating || 'none'}</div>
+
+                        <div class="detail-label">Queued At:</div>
+                        <div class="detail-value">${data.requested_at || 'Unknown'}</div>
+
+                        <div class="detail-label">Attempts:</div>
+                        <div class="detail-value">${data.attempts || 0}</div>
+
+                        ${data.last_attempt ? `
+                        <div class="detail-label">Last Attempt:</div>
+                        <div class="detail-value">${data.last_attempt}</div>
+                        ` : ''}
+
+                        <div class="detail-label">Play Count:</div>
+                        <div class="detail-value">${data.play_count || 0}</div>
+                    `;
+                } else if (data.type === 'search') {
+                    html += `
+                        <div class="detail-label">Search ID:</div>
+                        <div class="detail-value">${data.id}</div>
+
+                        <div class="detail-label">Home Assistant:</div>
+                        <div class="detail-value">
+                            <strong>${data.ha_title}</strong>
+                            ${data.ha_artist ? '<br>' + data.ha_artist : ''}
+                            ${data.ha_album ? '<br><em>' + data.ha_album + '</em>' : ''}
+                        </div>
+
+                        ${data.ha_duration ? `
+                        <div class="detail-label">Duration:</div>
+                        <div class="detail-value">${data.ha_duration}s</div>
+                        ` : ''}
+
+                        <div class="detail-label">App:</div>
+                        <div class="detail-value">${data.ha_app_name || 'Unknown'}</div>
+
+                        <div class="detail-label">Operation:</div>
+                        <div class="detail-value">${data.operation}</div>
+
+                        ${data.callback_rating ? `
+                        <div class="detail-label">Then:</div>
+                        <div class="detail-value">Rate as ${data.callback_rating}</div>
+                        ` : ''}
+
+                        <div class="detail-label">Status:</div>
+                        <div class="detail-value">${data.status || 'pending'}</div>
+
+                        <div class="detail-label">Queued At:</div>
+                        <div class="detail-value">${data.requested_at || 'Unknown'}</div>
+
+                        <div class="detail-label">Attempts:</div>
+                        <div class="detail-value">${data.attempts || 0}</div>
+
+                        ${data.last_attempt ? `
+                        <div class="detail-label">Last Attempt:</div>
+                        <div class="detail-value">${data.last_attempt}</div>
+                        ` : ''}
+
+                        ${data.yt_video_id ? `
+                        <div class="detail-label">Found Video:</div>
+                        <div class="detail-value">
+                            <a href="https://youtube.com/watch?v=${data.yt_video_id}" target="_blank" rel="noopener noreferrer">
+                                ${data.yt_video_id}
+                            </a>
+                        </div>
+                        ` : ''}
+
+                        ${data.completed_at ? `
+                        <div class="detail-label">Completed:</div>
+                        <div class="detail-value">${data.completed_at}</div>
+                        ` : ''}
+                    `;
+                }
+
+                html += '</div>';
+
+                // Show error if present
+                if (data.last_error) {
+                    html += `
+                        <div class="error-box">
+                            <strong style="color: #ef4444;">Last Error:</strong>
+                            <p style="margin: 8px 0 0 0; color: #991b1b; font-family: monospace; font-size: 0.9em;">
+                                ${data.last_error}
+                            </p>
+                        </div>
+                    `;
+                }
+
+                // Show warning for high attempts
+                if (data.attempts >= 100) {
+                    html += `
+                        <div class="warning-box">
+                            <strong style="color: #f59e0b;">⚠️ High Attempt Count</strong>
+                            <p style="margin: 8px 0 0 0; color: #92400e;">
+                                This item has been attempted ${data.attempts} times. Check the error message above to understand why it's failing.
+                            </p>
+                        </div>
+                    `;
+                }
+
+                modalBody.innerHTML = html;
+
+            } catch (error) {
+                modalBody.innerHTML = `<p style="color: #ef4444;">Error loading details: ${error.message}</p>`;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        };
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
