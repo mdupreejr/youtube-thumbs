@@ -10,26 +10,6 @@ from .video_helpers import prepare_video_upsert
 from .response_helpers import error_response, success_response
 
 
-def check_rate_limit(rate_limiter, rating_type: str, error_response_func) -> Optional[Tuple[Response, int]]:
-    """
-    Check rate limiting and return error response if limit exceeded.
-
-    Args:
-        rate_limiter: Rate limiter instance
-        rating_type: Type of rating (like/dislike)
-        error_response_func: Function to create error responses
-
-    Returns:
-        Error response tuple if rate limited, None otherwise
-    """
-    allowed, reason = rate_limiter.check_and_add_request()
-    if not allowed:
-        logger.warning(f"Request blocked: {reason}")
-        rating_logger.info(f"{rating_type.upper()} | BLOCKED | Reason: {reason}")
-        return error_response_func(reason, 429)
-    return None
-
-
 def validate_current_media(ha_api, rating_type: str, error_response_func) -> Tuple[Optional[Dict], Optional[Tuple[Response, int]]]:
     """
     Get and validate current media from Home Assistant.

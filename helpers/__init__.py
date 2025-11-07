@@ -7,7 +7,6 @@ Centralizes common patterns to reduce code duplication.
 from .cache_helpers import find_cached_video
 from .search_helpers import search_and_match_video
 from .rating_helpers import (
-    check_rate_limit,
     validate_current_media,
     check_youtube_content,
     find_or_search_video,
@@ -34,7 +33,6 @@ __all__ = [
     # Search helpers
     'search_and_match_video',
     # Rating helpers
-    'check_rate_limit',
     'validate_current_media',
     'check_youtube_content',
     'find_or_search_video',
