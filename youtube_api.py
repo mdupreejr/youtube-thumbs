@@ -80,7 +80,6 @@ class YouTubeAPI:
                     token_data = json.load(f)
                 creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
                 logger.info("Loaded YouTube API credentials from JSON")
-                logger.debug(f"Authenticate call stack: {traceback.format_stack()}")
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Failed to load credentials from {token_file}: {e}")
                 logger.warning("Removing corrupted token file")
@@ -798,6 +797,5 @@ def get_youtube_api() -> YouTubeAPI:
     global yt_api
     if yt_api is None:
         logger.info("Creating new YouTube API instance")
-        logger.debug(f"Call stack: {traceback.format_stack()}")
         yt_api = YouTubeAPI()
     return yt_api
