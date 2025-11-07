@@ -4,9 +4,11 @@ Simple background queue worker - NO THREADS, NO COMPLEXITY.
 
 This script runs as a separate process and processes queue items one at a time.
 Runs independently of the Flask/Gunicorn web server.
+ONLY ONE instance of this worker should run at a time (enforced by PID lock).
 """
 import time
 import sys
+import os
 import signal
 from logger import logger
 from database import get_database
@@ -23,6 +25,69 @@ def signal_handler(signum, frame):
     logger.info(f"Queue worker received signal {signum}, shutting down...")
     running = False
 
+    # Clean up PID file
+    pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
+    try:
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+            logger.info("PID file removed")
+    except Exception as e:
+        logger.warning(f"Failed to remove PID file: {e}")
+
+
+def check_quota_recently_exceeded(db):
+    """
+    Check if quota was exceeded within the last hour.
+
+    Returns:
+        bool: True if quota exceeded recently, False otherwise
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        with db._lock:
+            cursor = db._conn.execute(
+                """
+                SELECT timestamp, error_message
+                FROM api_call_log
+                WHERE success = 0
+                  AND (error_message LIKE '%quota%' OR error_message LIKE '%Quota%')
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                return False
+
+            last_quota_error = dict(row)
+            error_time_str = last_quota_error.get('timestamp')
+
+            if not error_time_str:
+                return False
+
+            # Parse timestamp
+            if isinstance(error_time_str, str):
+                error_dt = datetime.fromisoformat(error_time_str.replace('Z', '+00:00'))
+            else:
+                error_dt = error_time_str
+
+            # Check if error was within last hour
+            now = datetime.now(timezone.utc)
+            time_since_error = now - error_dt.replace(tzinfo=timezone.utc)
+
+            if time_since_error < timedelta(hours=1):
+                minutes_ago = int(time_since_error.total_seconds() / 60)
+                logger.info(f"Quota exceeded {minutes_ago} minutes ago - skipping API call attempt")
+                return True
+
+            return False
+
+    except Exception as e:
+        logger.debug(f"Error checking quota status: {e}")
+        return False  # If we can't check, allow the attempt
+
 
 def process_one_rating(db, yt_api):
     """
@@ -32,6 +97,7 @@ def process_one_rating(db, yt_api):
         'success': Processed a rating
         'empty': No ratings in queue
         'quota': Quota exceeded
+        'quota_recent': Quota exceeded recently (no attempt made)
     """
     # Get one pending rating
     pending = db.list_pending_ratings(limit=1)
@@ -41,6 +107,11 @@ def process_one_rating(db, yt_api):
     job = pending[0]
     video_id = job['yt_video_id']
     rating = job['rating']
+
+    # Check if quota was exceeded within the last hour
+    if check_quota_recently_exceeded(db):
+        logger.debug(f"Skipping rating {video_id} - quota exceeded within last hour")
+        return 'quota_recent'
 
     logger.info(f"Processing rating: {video_id} as {rating}")
 
@@ -76,6 +147,7 @@ def process_one_search(db, yt_api):
         'success': Processed a search
         'empty': No searches in queue
         'quota': Quota exceeded
+        'quota_recent': Quota exceeded recently (no attempt made)
     """
     # Atomically claim one search
     job = db.claim_pending_search()
@@ -84,6 +156,13 @@ def process_one_search(db, yt_api):
 
     search_id = job['id']
     title = job['ha_title']
+
+    # Check if quota was exceeded within the last hour
+    if check_quota_recently_exceeded(db):
+        logger.debug(f"Skipping search '{title}' - quota exceeded within last hour")
+        # Mark as failed so it can be retried later
+        db.mark_search_failed(search_id, "Quota exceeded recently - skipped to avoid wasting quota")
+        return 'quota_recent'
 
     logger.info(f"Processing search: {title}")
 
@@ -133,12 +212,41 @@ def main():
     """Main worker loop - simple and straightforward."""
     global running
 
+    # Ensure only ONE queue worker runs at a time
+    pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
+
+    try:
+        # Check if PID file exists
+        if os.path.exists(pid_file):
+            with open(pid_file, 'r') as f:
+                old_pid = int(f.read().strip())
+
+            # Check if process is still running
+            try:
+                os.kill(old_pid, 0)  # Check if process exists
+                logger.error(f"Queue worker already running (PID {old_pid}). Exiting to prevent duplicate workers.")
+                sys.exit(1)
+            except OSError:
+                # Process doesn't exist, remove stale PID file
+                logger.warning(f"Removing stale PID file (process {old_pid} no longer exists)")
+                os.remove(pid_file)
+
+        # Write our PID to file
+        with open(pid_file, 'w') as f:
+            f.write(str(os.getpid()))
+        logger.info(f"Queue worker PID file created: {pid_file}")
+
+    except Exception as e:
+        logger.error(f"Failed to create PID file: {e}")
+        sys.exit(1)
+
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
     logger.info("Queue worker starting (SIMPLE MODE: 1 item per minute)")
     logger.info("This is a standalone process, not a thread")
+    logger.info("ONLY ONE queue worker runs - enforced by PID lock")
 
     # Initialize database and YouTube API
     db = get_database()
@@ -157,8 +265,13 @@ def main():
             result = process_one_rating(db, yt_api)
 
             if result == 'quota':
-                # Sleep 1 hour when quota exceeded
+                # Sleep 1 hour when quota exceeded (actual API call was made)
                 logger.info("Sleeping for 1 hour due to quota limit")
+                time.sleep(3600)
+                continue
+            elif result == 'quota_recent':
+                # Quota exceeded recently - no API call made, sleep 1 hour
+                logger.info("Quota exceeded within last hour - sleeping 1 hour before retry")
                 time.sleep(3600)
                 continue
             elif result == 'success':
@@ -171,8 +284,13 @@ def main():
             result = process_one_search(db, yt_api)
 
             if result == 'quota':
-                # Sleep 1 hour when quota exceeded
+                # Sleep 1 hour when quota exceeded (actual API call was made)
                 logger.info("Sleeping for 1 hour due to quota limit")
+                time.sleep(3600)
+                continue
+            elif result == 'quota_recent':
+                # Quota exceeded recently - no API call made, sleep 1 hour
+                logger.info("Quota exceeded within last hour - sleeping 1 hour before retry")
                 time.sleep(3600)
                 continue
             elif result == 'success':
@@ -188,6 +306,15 @@ def main():
         except Exception as e:
             logger.error(f"Queue worker error: {e}")
             time.sleep(60)
+
+    # Clean up PID file on normal exit
+    pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
+    try:
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+            logger.info("PID file removed on shutdown")
+    except Exception as e:
+        logger.warning(f"Failed to remove PID file on shutdown: {e}")
 
     logger.info("Queue worker stopped")
 
