@@ -84,26 +84,46 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## Git Workflow
 
-When addressing issues or making changes:
+### Queue-Based Processing
+
+Issues are processed through a queue system using GitHub labels:
+- **`claude-queue`** - Issue is waiting to be processed
+- **`claude-in-progress`** - Currently being worked on
+- **`claude-pr-created`** - Pull request has been created, awaiting review
+
+Only ONE issue is processed at a time. When a PR is merged or closed, the system automatically moves to the next queued issue.
+
+### PR-Based Workflow
+
+**IMPORTANT:** All changes MUST be submitted via Pull Requests. DO NOT push directly to master.
+
+When processing an issue from the queue:
 
 1. **Read and understand** the issue or request thoroughly
 2. **Make the necessary code changes**
 3. **Bump the version** in `config.json` appropriately
 4. **Test if possible** (check for syntax errors, validate JSON, etc.)
-5. **Commit all changes** with the proper commit message format
-6. **Push the changes** to the repository
+5. **Create a new branch** with the format: `claude/issue-{number}-{title-slug}`
+6. **Commit changes** to the new branch with proper commit message format
+7. **Push the branch** to origin
+8. **Create a Pull Request** linking back to the original issue
 
-### Standard Git Commands
+### Git Commands for PR Workflow
+
 ```bash
+# Create and checkout new branch (name will be provided by workflow)
+git checkout -b claude/issue-123-fix-database-error
+
 # Stage all changes
 git add .
 
 # Commit with proper format
 git commit -m "$(cat <<'EOF'
-v1.51.3: Brief description
+v3.40.0: Fix database migration error
 
-- Change detail 1
-- Change detail 2
+- Fixed NOT NULL constraint error during schema updates
+- Added proper default values for new columns
+- Improved error handling in migration script
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -111,9 +131,35 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 
-# Push to remote
-git push
+# Push branch to remote
+git push -u origin claude/issue-123-fix-database-error
+
+# Create pull request (linking to the issue)
+gh pr create \
+  --base master \
+  --head claude/issue-123-fix-database-error \
+  --title "v3.40.0: Fix database migration error" \
+  --body "Fixes #123
+
+## Summary
+- Fixed NOT NULL constraint error during schema updates
+- Added proper default values for new columns
+- Improved error handling in migration script
+
+## Testing
+- Validated JSON syntax
+- Checked Python code for errors
+- Tested migration logic
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
+
+### Important Notes
+
+- **Never push directly to master** - Always create a PR
+- **Include issue reference** - Use "Fixes #123" in PR description
+- **Wait for merge** - The queue system won't process the next issue until the current PR is merged or closed
+- **Branch naming** - Follow the format: `claude/issue-{number}-{title-slug}`
 
 ## Code Style and Conventions
 
@@ -140,9 +186,30 @@ git push
 
 ## Notes for GitHub Issues
 
-When working on tagged GitHub issues:
-- Read the entire issue description and any comments
+### How the Queue System Works
+
+1. **Adding to Queue:** When an issue is labeled with `claude-queue`, it's added to the processing queue
+2. **Processing:** Issues are processed one at a time, in order by issue number (oldest first)
+3. **Status Updates:** The system automatically:
+   - Adds `claude-in-progress` label when work begins
+   - Posts a comment when starting work
+   - Creates a pull request when work is complete
+   - Adds `claude-pr-created` label and posts PR link
+   - Removes all labels when PR is merged/closed
+   - Moves to next issue in queue automatically
+
+### When Working on Issues
+
+- Read the entire issue description and any comments carefully
 - Ask clarifying questions if requirements are unclear
-- Reference the issue number in commits when relevant
-- Provide clear explanations of changes made
-- Update the issue with progress or completion status
+- Reference the issue number in PR title and body (use "Fixes #123")
+- Provide clear explanations of changes in the PR description
+- The PR will be reviewed by a human before merging
+- Once merged, the system automatically processes the next queued issue
+
+### For Direct Assistance (Not Queued)
+
+You can still mention @claude in PR comments or review comments for immediate assistance without going through the queue system. This is useful for:
+- Requesting changes to an existing PR
+- Getting help with code reviews
+- Quick questions or clarifications

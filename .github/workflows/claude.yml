@@ -6,17 +6,35 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned]
+    types: [opened, assigned, labeled]
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [closed]
+  schedule:
+    # Run hourly to check for queue progression
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+# Ensure only one Claude worker runs at a time
+concurrency:
+  group: claude-worker
+  cancel-in-progress: false
 
 jobs:
   claude:
+    # For PR comments and reviews, run immediately if @claude mentioned
+    # For issues, only process if they have the 'claude-queue' label
+    # For PR close and scheduled runs, always process queue
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'claude-queue') ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write      # Allow commits and pushes
@@ -31,8 +49,74 @@ jobs:
           fetch-depth: 0  # Full history for better context
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Queue Management Logic
+      - name: Check and manage issue queue
+        id: queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Make helper script executable
+          chmod +x .github/scripts/manage-claude-queue.sh
+
+          echo "🔍 Checking queue status..."
+
+          # Check if there's an issue currently in progress
+          if IN_PROGRESS_ISSUE=$(.github/scripts/manage-claude-queue.sh get-in-progress 2>/dev/null); then
+            echo "Found issue #${IN_PROGRESS_ISSUE} in progress"
+
+            # Find the PR for this issue
+            PR_NUMBER=$(gh pr list --search "issue #${IN_PROGRESS_ISSUE}" --json number --jq '.[0].number // empty')
+
+            if [ -n "$PR_NUMBER" ]; then
+              echo "Found PR #${PR_NUMBER} for issue #${IN_PROGRESS_ISSUE}"
+
+              # Check PR status
+              PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
+              echo "PR state: ${PR_STATE}"
+
+              if [ "$PR_STATE" = "MERGED" ] || [ "$PR_STATE" = "CLOSED" ]; then
+                echo "✅ PR is ${PR_STATE}, completing issue #${IN_PROGRESS_ISSUE}"
+                .github/scripts/manage-claude-queue.sh complete "$IN_PROGRESS_ISSUE"
+              else
+                echo "⏳ PR is still open, waiting for merge/close"
+                echo "skip_claude=true" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            else
+              echo "⚠️ No PR found for in-progress issue, will continue processing"
+            fi
+          fi
+
+          # Find next issue in queue
+          if NEXT_ISSUE=$(.github/scripts/manage-claude-queue.sh get-next-queued 2>/dev/null); then
+            echo "📋 Found next issue in queue: #${NEXT_ISSUE}"
+
+            # Get issue details
+            ISSUE_TITLE=$(gh issue view "$NEXT_ISSUE" --json title --jq '.title')
+            ISSUE_BODY=$(gh issue view "$NEXT_ISSUE" --json body --jq '.body')
+
+            # Generate branch name
+            BRANCH_NAME=$(.github/scripts/manage-claude-queue.sh generate-branch "$NEXT_ISSUE" "$ISSUE_TITLE")
+
+            # Mark as in progress
+            .github/scripts/manage-claude-queue.sh start-processing "$NEXT_ISSUE"
+
+            # Export for Claude
+            echo "issue_number=${NEXT_ISSUE}" >> $GITHUB_OUTPUT
+            echo "issue_title=${ISSUE_TITLE}" >> $GITHUB_OUTPUT
+            echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+            echo "skip_claude=false" >> $GITHUB_OUTPUT
+
+            # Save issue body to file for Claude to read
+            echo "$ISSUE_BODY" > /tmp/issue_body.txt
+          else
+            echo "ℹ️ No issues in queue"
+            echo "skip_claude=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Claude Code
         id: claude
+        if: steps.queue.outputs.skip_claude != 'true'
         uses: anthropics/claude-code-action@aaa4b4c42c41206c0bff3334d5cdfb91267cb695 # v1.0.1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -41,13 +125,55 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # Instructions are provided in CLAUDE.md in the repository root
-          # This includes version bumping requirements and commit message formatting
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+          # Provide specific instructions for queue-based processing
+          prompt: |
+            You are processing issue #${{ steps.queue.outputs.issue_number }}: "${{ steps.queue.outputs.issue_title }}"
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
+            IMPORTANT: Follow these steps exactly:
+
+            1. Read the issue details and understand what needs to be done
+            2. Make the necessary code changes
+            3. Update the version in config.json following semantic versioning
+            4. Create a new branch named: ${{ steps.queue.outputs.branch_name }}
+            5. Commit your changes to this branch with a proper commit message
+            6. Push the branch to origin
+            7. Create a pull request using: gh pr create --base master --head ${{ steps.queue.outputs.branch_name }} --title "v[VERSION]: [Brief description]" --body "Fixes #${{ steps.queue.outputs.issue_number }}\n\n[Detailed description of changes]"
+
+            DO NOT push directly to master. You MUST create a pull request.
+
+            Follow all instructions in CLAUDE.md regarding version bumping and commit message format.
+
+      - name: Mark PR as created
+        if: steps.queue.outputs.skip_claude != 'true' && steps.claude.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the PR that was just created
+          ISSUE_NUMBER="${{ steps.queue.outputs.issue_number }}"
+          BRANCH_NAME="${{ steps.queue.outputs.branch_name }}"
+
+          echo "Looking for PR created from branch ${BRANCH_NAME}..."
+
+          # Wait a moment for PR to be fully created
+          sleep 5
+
+          # Find PR by branch name
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "✅ Found PR #${PR_NUMBER}"
+            .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
+          else
+            echo "⚠️ Could not find PR, checking by issue reference..."
+            # Fallback: search for PRs mentioning the issue
+            PR_NUMBER=$(gh pr list --search "Fixes #${ISSUE_NUMBER}" --json number --jq '.[0].number // empty')
+
+            if [ -n "$PR_NUMBER" ]; then
+              echo "✅ Found PR #${PR_NUMBER}"
+              .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
+            else
+              echo "❌ Could not find created PR"
+              gh issue comment "$ISSUE_NUMBER" --body "⚠️ Claude completed work but PR could not be found. Please check manually."
+            fi
+          fi
 
