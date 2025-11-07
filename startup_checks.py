@@ -353,39 +353,22 @@ def check_database(db) -> Tuple[bool, str]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
             total_videos = cursor.fetchone()['count']
 
-            # Count matched videos (successfully found on YouTube)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 0")
-            matched_videos = cursor.fetchone()['count']
-
-            # Count pending videos (not yet matched to YouTube)
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 1")
-            pending_videos = cursor.fetchone()['count']
-
-            # Get pending reason breakdown
-            cursor = db._conn.execute("""
-                SELECT pending_reason, COUNT(*) as count
-                FROM video_ratings
-                WHERE yt_match_pending = 1
-                GROUP BY pending_reason
-            """)
-            pending_reasons = {row['pending_reason']: row['count'] for row in cursor.fetchall()}
-
             # Count rated videos breakdown
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like' AND yt_match_pending = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like'")
             liked_videos = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike' AND yt_match_pending = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike'")
             disliked_videos = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND yt_match_pending = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none'")
             unrated_videos = cursor.fetchone()['count']
 
             # Total plays
-            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings WHERE yt_match_pending = 0")
+            cursor = db._conn.execute("SELECT SUM(play_count) as total FROM video_ratings")
             total_plays = cursor.fetchone()['total'] or 0
 
             # Unique channels
-            cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE yt_match_pending = 0 AND yt_channel_id IS NOT NULL")
+            cursor = db._conn.execute("SELECT COUNT(DISTINCT yt_channel_id) as count FROM video_ratings WHERE yt_channel_id IS NOT NULL")
             unique_channels = cursor.fetchone()['count']
 
             # Count queue items (ratings + searches)
@@ -397,9 +380,9 @@ def check_database(db) -> Tuple[bool, str]:
 
             total_queue = pending_ratings + pending_searches
 
-            # Get recent videos (all videos, not just matched)
+            # Get recent videos
             cursor = db._conn.execute("""
-                SELECT ha_title, date_last_played, yt_match_pending
+                SELECT ha_title, date_last_played
                 FROM video_ratings
                 WHERE date_last_played IS NOT NULL
                 ORDER BY date_last_played DESC
@@ -408,20 +391,11 @@ def check_database(db) -> Tuple[bool, str]:
             recent_videos = cursor.fetchall()
 
         logger.info("✓ Database connected and working")
-        logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} unmatched)")
-
-        # Show unmatched reason breakdown if there are unmatched videos
-        if pending_videos > 0 and pending_reasons:
-            reason_strs = []
-            for reason, count in pending_reasons.items():
-                reason_label = reason or 'unknown'
-                reason_strs.append(f"{count} {reason_label}")
-            logger.info(f"    Unmatched reasons: {', '.join(reason_strs)}")
-
+        logger.info(f"  Total videos: {total_videos}")
         logger.info(f"  Ratings: {liked_videos} liked, {disliked_videos} disliked, {unrated_videos} unrated")
         logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
-        # Show queue status (the ONLY pending operation)
+        # Show queue status
         if total_queue > 0:
             if pending_searches > 0 and pending_ratings > 0:
                 logger.info(f"  Queue: {total_queue} items ({pending_searches} searches, {pending_ratings} ratings)")
@@ -440,18 +414,8 @@ def check_database(db) -> Tuple[bool, str]:
             logger.info("  No recent plays recorded")
 
         # Build comprehensive status message
-        pending_str = f"{pending_videos} unmatched"
-        if pending_videos > 0 and pending_reasons:
-            # Add most common pending reason
-            top_reason = max(pending_reasons.items(), key=lambda x: x[1])
-            reason_label = top_reason[0] or 'unknown'
-            if len(pending_reasons) == 1:
-                pending_str = f"{pending_videos} unmatched ({reason_label})"
-            else:
-                pending_str = f"{pending_videos} unmatched ({top_reason[1]} {reason_label}, {len(pending_reasons)-1} other)"
-
         status_parts = [
-            f"Videos: {total_videos} total, {matched_videos} matched, {pending_str}",
+            f"Videos: {total_videos} tracked",
             f"Ratings: {liked_videos}👍 {disliked_videos}👎 {unrated_videos}⭐",
             f"Activity: {total_plays:,} plays across {unique_channels} channels"
         ]
