@@ -384,26 +384,22 @@ def check_database(db) -> Tuple[bool, str]:
             recent_videos = cursor.fetchall()
 
         logger.info("✓ Database connected and working")
-        logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} pending)")
+        logger.info(f"  Total videos: {total_videos} ({matched_videos} matched, {pending_videos} unmatched)")
 
-        # Show pending reason breakdown if there are pending videos
+        # Show unmatched reason breakdown if there are unmatched videos
         if pending_videos > 0 and pending_reasons:
             reason_strs = []
             for reason, count in pending_reasons.items():
                 reason_label = reason or 'unknown'
                 reason_strs.append(f"{count} {reason_label}")
-            logger.info(f"    Pending reasons: {', '.join(reason_strs)}")
+            logger.info(f"    Unmatched reasons: {', '.join(reason_strs)}")
 
         logger.info(f"  Ratings: {liked_videos} liked, {disliked_videos} disliked, {unrated_videos} unrated")
-
-        # Show pending ratings queue status
-        if pending_ratings > 0:
-            logger.info(f"  Pending ratings queue: {pending_ratings} rating(s) waiting to sync to YouTube")
-
         logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
+        # Show queue status (the ONLY pending operation)
         if pending_ratings > 0:
-            logger.info(f"  Pending ratings to sync: {pending_ratings}")
+            logger.info(f"  Queue: {pending_ratings} rating(s) waiting to sync to YouTube")
 
         if recent_videos:
             logger.info("  Recent plays:")
