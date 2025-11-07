@@ -337,7 +337,7 @@ The QuotaProber is a background thread that:
 
 QuotaProber **only runs** when:
 - YouTube quota has been blocked (quotaExceeded error occurred)
-- Quota cooldown timer expires (default: 12 hours)
+- After midnight Pacific Time quota reset (when quotas are restored)
 - Recovery probe succeeds (test YouTube API call works)
 
 **Important**: QuotaProber does NOT continuously process pending videos. It only activates after quota recovery.
@@ -351,11 +351,11 @@ QuotaProber **only runs** when:
 #### Process Flow
 
 1. **Quota blocked** → quotaExceeded error occurs
-   - QuotaGuard sets cooldown timer (12 hours default)
+   - Queue paused until midnight Pacific Time
    - All YouTube API calls blocked
    - New videos stored as pending
 
-2. **Cooldown expires** → After 12 hours
+2. **After midnight Pacific** → When quota resets
    - QuotaProber attempts recovery probe
    - Sends test YouTube API search
 
@@ -399,7 +399,7 @@ QuotaProber **only runs** when:
 - **Type**: Integer
 - **Default**: `12`
 - **Range**: 1-168 (1 hour to 1 week)
-- **Description**: Hours to wait before attempting quota recovery
+- **Description**: Hours to wait before attempting quota recovery probe (actual quota resets at midnight PT)
 
 ### Logging
 
@@ -440,7 +440,7 @@ The Quota Prober logs tab shows:
 | **Trigger** | User clicks button | After quota recovery |
 | **Batch Size** | 1 video | 1 video (configurable) |
 | **Timing** | On-demand | Every 5 min (when quota blocked) |
-| **Cooldown** | 30 seconds | 12 hours (quota cooldown) |
+| **Cooldown** | 30 seconds | Until midnight PT (quota reset) |
 | **User Action** | Required | None (automatic) |
 | **Best For** | Quick fixes, testing | Hands-off recovery |
 | **Quota Safe** | Yes (1 at a time) | Yes (waits for recovery) |
@@ -474,7 +474,7 @@ If you have pending videos:
    - Immediate feedback
 
 3. **For 6+ pending videos** → Automatic retry
-   - Wait for quota to recover (12 hours)
+   - Wait for quota to reset (midnight Pacific Time)
    - QuotaProber will process them automatically
    - Check Quota Prober logs tab to monitor progress
 
@@ -513,11 +513,9 @@ YouTube quotas reset at **midnight Pacific Time** daily.
 
 Example timeline:
 - **2:00 PM PST**: Quota exhausted (10,000 units used)
-- **2:00 PM - 2:00 AM**: QuotaProber blocked, cooldown active
-- **2:00 AM PST**: Cooldown expires (12 hours), probe attempted
-- **2:00 AM - Midnight**: Probe fails (quota not reset yet)
-- **Midnight PST**: Quota resets to 10,000 units
-- **12:05 AM PST**: QuotaProber probe succeeds
+- **2:00 PM - Midnight**: Queue paused, waiting for quota reset
+- **Midnight PST**: YouTube quota resets to 10,000 units
+- **12:05 AM PST**: QuotaProber probe succeeds (quota restored)
 - **12:05 AM PST**: Retry 1 pending video
 - **Next probe at 12:10 AM**: If quota OK, retry another video
 

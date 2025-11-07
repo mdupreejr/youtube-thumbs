@@ -63,7 +63,7 @@ automation:
 | `rate_limit_per_minute` | 10 | Max API calls per minute |
 | `rate_limit_per_hour` | 100 | Max API calls per hour |
 | `rate_limit_per_day` | 500 | Max API calls per day |
-| `quota_cooldown_hours` | 12 | Hours to pause after quota error |
+| `quota_cooldown_hours` | 12 | Hours before probing for quota recovery (resets at midnight PT) |
 | `log_level` | INFO | Logging level |
 
 For all options, see config.json.
@@ -89,10 +89,10 @@ Access the web interface by clicking **OPEN WEB UI** in the addon page:
 
 ### Quota Protection
 
-- Automatic 12-hour cooldown after `quotaExceeded` errors
-- HTTP endpoints return `503` during cooldown
+- Queue pauses until YouTube API quota resets at midnight Pacific Time
+- HTTP endpoints return `503` during quota pause
 - Videos stored as "pending" during quota exhaustion
-- Automatic quota recovery detection and retry
+- Automatic quota recovery detection and retry after midnight reset
 - See [ARCHITECTURE.md](ARCHITECTURE.md) for details
 
 ## API Endpoints
@@ -143,8 +143,8 @@ For database schema details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 - YouTube Data API v3 must be enabled
 
 ### Quota exceeded / 503 errors
-- Automatic 12-hour cooldown activated
-- Wait for cooldown or delete `/config/youtube_thumbs/quota_guard.json` (only if quota reset)
+- Queue paused until midnight Pacific Time (when YouTube quota resets)
+- Wait for midnight reset or delete `/config/youtube_thumbs/quota_guard.json` (only if quota manually reset)
 
 ### Test buttons not working
 - Rebuild the addon (Settings → Add-ons → 3 dots → Rebuild)
