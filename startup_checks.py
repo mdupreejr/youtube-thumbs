@@ -395,6 +395,11 @@ def check_database(db) -> Tuple[bool, str]:
             logger.info(f"    Pending reasons: {', '.join(reason_strs)}")
 
         logger.info(f"  Ratings: {liked_videos} liked, {disliked_videos} disliked, {unrated_videos} unrated")
+
+        # Show pending ratings queue status
+        if pending_ratings > 0:
+            logger.info(f"  Pending ratings queue: {pending_ratings} rating(s) waiting to sync to YouTube")
+
         logger.info(f"  Total plays: {total_plays:,} across {unique_channels} channels")
 
         if pending_ratings > 0:
