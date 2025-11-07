@@ -132,6 +132,44 @@ def pending_ratings_log():
         return "<h1>Error loading pending ratings</h1>", 500
 
 
+@bp.route('/api/pending-rating/<video_id>')
+def get_pending_rating_details(video_id: str):
+    """Get full details for a pending rating including all attempt history."""
+    try:
+        # Get video details
+        video = _db.get_video(video_id)
+        if not video:
+            return jsonify({'success': False, 'error': 'Video not found'}), 404
+
+        # Check if it has a pending rating
+        if not video.get('rating_queue_pending'):
+            return jsonify({'success': False, 'error': 'No pending rating for this video'}), 404
+
+        # Format the response with all available details
+        details = {
+            'yt_video_id': video_id,
+            'ha_title': video.get('ha_title', 'Unknown'),
+            'ha_artist': video.get('ha_artist', 'Unknown'),
+            'yt_title': video.get('yt_title'),
+            'yt_channel': video.get('yt_channel'),
+            'rating': video.get('rating_queue_pending'),
+            'requested_at': video.get('rating_queue_requested_at'),
+            'attempts': video.get('rating_queue_attempts', 0),
+            'last_attempt': video.get('rating_queue_last_attempt'),
+            'last_error': video.get('rating_queue_last_error'),
+            'current_rating': video.get('rating'),  # What rating is actually set on YouTube
+            'play_count': video.get('play_count', 0),
+            'date_added': video.get('date_added'),
+            'date_last_played': video.get('date_last_played')
+        }
+
+        return jsonify({'success': True, 'data': details})
+
+    except Exception as e:
+        logger.error(f"Error getting pending rating details for {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def parse_error_log(
     period_filter: str = 'all',
     level_filter: str = 'all',

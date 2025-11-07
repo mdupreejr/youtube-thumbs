@@ -73,10 +73,10 @@
                     </thead>
                     <tbody>
                         {% for item in pending_ratings %}
-                        <tr>
+                        <tr class="clickable-row" data-video-id="{{ item.yt_video_id }}" style="cursor: pointer;">
                             <td>
                                 {% if item.yt_video_id %}
-                                <a href="https://youtube.com/watch?v={{ item.yt_video_id }}" target="_blank" rel="noopener noreferrer">
+                                <a href="https://youtube.com/watch?v={{ item.yt_video_id }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">
                                     {{ item.yt_video_id[:11] }}...
                                 </a>
                                 {% else %}
@@ -130,5 +130,229 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Modal for pending rating details -->
+    <div id="detailModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Pending Rating Details</h2>
+            <div id="modalBody" style="margin-top: 20px;">
+                <p style="text-align: center; color: #64748b;">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .clickable-row:hover {
+            background-color: #f1f5f9;
+        }
+
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 700px;
+        }
+
+        .close {
+            color: #94a3b8;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .close:hover {
+            color: #64748b;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .detail-value {
+            color: #1e293b;
+        }
+
+        .error-box {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+
+    <script>
+        const ingressPath = "{{ ingress_path }}";
+
+        // Add click handlers to all rows
+        document.querySelectorAll('.clickable-row').forEach(row => {
+            row.addEventListener('click', function() {
+                const videoId = this.dataset.videoId;
+                showDetails(videoId);
+            });
+        });
+
+        async function showDetails(videoId) {
+            const modal = document.getElementById('detailModal');
+            const modalBody = document.getElementById('modalBody');
+
+            // Show modal with loading state
+            modal.style.display = 'block';
+            modalBody.innerHTML = '<p style="text-align: center; color: #64748b;">Loading details...</p>';
+
+            try {
+                const response = await fetch(`${ingressPath}/api/pending-rating/${videoId}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    modalBody.innerHTML = `<p style="color: #ef4444;">Error: ${result.error}</p>`;
+                    return;
+                }
+
+                const data = result.data;
+
+                // Calculate time since requested
+                const requestedDate = new Date(data.requested_at);
+                const now = new Date();
+                const hoursSince = Math.floor((now - requestedDate) / (1000 * 60 * 60));
+                const daysSince = Math.floor(hoursSince / 24);
+
+                // Build the detail view
+                let html = `
+                    <div class="detail-grid">
+                        <div class="detail-label">Video ID:</div>
+                        <div class="detail-value">
+                            <a href="https://youtube.com/watch?v=${data.yt_video_id}" target="_blank" rel="noopener noreferrer">
+                                ${data.yt_video_id}
+                            </a>
+                        </div>
+
+                        <div class="detail-label">Home Assistant:</div>
+                        <div class="detail-value">${data.ha_title} - ${data.ha_artist}</div>
+
+                        ${data.yt_title ? `
+                            <div class="detail-label">YouTube Title:</div>
+                            <div class="detail-value">${data.yt_title}</div>
+                        ` : ''}
+
+                        ${data.yt_channel ? `
+                            <div class="detail-label">YouTube Channel:</div>
+                            <div class="detail-value">${data.yt_channel}</div>
+                        ` : ''}
+
+                        <div class="detail-label">Requested Rating:</div>
+                        <div class="detail-value">
+                            ${data.rating === 'like' ? '👍 Like' : '👎 Dislike'}
+                        </div>
+
+                        <div class="detail-label">Current Rating:</div>
+                        <div class="detail-value">
+                            ${data.current_rating === 'like' ? '👍 Like' :
+                              data.current_rating === 'dislike' ? '👎 Dislike' :
+                              data.current_rating === 'none' ? 'None' : 'Unknown'}
+                        </div>
+
+                        <div class="detail-label">Requested At:</div>
+                        <div class="detail-value">${data.requested_at} (${daysSince} days, ${hoursSince % 24} hours ago)</div>
+
+                        <div class="detail-label">Attempts:</div>
+                        <div class="detail-value" style="font-weight: 600; color: ${data.attempts > 100 ? '#ef4444' : '#f59e0b'};">
+                            ${data.attempts}
+                        </div>
+
+                        ${data.last_attempt ? `
+                            <div class="detail-label">Last Attempt:</div>
+                            <div class="detail-value">${data.last_attempt}</div>
+                        ` : ''}
+
+                        <div class="detail-label">Play Count:</div>
+                        <div class="detail-value">${data.play_count}</div>
+
+                        ${data.date_added ? `
+                            <div class="detail-label">Date Added:</div>
+                            <div class="detail-value">${data.date_added}</div>
+                        ` : ''}
+
+                        ${data.date_last_played ? `
+                            <div class="detail-label">Last Played:</div>
+                            <div class="detail-value">${data.date_last_played}</div>
+                        ` : ''}
+                    </div>
+                `;
+
+                // Show error if present
+                if (data.last_error) {
+                    html += `
+                        <div class="error-box">
+                            <strong style="color: #b91c1c;">Last Error:</strong><br>
+                            <span style="font-family: monospace; font-size: 0.9em; color: #7f1d1d;">${data.last_error}</span>
+                        </div>
+                    `;
+                }
+
+                // Show warning for high attempt count
+                if (data.attempts > 100) {
+                    html += `
+                        <div class="warning-box">
+                            <strong style="color: #92400e;">⚠️ High Attempt Count</strong><br>
+                            <span style="font-size: 0.9em; color: #78350f;">
+                                This rating has been attempted ${data.attempts} times over ${daysSince} days.
+                                This suggests the queue worker may be stuck or quota has been exceeded for an extended period.
+                            </span>
+                        </div>
+                    `;
+                }
+
+                modalBody.innerHTML = html;
+
+            } catch (error) {
+                modalBody.innerHTML = `<p style="color: #ef4444;">Error loading details: ${error.message}</p>`;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
 </body>
 </html>

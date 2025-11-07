@@ -56,8 +56,9 @@ def process_one_rating(db, yt_api):
         return 'success'
 
     except QuotaExceededError:
-        db.mark_pending_rating(video_id, False, "Quota exceeded - will retry")
-        logger.warning("YouTube quota exceeded - worker sleeping for 1 hour")
+        # DON'T increment attempts for quota errors - it's a global condition, not this rating's fault
+        logger.warning(f"YouTube quota exceeded while processing {video_id} - will retry when quota resets")
+        logger.warning("Worker sleeping for 1 hour before checking quota again")
         return 'quota'
 
     except Exception as e:
