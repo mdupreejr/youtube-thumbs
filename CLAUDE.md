@@ -188,15 +188,41 @@ gh pr create \
 
 ### How the Queue System Works
 
-1. **Adding to Queue:** When an issue is labeled with `claude-queue`, it's added to the processing queue
-2. **Processing:** Issues are processed one at a time, in order by issue number (oldest first)
+#### Smart Parallel Processing (Up to 3 Concurrent Issues)
+
+The queue system can process up to **3 issues simultaneously** using intelligent conflict detection:
+
+1. **Adding to Queue:** Label an issue with `claude-queue` to add it to the processing queue
+2. **Smart Processing:** The system:
+   - Processes issues in order by issue number (oldest first)
+   - Can work on up to 3 issues concurrently
+   - Runs **conflict detection** before starting each issue
+   - Only processes issues that won't conflict with active PRs
+   - Automatically skips conflicting issues and tries the next one
 3. **Status Updates:** The system automatically:
+   - Assigns issue to repository owner
    - Adds `claude-in-progress` label when work begins
    - Posts a comment when starting work
-   - Creates a pull request when work is complete
+   - Creates a pull request with review request when work is complete
    - Adds `claude-pr-created` label and posts PR link
    - Removes all labels when PR is merged/closed
-   - Moves to next issue in queue automatically
+   - Moves to next issues in queue automatically
+
+#### Conflict Detection
+
+Before processing an issue, the system checks:
+- **Version Conflicts:** If any open PR modifies `config.json`, blocks processing to avoid version conflicts
+- **File Conflicts:** Scans issue description for file mentions and checks against files changed in open PRs
+- **Smart Queuing:** If conflicts detected, skips that issue and tries the next queued issue
+
+This allows the system to safely process multiple non-conflicting issues in parallel!
+
+#### Error Handling & Timeout Protection
+
+- **Fail-Fast Policy:** If processing fails, issue is immediately marked as `claude-failed` and removed from queue
+- **Timeout Protection:** Issues in-progress for >24 hours are automatically failed
+- **Auto-Recovery:** Queue checks run hourly to recover from missed events
+- **Branch Cleanup:** Merged PR branches are automatically deleted
 
 ### When Working on Issues
 
@@ -206,6 +232,24 @@ gh pr create \
 - Provide clear explanations of changes in the PR description
 - The PR will be reviewed by a human before merging
 - Once merged, the system automatically processes the next queued issue
+
+### Queue Labels
+
+The system uses these labels to track issue status:
+- `claude-queue` - Issue is waiting to be processed
+- `claude-in-progress` - Issue is currently being worked on (max 3 at a time)
+- `claude-pr-created` - Pull request has been created, awaiting review
+- `claude-failed` - Issue failed processing and needs attention
+
+### Metrics Dashboard
+
+Track queue performance and status in the **📊 Claude Queue Metrics & Analytics** issue (pinned):
+- Current queue status (queued, in-progress, failed)
+- Processing statistics (success rate, total processed)
+- Recent activity and completed PRs
+- Failed issues requiring attention
+
+The dashboard updates automatically after each queue action.
 
 ### For Direct Assistance (Not Queued)
 

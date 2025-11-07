@@ -1,0 +1,35 @@
+name: Cleanup Merged PR Branch
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    # Only run if PR was merged and branch is a claude/* branch
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'claude/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Delete merged branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          echo "🗑️ Deleting merged branch: ${BRANCH_NAME}"
+
+          # Delete the branch
+          git push origin --delete "$BRANCH_NAME" || echo "Branch already deleted or does not exist"
+
+          echo "✅ Branch cleanup complete"
+
+      - name: Post cleanup comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+
+          gh pr comment "$PR_NUMBER" --body "🧹 Automatically deleted branch \`${BRANCH_NAME}\` after merge"
