@@ -64,7 +64,7 @@ port: 21812
 rate_limit_per_minute: 10   # Max YouTube API calls in any 60-second window
 rate_limit_per_hour: 100    # Max YouTube API calls in any 3600-second window
 rate_limit_per_day: 500     # Max YouTube API calls in any 24-hour period
-quota_cooldown_hours: 12    # Cooldown after YouTube quota/rate limit errors
+quota_cooldown_hours: 12    # Hours before probing for quota recovery (actual reset at midnight PT)
 log_level: INFO
 ```
 
@@ -84,8 +84,8 @@ button will route through Home Assistant ingress automatically. If you override 
 host, skip the button and browse directly to `http://<home-assistant-host>:<sqlite_web_port>`.
 
 If Google reports `quotaExceeded`, the add-on writes
-`/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic for
-12 hours (tweak with the `quota_cooldown_hours` option or `YTT_QUOTA_COOLDOWN_SECONDS`). During that cooldown the HTTP
+`/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic until
+midnight Pacific Time when quotas reset (configurable probe timing with `quota_cooldown_hours`). During that pause the HTTP
 API returns `503` responses and new videos are stored as pending for retry after quota recovery.
 
 Every time a video is matched we store both the Home Assistant artist/channel
