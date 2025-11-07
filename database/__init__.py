@@ -14,6 +14,7 @@ from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
 from .search_cache_operations import SearchCacheOperations
 from .logs_operations import LogsOperations
+from .queue_operations import QueueOperations
 from helpers.video_helpers import get_content_hash
 from error_handler import validate_environment_variable
 
@@ -41,6 +42,7 @@ class Database:
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
         self._search_cache_ops = SearchCacheOperations(self._conn, self._lock)
         self._logs_ops = LogsOperations(self._conn, self._lock)
+        self._queue_ops = QueueOperations(self._conn, self._lock)
 
         # Not found cache configuration (previously in NotFoundOperations)
         # Default to 7 days (168 hours) to prevent wasting quota on failed searches
@@ -396,6 +398,23 @@ class Database:
     def get_api_call_summary(self, hours: int = 24) -> Dict[str, Any]:
         """Get summary statistics of API calls for the last N hours."""
         return self._api_usage_ops.get_api_call_summary(hours)
+
+    # Queue Operations
+    def get_queue_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive queue statistics."""
+        return self._queue_ops.get_queue_statistics()
+
+    def get_recent_queue_activity(self, limit: int = 50) -> Dict[str, List[Dict]]:
+        """Get recent queue processing activity."""
+        return self._queue_ops.get_recent_queue_activity(limit)
+
+    def get_queue_errors(self, limit: int = 50) -> Dict[str, List[Dict]]:
+        """Get recent queue errors for troubleshooting."""
+        return self._queue_ops.get_queue_errors(limit)
+
+    def get_queue_performance_metrics(self, hours: int = 24) -> Dict[str, Any]:
+        """Get queue performance metrics over time."""
+        return self._queue_ops.get_queue_performance_metrics(hours)
 
     # Stats Cache Operations
     def get_cached_stats(self, cache_key: str) -> Optional[Dict[str, Any]]:

@@ -40,6 +40,9 @@
                 <a href="{{ ingress_path }}/logs?tab=quota_prober" class="tab-button {{ 'active' if current_tab == 'quota_prober' else '' }}">
                     Quota Prober
                 </a>
+                <a href="{{ ingress_path }}/logs?tab=queue" class="tab-button {{ 'active' if current_tab == 'queue' else '' }}">
+                    Queue
+                </a>
                 <a href="{{ ingress_path }}/logs/api-calls" class="tab-button">
                     API Calls
                 </a>
@@ -574,6 +577,214 @@
                 <div class="empty-icon">📭</div>
                 <h3>No Videos Yet</h3>
                 <p>No videos have been added to the database yet.</p>
+            </div>
+            {% endif %}
+
+            <!-- Queue Tab -->
+            {% if current_tab == 'queue' %}
+            <h2>Queue Statistics & Activity</h2>
+
+            <!-- Queue Health Status -->
+            <div class="stats-section">
+                <h3>Worker Health</h3>
+                <div class="stats-grid">
+                    <div class="stat-card {{ 'success' if queue_stats.worker_health.is_active else 'warning' }}">
+                        <div class="stat-label">Worker Status</div>
+                        <div class="stat-value">{{ '🟢 Active' if queue_stats.worker_health.is_active else '🔴 Inactive' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Last Rating Activity</div>
+                        <div class="stat-value">{{ queue_stats.worker_health.last_rating_activity_relative if queue_stats.worker_health.last_rating_activity_relative else 'Never' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Last Search Activity</div>
+                        <div class="stat-value">{{ queue_stats.worker_health.last_search_activity_relative if queue_stats.worker_health.last_search_activity_relative else 'Never' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rating Queue Statistics -->
+            <div class="stats-section">
+                <h3>Rating Queue</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Pending Ratings</div>
+                        <div class="stat-value">{{ queue_stats.rating_queue.pending }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Processed (24h)</div>
+                        <div class="stat-value">{{ queue_stats.rating_queue.processed_24h }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Success Rate (24h)</div>
+                        <div class="stat-value">{{ queue_stats.rating_queue.success_rate_24h }}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg Attempts</div>
+                        <div class="stat-value">{{ queue_stats.rating_queue.avg_attempts }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Queue Statistics -->
+            <div class="stats-section">
+                <h3>Search Queue</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value">{{ queue_stats.search_queue.pending }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value">{{ queue_stats.search_queue.completed }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failed</div>
+                        <div class="stat-value">{{ queue_stats.search_queue.failed }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Success Rate (24h)</div>
+                        <div class="stat-value">{{ queue_stats.search_queue.success_rate_24h }}%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Rating Activity -->
+            <div class="stats-section">
+                <h3>Recent Rating Activity (Last 30)</h3>
+                {% if queue_activity.recent_ratings %}
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Requested</th>
+                                <th>Song</th>
+                                <th>Rating</th>
+                                <th>Status</th>
+                                <th>Attempts</th>
+                                <th>Last Attempt</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rating in queue_activity.recent_ratings %}
+                            <tr class="{{ 'success' if rating.status == 'success' else ('error' if rating.status == 'failed' else 'pending') }}">
+                                <td><span class="time-ago">{{ rating.requested_at_relative }}</span></td>
+                                <td>{{ rating.ha_title }}</td>
+                                <td>{{ '👍' if rating.requested_rating == 'like' else '👎' }}</td>
+                                <td>{{ rating.status }}</td>
+                                <td>{{ rating.attempts }}</td>
+                                <td><span class="time-ago">{{ rating.last_attempt_relative if rating.last_attempt else 'Never' }}</span></td>
+                                <td>{{ rating.error if rating.error else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="info-text">No rating queue activity</p>
+                {% endif %}
+            </div>
+
+            <!-- Recent Search Activity -->
+            <div class="stats-section">
+                <h3>Recent Search Activity (Last 30)</h3>
+                {% if queue_activity.recent_searches %}
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Requested</th>
+                                <th>Song</th>
+                                <th>Artist</th>
+                                <th>Status</th>
+                                <th>Attempts</th>
+                                <th>Last Attempt</th>
+                                <th>Callback</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for search in queue_activity.recent_searches %}
+                            <tr class="{{ 'success' if search.status == 'completed' else ('error' if search.status == 'failed' else 'pending') }}">
+                                <td><span class="time-ago">{{ search.requested_at_relative }}</span></td>
+                                <td>{{ search.ha_title }}</td>
+                                <td>{{ search.ha_artist }}</td>
+                                <td>{{ search.status }}</td>
+                                <td>{{ search.attempts }}</td>
+                                <td><span class="time-ago">{{ search.last_attempt_relative if search.last_attempt else 'Never' }}</span></td>
+                                <td>{{ search.callback_rating if search.callback_rating else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="info-text">No search queue activity</p>
+                {% endif %}
+            </div>
+
+            <!-- Recent Errors -->
+            <div class="stats-section">
+                <h3>Recent Queue Errors</h3>
+                {% if queue_errors.rating_errors or queue_errors.search_errors %}
+                    {% if queue_errors.rating_errors %}
+                    <h4>Rating Errors</h4>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Song</th>
+                                    <th>Rating</th>
+                                    <th>Attempts</th>
+                                    <th>Last Attempt</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for error in queue_errors.rating_errors %}
+                                <tr class="error">
+                                    <td>{{ error.ha_title }}</td>
+                                    <td>{{ '👍' if error.requested_rating == 'like' else '👎' }}</td>
+                                    <td>{{ error.attempts }}</td>
+                                    <td><span class="time-ago">{{ error.last_attempt_relative }}</span></td>
+                                    <td>{{ error.error }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    {% if queue_errors.search_errors %}
+                    <h4>Search Errors</h4>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Song</th>
+                                    <th>Artist</th>
+                                    <th>Attempts</th>
+                                    <th>Last Attempt</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for error in queue_errors.search_errors %}
+                                <tr class="error">
+                                    <td>{{ error.ha_title }}</td>
+                                    <td>{{ error.ha_artist }}</td>
+                                    <td>{{ error.attempts }}</td>
+                                    <td><span class="time-ago">{{ error.last_attempt_relative }}</span></td>
+                                    <td>{{ error.error_message }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                {% else %}
+                <p class="info-text">No recent queue errors</p>
+                {% endif %}
             </div>
             {% endif %}
             {% endif %}

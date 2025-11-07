@@ -618,15 +618,71 @@ def _handle_recent_tab():
     }
 
 
+def _handle_queue_tab():
+    """Handle queue statistics and activity tab."""
+    # Get queue statistics
+    stats = _db.get_queue_statistics()
+
+    # Get recent activity
+    activity = _db.get_recent_queue_activity(limit=30)
+
+    # Get performance metrics
+    metrics = _db.get_queue_performance_metrics(hours=24)
+
+    # Get recent errors
+    errors = _db.get_queue_errors(limit=20)
+
+    # Format timestamps in activity
+    for rating in activity['recent_ratings']:
+        if rating.get('requested_at'):
+            rating['requested_at_relative'] = format_relative_time(parse_timestamp(rating['requested_at']))
+        if rating.get('last_attempt'):
+            rating['last_attempt_relative'] = format_relative_time(parse_timestamp(rating['last_attempt']))
+
+    for search in activity['recent_searches']:
+        if search.get('requested_at'):
+            search['requested_at_relative'] = format_relative_time(parse_timestamp(search['requested_at']))
+        if search.get('last_attempt'):
+            search['last_attempt_relative'] = format_relative_time(parse_timestamp(search['last_attempt']))
+
+    # Format timestamps in errors
+    for error in errors['rating_errors']:
+        if error.get('last_attempt'):
+            error['last_attempt_relative'] = format_relative_time(parse_timestamp(error['last_attempt']))
+
+    for error in errors['search_errors']:
+        if error.get('last_attempt'):
+            error['last_attempt_relative'] = format_relative_time(parse_timestamp(error['last_attempt']))
+
+    # Format last activity timestamps in stats
+    if stats['worker_health'].get('last_rating_activity'):
+        stats['worker_health']['last_rating_activity_relative'] = format_relative_time(
+            parse_timestamp(stats['worker_health']['last_rating_activity'])
+        )
+    if stats['worker_health'].get('last_search_activity'):
+        stats['worker_health']['last_search_activity_relative'] = format_relative_time(
+            parse_timestamp(stats['worker_health']['last_search_activity'])
+        )
+
+    return {
+        'queue_stats': stats,
+        'queue_activity': activity,
+        'queue_metrics': metrics,
+        'queue_errors': errors,
+        'total_count': 0,  # Queue tab doesn't use pagination
+        'total_pages': 0
+    }
+
+
 @bp.route('/logs')
 def logs_viewer():
     """
-    Main logs viewer page with tabs for rated songs, matches, and errors.
+    Main logs viewer page with tabs for rated songs, matches, errors, and queue.
     """
     try:
         # Get query parameters
         current_tab = request.args.get('tab', 'rated')
-        if current_tab not in ['rated', 'matches', 'errors', 'quota_prober', 'recent']:
+        if current_tab not in ['rated', 'matches', 'errors', 'quota_prober', 'recent', 'queue']:
             current_tab = 'rated'
 
         page, _ = validate_page_param(request.args)
@@ -659,6 +715,8 @@ def logs_viewer():
             template_data.update(_handle_quota_prober_tab(page, period_filter))
         elif current_tab == 'recent':
             template_data.update(_handle_recent_tab())
+        elif current_tab == 'queue':
+            template_data.update(_handle_queue_tab())
 
         # Generate page numbers for pagination
         total_pages = template_data.get('total_pages', 0)
