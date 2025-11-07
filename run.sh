@@ -64,20 +64,6 @@ else
     unset YTT_FORCE_QUOTA_UNLOCK
 fi
 
-QUOTA_COOLDOWN_ENV="${YTT_QUOTA_COOLDOWN_SECONDS:-}"
-if bashio::var.has_value "${QUOTA_COOLDOWN_ENV}"; then
-    export YTT_QUOTA_COOLDOWN_SECONDS="${QUOTA_COOLDOWN_ENV}"
-else
-    QUOTA_COOLDOWN_CONFIG=$(bashio::config 'quota_cooldown_hours')
-    if bashio::var.has_value "${QUOTA_COOLDOWN_CONFIG}" && [ "${QUOTA_COOLDOWN_CONFIG}" != "null" ]; then
-        QUOTA_COOLDOWN_SECONDS=$((QUOTA_COOLDOWN_CONFIG * 3600))
-    else
-        QUOTA_COOLDOWN_SECONDS=43200
-    fi
-    export YTT_QUOTA_COOLDOWN_SECONDS="${QUOTA_COOLDOWN_SECONDS}"
-fi
-bashio::log.info "Quota cooldown: ${YTT_QUOTA_COOLDOWN_SECONDS}s"
-
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 bashio::log.info "Pending retry: enabled=${PENDING_VIDEO_RETRY_ENABLED}, batch_size=${PENDING_VIDEO_RETRY_BATCH_SIZE}"
