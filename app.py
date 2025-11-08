@@ -506,35 +506,21 @@ def index() -> str:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
         # Initialize template data
+        # v4.0.23: Use cached health check results from startup instead of re-running on every page load
         template_data = {
             'current_tab': current_tab,
             'ingress_path': ingress_path,
-            'ha_test': {'success': False, 'message': 'Not tested'},
-            'yt_test': {'success': False, 'message': 'Not tested'},
-            'db_test': {'success': False, 'message': 'Not tested'},
+            'ha_test': _cached_health_checks['ha_test'],
+            'yt_test': _cached_health_checks['yt_test'],
+            'db_test': _cached_health_checks['db_test'],
             'songs': [],
             'current_page': 1,
             'total_pages': 0,
             'total_unrated': 0
         }
 
-        # Run connection tests if on tests tab
-        if current_tab == 'tests':
-            # Test Home Assistant (returns detailed dict)
-            ha_success, ha_data = check_home_assistant_api(ha_api)
-            template_data['ha_test'] = {'success': ha_success, **ha_data}
-
-            # Test YouTube API (returns detailed dict)
-            yt_api = get_youtube_api()
-            yt_success, yt_data = check_youtube_api(yt_api, db=db)
-            template_data['yt_test'] = {'success': yt_success, **yt_data}
-
-            # Test Database (returns simple string message)
-            db_success, db_message = check_database(db)
-            template_data['db_test'] = {'success': db_success, 'message': db_message}
-
         # Get unrated songs if on rating tab
-        elif current_tab == 'rating':
+        if current_tab == 'rating':
             page, _ = validate_page_param(request.args)
             if not page:  # If validation failed, default to 1
                 page = 1
@@ -593,9 +579,27 @@ except Exception as e:
     logger.error(f"Failed to initialize YouTube API: {str(e)}")
     logger.error("Please ensure credentials.json exists and run the OAuth flow")
 
-# Run startup health checks (wrapped in try-except to prevent app crashes)
+# Run startup health checks and cache results (wrapped in try-except to prevent app crashes)
+# v4.0.23: Cache results to avoid re-running checks on every page load
+_cached_health_checks = {
+    'ha_test': {'success': False, 'message': 'Not tested', 'details': {}},
+    'yt_test': {'success': False, 'message': 'Not tested', 'details': {}},
+    'db_test': {'success': False, 'message': 'Not tested'}
+}
+
 try:
     run_startup_checks(ha_api, yt_api, db)
+
+    # Cache the results for display in webui (avoid re-running on every page load)
+    ha_success, ha_data = check_home_assistant_api(ha_api)
+    _cached_health_checks['ha_test'] = {'success': ha_success, **ha_data}
+
+    yt_success, yt_data = check_youtube_api(yt_api, db=db)
+    _cached_health_checks['yt_test'] = {'success': yt_success, **yt_data}
+
+    db_success, db_message = check_database(db)
+    _cached_health_checks['db_test'] = {'success': db_success, 'message': db_message}
+
 except Exception as e:
     logger.error(f"Startup health checks failed: {str(e)}")
     logger.error(traceback.format_exc())
