@@ -293,18 +293,48 @@ class QueueOperations:
         callback_rating: Optional[str] = None
     ) -> int:
         """
-        Enqueue a search operation (convenience method).
+        Enqueue a search operation with deduplication (convenience method).
+        
+        v4.0.81: Added deduplication logic to prevent multiple queue entries 
+        for the same song. Checks for existing pending/processing searches 
+        with the same title+artist combination.
 
         Args:
             ha_media: Home Assistant media info
             callback_rating: Optional rating to apply after search succeeds
 
         Returns:
-            Queue item ID
+            Queue item ID (existing or newly created)
         """
+        ha_title = ha_media.get('title')
+        ha_artist = ha_media.get('artist')
+        
+        # Check for existing pending/processing search with same title+artist
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                SELECT id, payload FROM queue
+                WHERE type = 'search' 
+                  AND status IN ('pending', 'processing')
+                  AND json_extract(payload, '$.ha_title') = ?
+                  AND json_extract(payload, '$.ha_artist') = ?
+                ORDER BY requested_at ASC
+                LIMIT 1
+                """,
+                (ha_title, ha_artist)
+            )
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Found existing search - return its ID instead of creating duplicate
+                existing_id = existing['id']
+                logger.info(f"Found existing search for '{ha_title}' by '{ha_artist}' (queue_id: {existing_id})")
+                return existing_id
+        
+        # No existing search found - create new one
         payload = {
-            'ha_title': ha_media.get('title'),
-            'ha_artist': ha_media.get('artist'),
+            'ha_title': ha_title,
+            'ha_artist': ha_artist,
             'ha_album': ha_media.get('album'),
             'ha_content_id': ha_media.get('content_id'),
             'ha_duration': ha_media.get('duration'),
