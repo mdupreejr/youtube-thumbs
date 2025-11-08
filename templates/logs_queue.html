@@ -227,7 +227,7 @@
                             <th>Title</th>
                             <th>Artist</th>
                             <th>Operation</th>
-                            <th>Failed At</th>
+                            <th>Last Attempt</th>
                             <th>Attempts</th>
                             <th>Error Message</th>
                         </tr>
@@ -245,7 +245,7 @@
                             <td>{{ item.ha_title or 'Unknown' }}</td>
                             <td>{{ item.ha_artist or '—' }}</td>
                             <td>{{ item.operation }}</td>
-                            <td>{{ item.completed_at if item.completed_at else '—' }}</td>
+                            <td>{{ item.last_attempt if item.last_attempt else (item.requested_at if item.requested_at else '—') }}</td>
                             <td style="text-align: center;">{{ item.attempts or 0 }}</td>
                             <td>
                                 <span style="color: #ef4444; font-size: 0.9em;">
@@ -276,90 +276,77 @@
                 Queue performance metrics and operational statistics.
             </p>
 
-            {% if statistics %}
+            {% if statistics and statistics.overall_queue %}
             <!-- Overall Statistics -->
             <div class="summary-section">
-                <h3 style="margin: 20px 0 10px 0;">Overall Statistics</h3>
+                <h3 style="margin: 20px 0 10px 0;">Overall Queue Statistics</h3>
                 <div class="summary-grid">
                     <div class="stat-card">
                         <div class="stat-label">Total Items</div>
-                        <div class="stat-value">{{ statistics.total_items or 0 }}</div>
+                        <div class="stat-value">{{ statistics.overall_queue.total or 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Pending</div>
-                        <div class="stat-value" style="color: #f59e0b;">{{ statistics.pending or 0 }}</div>
+                        <div class="stat-value" style="color: #f59e0b;">{{ statistics.overall_queue.pending or 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Processing</div>
-                        <div class="stat-value" style="color: #3b82f6;">{{ statistics.processing or 0 }}</div>
+                        <div class="stat-value" style="color: #3b82f6;">{{ statistics.overall_queue.processing or 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Completed</div>
-                        <div class="stat-value" style="color: #16a34a;">{{ statistics.completed or 0 }}</div>
+                        <div class="stat-value" style="color: #16a34a;">{{ statistics.overall_queue.completed or 0 }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">Failed</div>
-                        <div class="stat-value" style="color: #dc2626;">{{ statistics.failed or 0 }}</div>
+                        <div class="stat-value" style="color: #dc2626;">{{ statistics.overall_queue.failed or 0 }}</div>
                     </div>
-                    {% if statistics.success_rate is not none %}
-                    <div class="stat-card">
-                        <div class="stat-label">Success Rate</div>
-                        <div class="stat-value">{{ "%.1f"|format(statistics.success_rate) }}%</div>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
 
-            <!-- Per-Type Statistics -->
-            {% if statistics.by_type %}
-            <div class="breakdown-section" style="margin-top: 20px;">
-                <div class="breakdown-title">📌 By Operation Type</div>
-                <table class="breakdown-table">
-                    {% for type_stat in statistics.by_type %}
-                    <tr>
-                        <td style="font-weight: 500;">
-                            {% if type_stat.type == 'search' %}🔍 Search{% else %}⭐ Rating{% endif %}
-                        </td>
-                        <td style="text-align: right;">{{ type_stat.count }} total</td>
-                        <td style="text-align: right; color: #16a34a;">{{ type_stat.completed or 0 }} completed</td>
-                        <td style="text-align: right; color: #dc2626;">{{ type_stat.failed or 0 }} failed</td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-            {% endif %}
-
-            <!-- Performance Metrics -->
-            {% if performance %}
-            <div class="summary-section" style="margin-top: 30px;">
-                <h3 style="margin: 20px 0 10px 0;">Performance (Last 24 Hours)</h3>
+            <!-- Rating Queue -->
+            {% if statistics.rating_queue %}
+            <div class="summary-section" style="margin-top: 20px;">
+                <h3 style="margin: 20px 0 10px 0;">⭐ Rating Queue</h3>
                 <div class="summary-grid">
                     <div class="stat-card">
-                        <div class="stat-label">Processed</div>
-                        <div class="stat-value">{{ performance.items_processed or 0 }}</div>
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value">{{ statistics.rating_queue.pending or 0 }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Success Rate</div>
-                        <div class="stat-value">{{ "%.1f"|format(performance.success_rate) if performance.success_rate is not none else '—' }}%</div>
+                        <div class="stat-label">Processed (24h)</div>
+                        <div class="stat-value">{{ statistics.rating_queue.processed_24h or 0 }}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Avg Processing Time</div>
-                        <div class="stat-value">{{ "%.1f"|format(performance.avg_processing_time) if performance.avg_processing_time else '—' }}s</div>
+                        <div class="stat-label">Success Rate (24h)</div>
+                        <div class="stat-value">{{ statistics.rating_queue.success_rate_24h or 0 }}%</div>
                     </div>
                 </div>
             </div>
             {% endif %}
 
-            <!-- Recent Activity -->
-            {% if recent_activity and recent_activity.recent_completions %}
-            <div class="info-box" style="margin-top: 20px;">
-                <h4 style="margin: 0 0 10px 0;">Recent Activity</h4>
-                <p style="margin: 5px 0;">
-                    <strong>Completed:</strong> {{ recent_activity.recent_completions|length }} in last hour
-                </p>
-                <p style="margin: 5px 0;">
-                    <strong>Failed:</strong> {{ recent_activity.recent_failures|length if recent_activity.recent_failures else 0 }} in last hour
-                </p>
+            <!-- Search Queue -->
+            {% if statistics.search_queue %}
+            <div class="summary-section" style="margin-top: 20px;">
+                <h3 style="margin: 20px 0 10px 0;">🔍 Search Queue</h3>
+                <div class="summary-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total</div>
+                        <div class="stat-value">{{ statistics.search_queue.total or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value">{{ statistics.search_queue.pending or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Processed (24h)</div>
+                        <div class="stat-value">{{ statistics.search_queue.processed_24h or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Success Rate (24h)</div>
+                        <div class="stat-value">{{ statistics.search_queue.success_rate_24h or 0 }}%</div>
+                    </div>
+                </div>
             </div>
             {% endif %}
 
