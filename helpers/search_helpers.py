@@ -31,29 +31,6 @@ def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
     return title, duration
 
 
-def should_skip_search(db, title: str, duration: int, artist: Optional[str] = None) -> bool:
-    """
-    Check if search should be skipped due to recent failures or quota blocking.
-
-    Args:
-        db: Database instance
-        title: Video title
-        duration: Video duration in seconds
-        artist: Artist name (optional, used for accurate not_found cache matching)
-
-    Returns:
-        True if search should be skipped, False otherwise
-    """
-    # Check if this search recently failed (negative result cache)
-    if db.is_recently_not_found(title, artist, duration):
-        metrics.record_not_found_cache_hit(title)
-        logger.debug("Skipping search for '%s' - recently marked as not found", title)
-        return True
-
-    # No quota checks needed - if quota is exceeded, search will raise QuotaExceededError
-    return False
-
-
 def search_youtube_for_video(
     yt_api,
     title: str,
@@ -117,24 +94,6 @@ def select_best_match(
     return video
 
 
-def record_failed_search(
-    db,
-    title: str,
-    duration: int,
-    artist: Optional[str] = None
-) -> None:
-    """
-    Record a failed search to prevent repeated API calls.
-
-    Args:
-        db: Database instance
-        title: Video title
-        duration: Video duration
-        artist: Artist name (optional, used for accurate cache matching)
-    """
-    db.record_not_found(title, artist, duration, title)
-
-
 def search_and_match_video(
     ha_media: Dict[str, Any],
     yt_api,
@@ -172,15 +131,11 @@ def search_and_match_video(
             'duration': cached_result['yt_duration']
         }
 
-    # Step 3: Check if should skip search
-    artist = ha_media.get('artist')
-    if should_skip_search(db, title, duration, artist):
-        return None
-
-    # Step 4: Search YouTube (with exact duration matching)
+    # v4.0.11: Removed should_skip_search() - not-found cache disabled, always search
+    # Step 3: Search YouTube (with exact duration matching)
     candidates = search_youtube_for_video(yt_api, title, duration)
     if not candidates:
-        record_failed_search(db, title, duration, artist)
+        # v4.0.11: No longer recording not-found - queue table tracks failed searches
         return None
 
     # Step 5: Opportunistically cache ALL search results (not just the match!)
@@ -194,7 +149,7 @@ def search_and_match_video(
     # Step 6: Select best match (just take first result)
     video = select_best_match(candidates, title)
     if not video:
-        record_failed_search(db, title, duration, artist)
+        # v4.0.11: No longer recording not-found - queue table tracks failed searches
         return None
 
     # Step 7: Log success

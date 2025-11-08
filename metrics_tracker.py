@@ -28,7 +28,6 @@ class MetricsTracker:
 
         # Failed searches tracking - reduced from 1k to 500
         self._failed_searches = deque(maxlen=500)
-        self._not_found_cache_hits = deque(maxlen=500)
 
         # Rating operations tracking - reduced from 1k to 500
         self._ratings_success = deque(maxlen=500)
@@ -82,14 +81,6 @@ class MetricsTracker:
                 'title': title,
                 'channel': channel,
                 'reason': reason
-            })
-
-    def record_not_found_cache_hit(self, title: str):
-        """Record when a search is skipped due to not-found cache."""
-        with self._lock:
-            self._not_found_cache_hits.append({
-                'timestamp': time.time(),
-                'title': title
             })
 
     def record_rating(self, success: bool, queued: bool = False):
@@ -198,10 +189,6 @@ class MetricsTracker:
                     'misses': misses_24h,
                     'requests': total_24h,
                     'hit_rate': (hits_24h / total_24h * 100) if total_24h > 0 else 0
-                },
-                'not_found_cache_hits': {
-                    'total': len(self._not_found_cache_hits),
-                    'last_hour': self._count_recent(self._not_found_cache_hits, 3600)
                 }
             }
 

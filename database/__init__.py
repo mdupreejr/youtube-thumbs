@@ -96,9 +96,6 @@ class Database:
     def mark_pending_not_found(self, ha_content_id: str):
         return self._video_ops.mark_pending_not_found(ha_content_id)
 
-    def cleanup_unknown_entries(self) -> Dict[str, int]:
-        return self._video_ops.cleanup_unknown_entries()
-
     # Pending operations
     def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
         return self._pending_ops.upsert_pending_media(media, reason)
@@ -146,89 +143,6 @@ class Database:
     def get_queue_item_by_id(self, queue_id):
         """Get a specific queue item by ID."""
         return self._queue_ops.get_item_by_id(queue_id)
-
-    # Not found cache operations (v4.0.0: disabled - TODO implement queue-based caching)
-    def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
-        """
-        Check if this content was recently searched and not found.
-
-        v4.0.0: Temporarily disabled. TODO: Re-implement by querying queue for failed searches.
-
-        Args:
-            title: Media title
-            artist: Media artist (optional)
-            duration: Media duration in seconds (optional)
-
-        Returns:
-            Always returns False (not-found caching temporarily disabled)
-        """
-        # TODO v4.1.0: Re-implement by querying queue table for failed search attempts
-        # Should check queue items with status='failed' and type='search'
-        # within the cache period (default 24 hours)
-        return False
-
-    def record_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None, search_query: Optional[str] = None) -> bool:
-        """
-        Record a failed search attempt.
-        Now uses video_ratings table instead of separate not_found_searches table.
-
-        Args:
-            title: Media title that wasn't found
-            artist: Media artist (optional)
-            duration: Media duration in seconds (optional)
-            search_query: The actual query sent to YouTube (optional, deprecated)
-
-        Returns:
-            True if successfully recorded, False otherwise
-        """
-        if not title:
-            return False
-
-        # Use upsert_pending_media with reason='not_found'
-        media = {
-            'title': title,
-            'artist': artist,
-            'duration': duration
-        }
-
-        try:
-            self.upsert_pending_media(media, reason='not_found')
-            from logger import logger
-            logger.info(
-                "Cached not found result for '%s' (duration: %s)",
-                title, duration
-            )
-            return True
-        except Exception as exc:
-            from logger import logger
-            from error_handler import log_and_suppress
-            return log_and_suppress(
-                exc,
-                "Failed to record not found search for '%s'",
-                title,
-                level="error",
-                return_value=False
-            )
-
-    def cleanup_old_not_found(self, days: int = 2) -> int:
-        """
-        v4.0.0: DEPRECATED - Not found entries no longer stored in video_ratings.
-
-        OLD BEHAVIOR (pre-v4.0.0):
-        Removed old not found entries from video_ratings table where pending_reason='not_found'.
-
-        NEW BEHAVIOR (v4.0.0+):
-        Returns 0. Not found entries are tracked in queue table and automatically age out.
-
-        Args:
-            days: Remove entries older than this many days (ignored)
-
-        Returns:
-            0 (no entries to remove)
-        """
-        from logger import logger
-        logger.debug("cleanup_old_not_found() called but is DEPRECATED in v4.0.0 - returning 0")
-        return 0
 
     # Stats operations
     def get_total_videos(self) -> int:
