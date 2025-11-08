@@ -34,8 +34,9 @@ def validate_search_requirements(ha_media: Dict[str, Any]) -> Optional[tuple]:
 def search_youtube_for_video(
     yt_api,
     title: str,
-    duration: int
-) -> Optional[List[Dict]]:
+    duration: int,
+    return_api_response: bool = False
+):
     """
     Search YouTube for matching videos with exact duration (+1 second).
 
@@ -43,12 +44,20 @@ def search_youtube_for_video(
         yt_api: YouTube API instance
         title: Video title
         duration: Video duration (HA duration, YouTube will be +1)
+        return_api_response: If True, return tuple of (candidates, api_debug_data)
 
     Returns:
-        List of candidate videos or None if not found
+        If return_api_response=False: List of candidate videos or None if not found
+        If return_api_response=True: Tuple of (candidates or None, api_debug_data dict)
     """
     logger.debug(f"Searching YouTube: title='{title}', expected YT duration={duration + 1}s")
-    candidates = yt_api.search_video_globally(title, duration, None)
+
+    if return_api_response:
+        result = yt_api.search_video_globally(title, duration, None, return_api_response=True)
+        candidates, api_debug_data = result if result else (None, {})
+    else:
+        candidates = yt_api.search_video_globally(title, duration, None)
+        api_debug_data = None
 
     if not candidates:
         logger.error(
@@ -57,9 +66,9 @@ def search_youtube_for_video(
             duration + 1
         )
         metrics.record_failed_search(title, None, reason='not_found')
-        return None
+        return (None, api_debug_data) if return_api_response else None
 
-    return candidates
+    return (candidates, api_debug_data) if return_api_response else candidates
 
 
 def select_best_match(
@@ -97,8 +106,9 @@ def select_best_match(
 def search_and_match_video(
     ha_media: Dict[str, Any],
     yt_api,
-    db
-) -> Optional[Dict]:
+    db,
+    return_api_response: bool = False
+):
     """
     Simplified video search: find YouTube video by exact title and duration (+1s).
     Now with opportunistic caching of all search results!
@@ -107,14 +117,16 @@ def search_and_match_video(
         ha_media: Media information from Home Assistant (must have channel='YouTube')
         yt_api: YouTube API instance
         db: Database instance
+        return_api_response: If True, return tuple of (video, api_debug_data)
 
     Returns:
-        video_dict or None
+        If return_api_response=False: video_dict or None
+        If return_api_response=True: Tuple of (video_dict or None, api_debug_data dict or None)
     """
     # Step 1: Validate requirements
     validation_result = validate_search_requirements(ha_media)
     if not validation_result:
-        return None
+        return (None, None) if return_api_response else None
     title, duration = validation_result
 
     # Step 2: Check opportunistic search cache FIRST (0 API cost!)
@@ -123,7 +135,7 @@ def search_and_match_video(
         logger.info(f"Opportunistic cache HIT: '{title}' → {cached_result['yt_video_id']} (saved 101 quota units!)")
         metrics.record_cache_hit('search_results')
         # v4.0.46: Return ALL cached video fields, not just 5
-        return {
+        cached_video = {
             'yt_video_id': cached_result['yt_video_id'],
             'title': cached_result['yt_title'],
             'channel': cached_result['yt_channel'],
@@ -136,21 +148,29 @@ def search_and_match_video(
             'location': cached_result.get('yt_location'),
             'recording_date': cached_result.get('yt_recording_date')
         }
+        # No API call made, so no debug data
+        return (cached_video, {'cache_hit': True}) if return_api_response else cached_video
 
     # v4.0.11: Removed should_skip_search() - not-found cache disabled, always search
     # Step 3: Search YouTube (with exact duration matching)
     # v4.0.46: Caching now happens inside search_youtube_for_video (youtube_api.py)
     #          to cache ALL fetched videos, not just duration-matched candidates
-    candidates = search_youtube_for_video(yt_api, title, duration)
+    if return_api_response:
+        result = search_youtube_for_video(yt_api, title, duration, return_api_response=True)
+        candidates, api_debug_data = result if result else (None, {})
+    else:
+        candidates = search_youtube_for_video(yt_api, title, duration)
+        api_debug_data = None
+
     if not candidates:
         # v4.0.11: No longer recording not-found - queue table tracks failed searches
-        return None
+        return (None, api_debug_data) if return_api_response else None
 
     # Step 4: Select best match (just take first result)
     video = select_best_match(candidates, title)
     if not video:
         # v4.0.11: No longer recording not-found - queue table tracks failed searches
-        return None
+        return (None, api_debug_data) if return_api_response else None
 
     # Step 7: Log success
     logger.info(
@@ -158,4 +178,4 @@ def search_and_match_video(
         f"Channel: {video.get('channel')} | ID: {video['yt_video_id']}"
     )
 
-    return video
+    return (video, api_debug_data) if return_api_response else video

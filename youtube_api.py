@@ -477,17 +477,37 @@ class YouTubeAPI:
 
         return search_query
 
-    def search_video_globally(self, title: str, expected_duration: Optional[int] = None, artist: Optional[str] = None) -> Optional[List[Dict]]:
+    def search_video_globally(self, title: str, expected_duration: Optional[int] = None, artist: Optional[str] = None, return_api_response: bool = False):
         """
         Search for a video globally. Filters by duration (±2s) if provided.
 
+        Args:
+            title: Video title to search for
+            expected_duration: Expected duration in seconds (±2s tolerance)
+            artist: Artist name (kept for compatibility, not used)
+            return_api_response: If True, return tuple of (candidates, api_debug_data)
+
         Note: artist parameter is kept for compatibility but not used in search
         since ha_artist is typically just "YouTube" (the platform), not the actual artist.
+
+        Returns:
+            If return_api_response=False: List of candidate videos or None
+            If return_api_response=True: Tuple of (candidates or None, api_debug_data dict)
         """
+        api_debug_data = {
+            'search_query': None,
+            'search_response': None,
+            'batch_responses': [],
+            'videos_checked': 0,
+            'candidates_found': 0
+        }
+
         try:
             # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
             search_query = self._build_smart_search_query(title)
             logger.debug(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
+
+            api_debug_data['search_query'] = search_query
 
             response = self.youtube.search().list(
                 part='snippet',
@@ -496,6 +516,8 @@ class YouTubeAPI:
                 maxResults=self.MAX_SEARCH_RESULTS,
                 fields=self.SEARCH_FIELDS,
             ).execute()
+
+            api_debug_data['search_response'] = response
 
             # Track API usage (both old and new methods for compatibility)
             if _db:
@@ -513,7 +535,9 @@ class YouTubeAPI:
             items = response.get('items', [])
             if not items:
                 logger.error(f"No videos found globally for: '{title}'")
-                return None
+                api_debug_data['videos_checked'] = 0
+                api_debug_data['candidates_found'] = 0
+                return (None, api_debug_data) if return_api_response else None
 
             logger.debug(f"Found {len(items)} videos globally")
 
@@ -593,6 +617,14 @@ class YouTubeAPI:
                         id=batch_ids,  # Batch request - up to 50 IDs
                         fields=self.VIDEO_FIELDS,
                     ).execute()
+
+                    # Capture batch response for debugging
+                    api_debug_data['batch_responses'].append({
+                        'phase': phase,
+                        'batch_num': batch_num,
+                        'video_ids_requested': len(video_id_batch),
+                        'response': details
+                    })
 
                     videos_fetched = len(details.get('items', []))
                     videos_checked += videos_fetched
@@ -719,16 +751,27 @@ class YouTubeAPI:
                 except Exception as exc:
                     logger.warning(f"Failed to cache fetched videos: {exc}")
 
+            # Update final stats in debug data
+            api_debug_data['videos_checked'] = videos_checked
+            api_debug_data['candidates_found'] = len(candidates) if candidates else 0
+
             if not candidates:
                 logger.info(f"No duration matches, but cached {len(all_fetched_videos)} checked videos for future searches")
-                return None
+                return (None, api_debug_data) if return_api_response else None
 
             logger.debug(f"Found {len(candidates)} duration-matched candidates")
-            return candidates
+            return (candidates, api_debug_data) if return_api_response else candidates
 
         except HttpError as e:
             detail = self._quota_error_detail(e)
             is_quota_error = detail is not None
+
+            # Capture error in debug data
+            api_debug_data['error'] = {
+                'type': 'quota_exceeded' if is_quota_error else 'http_error',
+                'message': "Quota exceeded" if is_quota_error else str(e),
+                'detail': detail
+            }
 
             # v4.0.29: ALWAYS log failed API calls (including quota errors) BEFORE raising
             # This ensures check_quota_recently_exceeded() can find recent quota errors
@@ -738,7 +781,7 @@ class YouTubeAPI:
                 _db.log_api_call_detailed(
                     api_method='search',
                     operation_type='search_video',
-                    query_params=f"q='{search_query}', maxResults={self.MAX_SEARCH_RESULTS}",
+                    query_params=f"q='{api_debug_data.get('search_query', title)}', maxResults={self.MAX_SEARCH_RESULTS}",
                     quota_cost=100 if not is_quota_error else 0,  # No quota consumed if quota already exceeded
                     success=False,
                     error_message="Quota exceeded" if is_quota_error else str(e),
@@ -749,6 +792,9 @@ class YouTubeAPI:
                 # Raise exception - worker will catch and sleep until midnight
                 raise QuotaExceededError("YouTube quota exceeded")
 
+            if return_api_response:
+                return (None, api_debug_data)
+
             return log_and_suppress(
                 e,
                 f"YouTube API error in search_video_globally | Query: '{title}'",
@@ -757,6 +803,15 @@ class YouTubeAPI:
                 log_traceback=not is_quota_error  # Skip traceback for quota errors
             )
         except Exception as e:
+            # Capture unexpected error in debug data
+            api_debug_data['error'] = {
+                'type': 'unexpected_error',
+                'message': str(e)
+            }
+
+            if return_api_response:
+                return (None, api_debug_data)
+
             return log_and_suppress(
                 e,
                 f"Unexpected error searching video | Query: '{title}'",

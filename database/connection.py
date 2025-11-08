@@ -149,7 +149,8 @@ class DatabaseConnection:
             attempts INTEGER DEFAULT 0,
             last_attempt TIMESTAMP,
             last_error TEXT,
-            completed_at TIMESTAMP
+            completed_at TIMESTAMP,
+            api_response_data TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_queue_status_priority ON queue(status, priority, requested_at);
         CREATE INDEX IF NOT EXISTS idx_queue_type ON queue(type);

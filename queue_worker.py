@@ -275,10 +275,17 @@ def process_next_item(db, yt_api):
                 'app_name': payload['ha_app_name']
             }
 
-            # Search using the wrapper (includes caching)
+            # Search using the wrapper (includes caching) - capture API response for debugging
             from helpers.search_helpers import search_and_match_video
             from helpers.video_helpers import prepare_video_upsert
-            video = search_and_match_video(ha_media, yt_api, db)
+            import json
+
+            # v4.0.64: Request API response data for debugging failed searches
+            result = search_and_match_video(ha_media, yt_api, db, return_api_response=True)
+            video, api_debug_data = result if result else (None, None)
+
+            # Serialize API debug data for storage
+            api_response_json = json.dumps(api_debug_data) if api_debug_data else None
 
             if video and video.get('yt_video_id'):
                 video_id = video['yt_video_id']
@@ -299,7 +306,7 @@ def process_next_item(db, yt_api):
                     logger.debug(f"  → Recorded play for {video_id} (play_count incremented)")
                 except Exception as e:
                     logger.error(f"  ✗ Failed to add video {video_id} to database: {e}")
-                    db.mark_queue_item_failed(queue_id, f"Failed to add to database: {str(e)}")
+                    db.mark_queue_item_failed(queue_id, f"Failed to add to database: {str(e)}", api_response_json)
                     return 'success'  # Continue processing other items
 
                 # If there's a callback rating, enqueue it
@@ -309,10 +316,10 @@ def process_next_item(db, yt_api):
                     logger.info(f"  → Enqueued {callback_rating} rating for {video_id}")
                     logger.debug(f"Added rating to queue for {video_id}")
 
-                db.mark_queue_item_completed(queue_id)
+                db.mark_queue_item_completed(queue_id, api_response_json)
                 logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
             else:
-                db.mark_queue_item_failed(queue_id, "No matching video found")
+                db.mark_queue_item_failed(queue_id, "No matching video found", api_response_json)
                 logger.warning(f"✗ No video found for '{title}'")
                 logger.debug(f"Marked queue item #{queue_id} as FAILED: No matching video found")
 

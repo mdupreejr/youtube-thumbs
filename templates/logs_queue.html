@@ -621,6 +621,90 @@
                     `;
                 }
 
+                // v4.0.64: Show YouTube API response for debugging (particularly useful for failed searches)
+                if (data.api_response_data) {
+                    try {
+                        const apiData = typeof data.api_response_data === 'string'
+                            ? JSON.parse(data.api_response_data)
+                            : data.api_response_data;
+
+                        let apiHtml = `
+                            <div class="error-box" style="border-color: #3b82f6; background-color: #eff6ff;">
+                                <strong style="color: #1e40af;">📊 YouTube API Response Debug Data</strong>
+                        `;
+
+                        // Show cache hit status
+                        if (apiData.cache_hit) {
+                            apiHtml += `<p style="margin: 8px 0 0 0; color: #059669;">✓ Cache Hit - No API call made</p>`;
+                        } else {
+                            // Show search query used
+                            if (apiData.search_query) {
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Search Query:</strong> "${apiData.search_query}"</p>`;
+                            }
+
+                            // Show search results summary
+                            if (apiData.search_response) {
+                                const items = apiData.search_response.items || [];
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Search Results:</strong> ${items.length} videos found</p>`;
+
+                                if (items.length > 0) {
+                                    apiHtml += `<p style="margin: 8px 0 0 0; color: #64748b; font-size: 0.9em;">Top results:</p><ul style="margin: 4px 0 0 20px; color: #64748b; font-size: 0.85em;">`;
+                                    items.slice(0, 5).forEach((item, idx) => {
+                                        const title = item.snippet?.title || 'Unknown';
+                                        const videoId = item.id?.videoId || 'Unknown';
+                                        apiHtml += `<li>${title} (${videoId})</li>`;
+                                    });
+                                    apiHtml += `</ul>`;
+                                }
+                            }
+
+                            // Show videos checked
+                            if (apiData.videos_checked !== undefined) {
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Videos Checked:</strong> ${apiData.videos_checked}</p>`;
+                            }
+
+                            // Show candidates found
+                            if (apiData.candidates_found !== undefined) {
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Duration Matches:</strong> ${apiData.candidates_found}</p>`;
+                            }
+
+                            // Show batch details
+                            if (apiData.batch_responses && apiData.batch_responses.length > 0) {
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Batch API Calls:</strong> ${apiData.batch_responses.length}</p>`;
+                            }
+
+                            // Show error if present
+                            if (apiData.error) {
+                                apiHtml += `<p style="margin: 8px 0 0 0; color: #dc2626;"><strong>API Error:</strong> ${apiData.error.type} - ${apiData.error.message}</p>`;
+                            }
+                        }
+
+                        // Add expandable JSON view
+                        apiHtml += `
+                            <details style="margin-top: 12px;">
+                                <summary style="cursor: pointer; color: #1e40af; font-weight: 600; user-select: none;">
+                                    View Full API Response JSON
+                                </summary>
+                                <pre style="margin: 8px 0 0 0; padding: 12px; background-color: #f1f5f9; border-radius: 4px; overflow-x: auto; font-size: 0.75em; color: #334155;">
+${JSON.stringify(apiData, null, 2)}</pre>
+                            </details>
+                        `;
+
+                        apiHtml += `</div>`;
+                        html += apiHtml;
+
+                    } catch (parseError) {
+                        // If JSON parsing fails, show raw data
+                        html += `
+                            <div class="error-box" style="border-color: #f59e0b;">
+                                <strong style="color: #d97706;">⚠️ API Response Data (parsing failed)</strong>
+                                <pre style="margin: 8px 0 0 0; font-family: monospace; font-size: 0.8em; color: #92400e; overflow-x: auto;">
+${data.api_response_data}</pre>
+                            </div>
+                        `;
+                    }
+                }
+
                 // Show warning for high attempts
                 if (data.attempts >= 100) {
                     html += `

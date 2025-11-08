@@ -113,22 +113,29 @@ class QueueOperations:
             item = self._hydrate_queue_item(row)
             return item
 
-    def mark_completed(self, queue_id: int) -> None:
-        """Mark a queue item as completed."""
+    def mark_completed(self, queue_id: int, api_response_data: str = None) -> None:
+        """
+        Mark a queue item as completed.
+
+        Args:
+            queue_id: Queue item ID
+            api_response_data: Optional JSON string containing YouTube API response data for debugging
+        """
         with self._lock:
             self._conn.execute(
                 """
                 UPDATE queue
                 SET status = 'completed',
                     completed_at = CURRENT_TIMESTAMP,
-                    last_error = NULL
+                    last_error = NULL,
+                    api_response_data = ?
                 WHERE id = ?
                 """,
-                (queue_id,)
+                (api_response_data, queue_id)
             )
             self._conn.commit()
 
-    def mark_failed(self, queue_id: int, error: str) -> None:
+    def mark_failed(self, queue_id: int, error: str, api_response_data: str = None) -> None:
         """
         Mark a queue item as failed.
 
@@ -142,16 +149,18 @@ class QueueOperations:
         Args:
             queue_id: Queue item ID
             error: Error message
+            api_response_data: Optional JSON string containing YouTube API response data for debugging
         """
         with self._lock:
             self._conn.execute(
                 """
                 UPDATE queue
                 SET status = 'failed',
-                    last_error = ?
+                    last_error = ?,
+                    api_response_data = ?
                 WHERE id = ?
                 """,
-                (error, queue_id)
+                (error, api_response_data, queue_id)
             )
             self._conn.commit()
 

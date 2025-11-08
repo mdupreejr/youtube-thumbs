@@ -227,6 +227,7 @@ def get_queue_item_details(queue_id: int):
                 'play_count': video.get('play_count', 0) if video else 0,
                 'date_added': video.get('date_added') if video else None,
                 'date_last_played': video.get('date_last_played') if video else None,
+                'api_response_data': queue_item.get('api_response_data'),  # v4.0.64: YouTube API debug data
                 'payload': payload
             }
 
@@ -253,6 +254,7 @@ def get_queue_item_details(queue_id: int):
                 'last_attempt': queue_item.get('last_attempt'),
                 'last_error': queue_item.get('last_error'),
                 'completed_at': queue_item.get('completed_at'),
+                'api_response_data': queue_item.get('api_response_data'),  # v4.0.64: YouTube API debug data
                 'payload': payload
             }
 
