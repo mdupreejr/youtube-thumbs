@@ -89,8 +89,8 @@ class SongTracker:
                 return
 
             # Calculate content hash for deduplication
-            from helpers.cache_helpers import calculate_content_hash
-            content_hash = calculate_content_hash(
+            from helpers.video_helpers import get_content_hash
+            content_hash = get_content_hash(
                 title=title,
                 duration=duration,
                 artist=media.get('artist')
