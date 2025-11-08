@@ -44,7 +44,7 @@ class YouTubeAPI:
         converter=int,
         validator=lambda x: 1 <= x <= 50
     )
-    SEARCH_FIELDS = 'items(id/videoId)'
+    SEARCH_FIELDS = 'items(id/videoId,snippet/title)'
     VIDEO_FIELDS = 'items(id,snippet(title,channelTitle,channelId,description,publishedAt,categoryId,liveBroadcastContent),contentDetails(duration),recordingDetails(location,recordingDate))'
     QUOTA_REASON_CODES = {
         'quotaExceeded',
