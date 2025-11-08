@@ -205,6 +205,10 @@ class DatabaseConnection:
                     # v4.0.46: Migrate existing search_results_cache to include all video fields
                     self._migrate_search_cache_columns()
 
+                    # v4.0.47: ONE-TIME cleanup - remove deprecated queue columns from video_ratings
+                    # TODO: REMOVE THIS CALL IN v4.0.48 (after users have migrated)
+                    self._cleanup_deprecated_video_ratings_columns()
+
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
@@ -235,6 +239,118 @@ class DatabaseConnection:
 
         except Exception as e:
             logger.warning(f"Failed to migrate search_results_cache columns: {e}")
+
+    def _cleanup_deprecated_video_ratings_columns(self) -> None:
+        """
+        v4.0.47: ONE-TIME migration to remove 11 deprecated queue-tracking columns.
+        These were replaced by the unified queue table in v4.0.0 but never dropped.
+
+        TODO: REMOVE THIS METHOD IN v4.0.48 (after users have migrated)
+
+        Deprecated columns to remove:
+        - yt_match_pending, yt_match_requested_at, yt_match_attempts,
+          yt_match_last_attempt, yt_match_last_error, pending_reason
+        - rating_queue_pending, rating_queue_requested_at, rating_queue_attempts,
+          rating_queue_last_attempt, rating_queue_last_error
+        """
+        try:
+            # Check if deprecated columns exist
+            cursor = self._conn.execute("PRAGMA table_info(video_ratings)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+            deprecated_columns = {
+                'yt_match_pending', 'yt_match_requested_at', 'yt_match_attempts',
+                'yt_match_last_attempt', 'yt_match_last_error', 'pending_reason',
+                'rating_queue_pending', 'rating_queue_requested_at', 'rating_queue_attempts',
+                'rating_queue_last_attempt', 'rating_queue_last_error'
+            }
+
+            # If no deprecated columns exist, migration already completed
+            if not any(col in columns for col in deprecated_columns):
+                logger.debug("Deprecated columns already removed from video_ratings")
+                return
+
+            logger.info("Cleaning up 11 deprecated columns from video_ratings table...")
+
+            # SQLite doesn't support DROP COLUMN directly, so we need to:
+            # 1. Create new table without deprecated columns
+            # 2. Copy data
+            # 3. Drop old table
+            # 4. Rename new table
+
+            # Create new table with clean schema (from VIDEO_RATINGS_SCHEMA)
+            self._conn.execute("""
+                CREATE TABLE video_ratings_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    yt_video_id TEXT NOT NULL UNIQUE,
+                    ha_content_id TEXT,
+                    ha_title TEXT NOT NULL,
+                    ha_artist TEXT,
+                    ha_app_name TEXT,
+                    yt_title TEXT NOT NULL,
+                    yt_channel TEXT,
+                    yt_channel_id TEXT,
+                    yt_description TEXT,
+                    yt_published_at TIMESTAMP,
+                    yt_category_id INTEGER,
+                    yt_live_broadcast TEXT,
+                    yt_location TEXT,
+                    yt_recording_date TIMESTAMP,
+                    ha_duration INTEGER,
+                    yt_duration INTEGER,
+                    yt_url TEXT NOT NULL,
+                    rating TEXT DEFAULT 'none',
+                    ha_content_hash TEXT,
+                    date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    date_last_played TIMESTAMP,
+                    play_count INTEGER DEFAULT 1,
+                    rating_score INTEGER DEFAULT 0,
+                    source TEXT DEFAULT 'ha_live'
+                )
+            """)
+
+            # Copy all data from old table to new table (only non-deprecated columns)
+            self._conn.execute("""
+                INSERT INTO video_ratings_new (
+                    id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
+                    yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
+                    yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
+                    ha_duration, yt_duration, yt_url, rating, ha_content_hash,
+                    date_added, date_last_played, play_count, rating_score, source
+                )
+                SELECT
+                    id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
+                    yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
+                    yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
+                    ha_duration, yt_duration, yt_url, rating, ha_content_hash,
+                    date_added, date_last_played, play_count, rating_score, source
+                FROM video_ratings
+            """)
+
+            # Drop old table
+            self._conn.execute("DROP TABLE video_ratings")
+
+            # Rename new table to original name
+            self._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
+
+            # Recreate indexes (from VIDEO_RATINGS_SCHEMA)
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id)")
+
+            # Recreate indexes that were created outside VIDEO_RATINGS_SCHEMA
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)")
+
+            self._conn.commit()
+
+            logger.info("✓ Successfully removed 11 deprecated columns from video_ratings")
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup deprecated video_ratings columns: {e}")
+            # Don't raise - allow app to continue even if migration fails
+            # Old schema with extra columns is still functional
 
     @staticmethod
     def timestamp(ts = None) -> str:
