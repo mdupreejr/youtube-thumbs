@@ -18,7 +18,7 @@ from quota_error import (
 _db = None
 
 
-def handle_youtube_error(context: str, return_value: Any = None, api_method: str = None, quota_cost: int = 0):
+def handle_youtube_error(context: str, api_method: str = None, quota_cost: int = 0):
     """
     Decorator to convert YouTube API HttpErrors to specific exception types.
 
@@ -27,7 +27,6 @@ def handle_youtube_error(context: str, return_value: Any = None, api_method: str
 
     Args:
         context: Description of the operation for logging
-        return_value: DEPRECATED - no longer used (errors are not suppressed)
         api_method: Optional API method name (e.g., "videos.rate") for database logging
         quota_cost: Optional quota cost for this API call (for database logging)
 

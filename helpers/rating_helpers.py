@@ -155,20 +155,6 @@ def check_already_rated(db, yt_video_id: str, rating_type: str, media_info: str,
     return None
 
 
-def handle_quota_blocked_rating(
-    yt_video_id: str,
-    rating_type: str,
-    media_info: str,
-    queue_rating_func
-) -> Optional[Tuple[Response, int]]:
-    """
-    DEPRECATED: This function is no longer needed with queue-based architecture.
-    All ratings go through the queue, and quota errors are handled by the worker.
-
-    Kept for backwards compatibility but returns None (no-op).
-    """
-    return None
-
 
 def execute_rating(
     yt_api,

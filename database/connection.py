@@ -205,8 +205,6 @@ class DatabaseConnection:
                     # v4.0.46: Migrate existing search_results_cache to include all video fields
                     self._migrate_search_cache_columns()
 
-                    # v4.0.49: One-time cleanup of orphaned table from failed migrations
-                    self._cleanup_orphaned_migration_table()
 
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
@@ -239,20 +237,6 @@ class DatabaseConnection:
         except Exception as e:
             logger.warning(f"Failed to migrate search_results_cache columns: {e}")
 
-    def _cleanup_orphaned_migration_table(self) -> None:
-        """
-        v4.0.49: One-time cleanup of orphaned video_ratings_new table.
-        TODO: Remove this method in v4.0.50
-        """
-        try:
-            cursor = self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings_new'")
-            if cursor.fetchone():
-                logger.info("Cleaning up orphaned video_ratings_new table...")
-                self._conn.execute("DROP TABLE video_ratings_new")
-                self._conn.commit()
-                logger.info("✓ Removed orphaned video_ratings_new table")
-        except Exception as e:
-            logger.warning(f"Failed to cleanup orphaned table: {e}")
 
     @staticmethod
     def timestamp(ts = None) -> str:

@@ -422,8 +422,6 @@ def run_startup_checks(ha_api, yt_api, db):
     results.append(("Database", db_ok, db_msg))
     all_ok = all_ok and db_ok
 
-    # v4.0.7: Removed deprecated cleanup_old_not_found() call
-    # Not-found entries are now tracked in queue table, not video_ratings
 
     # Log concise summary
     logger.info("")

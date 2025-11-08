@@ -339,38 +339,3 @@ class VideoOperations:
 
         return dict(row) if row else None
 
-    def get_pending_videos(self, limit: int = 50, reason_filter: Optional[str] = None) -> List[Dict]:
-        """
-        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
-        Kept for backward compatibility but returns empty list.
-
-        Args:
-            limit: Maximum number of pending videos to return (ignored)
-            reason_filter: Optional filter by pending_reason (ignored)
-
-        Returns:
-            Empty list (pending videos are in queue table now)
-        """
-        logger.debug("get_pending_videos() called but is deprecated in v4.0.0 - returning empty list")
-        return []
-
-    def resolve_pending_video(self, ha_content_id: str, youtube_data: Dict[str, Any]) -> None:
-        """
-        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
-        Kept for backward compatibility but does nothing.
-
-        Args:
-            ha_content_id: The placeholder ID (ignored)
-            youtube_data: YouTube video data (ignored)
-        """
-        logger.debug(f"resolve_pending_video() called but is deprecated in v4.0.0 - ignoring")
-
-    def mark_pending_not_found(self, ha_content_id: str) -> None:
-        """
-        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
-        Kept for backward compatibility but does nothing.
-
-        Args:
-            ha_content_id: The placeholder ID (ignored)
-        """
-        logger.debug(f"mark_pending_not_found() called but is deprecated in v4.0.0 - ignoring")
