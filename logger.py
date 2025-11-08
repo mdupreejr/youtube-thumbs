@@ -13,9 +13,10 @@ def setup_logger() -> logging.Logger:
     logger.handlers = []
     logger.propagate = False
 
-    # Console handler with time-only timestamp
+    # Console handler without timestamp (Home Assistant supervisor adds its own)
+    # v4.0.28: Removed duplicate timestamp - HA wrapper already prefixes logs with timestamp
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter('%(asctime)s | [%(levelname)s] %(message)s', datefmt='%H:%M:%S'))
+    console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
     logger.addHandler(console_handler)
 
     # Create log directory if it doesn't exist
@@ -65,7 +66,8 @@ def setup_user_action_logger() -> logging.Logger:
     logger.propagate = False
 
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('%(asctime)s | [USER_ACTION] %(message)s', datefmt='%H:%M:%S'))
+    # v4.0.28: Removed duplicate timestamp - HA wrapper already prefixes logs with timestamp
+    handler.setFormatter(logging.Formatter('[USER_ACTION] %(message)s'))
     logger.addHandler(handler)
 
     return logger
@@ -99,9 +101,8 @@ def setup_rating_logger() -> logging.Logger:
     except Exception as e:
         # Fallback to console if file handler fails
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(
-            logging.Formatter('%(asctime)s | [RATING] %(message)s', datefmt='%H:%M:%S')
-        )
+        # v4.0.28: Removed duplicate timestamp - HA wrapper already prefixes logs with timestamp
+        console_handler.setFormatter(logging.Formatter('[RATING] %(message)s'))
         logger.addHandler(console_handler)
         logger.warning(f"Could not create rating file handler: {e}")
 
