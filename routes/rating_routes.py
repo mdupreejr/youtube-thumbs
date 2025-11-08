@@ -117,6 +117,9 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
     Unified function to queue a rating. ALL ratings go through this function.
     No immediate YouTube API submission - everything goes to queue for worker processing.
 
+    v4.0.0: Removed premature database update - video_ratings is only updated by queue worker
+    after successful YouTube API submission.
+
     Args:
         video_id: YouTube video ID
         rating_type: 'like' or 'dislike'
@@ -130,8 +133,8 @@ def enqueue_rating_unified(video_id: str, rating_type: str, video_title: str = "
         Exception: If queue is full
     """
     try:
-        # Update local database first (so UI shows change immediately)
-        _db.record_rating_local(video_id, rating_type)
+        # v4.0.0: Don't update video_ratings here - let queue worker do it after API success
+        # This ensures video_ratings only contains confirmed YouTube state
 
         # Add to queue for background worker processing
         # This may raise Exception if queue is full
@@ -208,17 +211,21 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             artist = ha_media.get('artist', '')
             media_info = format_media_info(video_title, artist)
 
-            # Check if already rated
+            # Check if already rated with same rating
             existing_rating = _db.get_video(yt_video_id)
             if existing_rating and existing_rating.get('rating') == rating_type:
-                user_action_logger.info(f"{rating_type.upper()} | ALREADY-RATED | {media_info}")
+                # v4.0.0: Increment rating_score locally (no queue, no API call needed)
+                # YouTube already has this rating, but we track local score
+                _db.record_rating(yt_video_id, rating_type)
+                user_action_logger.info(f"{rating_type.upper()} | SCORE-INCREMENTED | {media_info}")
                 return jsonify({
                     'success': True,
-                    'message': f'Already rated as {rating_type}',
-                    'already_rated': True
+                    'message': f'Rating score incremented (already rated as {rating_type})',
+                    'already_rated': True,
+                    'score_incremented': True
                 }), 200
 
-            # Queue rating
+            # Queue rating (either new rating or changing rating)
             result = enqueue_rating_unified(yt_video_id, rating_type, video_title)
             user_action_logger.info(f"{rating_type.upper()} | {media_info} | RATING-QUEUED")
 
@@ -288,13 +295,16 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
 
         title = video_data.get('yt_title') or video_data.get('ha_title') or 'Unknown'
 
-        # Check if already rated
+        # Check if already rated with same rating
         current_rating = video_data.get('rating', 'none')
         if current_rating == rating_type:
+            # v4.0.0: Increment rating_score locally (no queue, no API call needed)
+            _db.record_rating(video_id, rating_type)
             return jsonify({
                 'success': True,
-                'message': f'Already rated as {rating_type}',
-                'already_rated': True
+                'message': f'Rating score incremented (already rated as {rating_type})',
+                'already_rated': True,
+                'score_incremented': True
             })
 
         # Queue rating for background worker (no immediate submission)

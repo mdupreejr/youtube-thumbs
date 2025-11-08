@@ -266,11 +266,23 @@ def process_next_item(db, yt_api):
 
             # Search using the wrapper (includes caching)
             from helpers.search_helpers import search_and_match_video
+            from helpers.video_helpers import prepare_video_upsert
             video = search_and_match_video(ha_media, yt_api, db)
 
             if video and video.get('yt_video_id'):
                 video_id = video['yt_video_id']
                 logger.info(f"✓ Search found video {video_id} for '{title}'")
+
+                # v4.0.0: Add matched video to video_ratings table
+                try:
+                    # Prepare full video data for insertion
+                    video_data = prepare_video_upsert(video, ha_media, source='queue_search')
+                    db.upsert_video(video_data)
+                    logger.info(f"  → Added video {video_id} to video_ratings table")
+                except Exception as e:
+                    logger.error(f"  ✗ Failed to add video {video_id} to database: {e}")
+                    db.mark_queue_item_failed(queue_id, f"Failed to add to database: {str(e)}")
+                    return 'success'  # Continue processing other items
 
                 # If there's a callback rating, enqueue it
                 callback_rating = payload.get('callback_rating')

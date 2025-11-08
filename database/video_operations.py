@@ -70,110 +70,40 @@ class VideoOperations:
             'yt_url': video.get('yt_url'),
             'rating': video.get('rating', 'none') or 'none',
             'ha_content_hash': ha_content_hash,
-            'yt_match_pending': 0 if video.get('yt_match_pending') == 0 else 1,
-            'yt_match_requested_at': self._timestamp(video.get('yt_match_requested_at')),
-            'yt_match_attempts': video.get('yt_match_attempts', 0),
-            'yt_match_last_attempt': self._timestamp(video.get('yt_match_last_attempt')),
-            'yt_match_last_error': video.get('yt_match_last_error'),
-            'pending_reason': video.get('pending_reason'),
             'source': video.get('source') or 'ha_live',
             'date_added': self._timestamp(date_added) if date_added else self._timestamp(''),
         }
 
-        # Skip upsert if ha_title is None (NOT NULL constraint in schema)
-        # Also require at least one identifier (yt_video_id or ha_content_id)
+        # v4.0.0: Only matched videos with yt_video_id are stored in video_ratings
+        # Unmatched videos are tracked in the queue until matched
         if not payload['ha_title']:
             logger.error(
                 "Cannot upsert video: ha_title is required (NOT NULL constraint)"
             )
             return
 
-        if payload['yt_video_id'] is None and payload['ha_content_id'] is None:
+        if payload['yt_video_id'] is None:
             logger.error(
-                "Cannot upsert video: both yt_video_id and ha_content_id are None | Title: '%s'",
+                "Cannot upsert video: yt_video_id is required (v4.0.0 - only matched videos) | Title: '%s'",
                 ha_title
             )
             return
 
-        # For pending videos (yt_video_id is None), use ha_content_id to check for duplicates
-        if payload['yt_video_id'] is None:
-            # Check if a record with this ha_content_id already exists
-            with self._lock:
-                try:
-                    cursor = self._conn.execute(
-                        "SELECT id FROM video_ratings WHERE ha_content_id = ? LIMIT 1",
-                        (payload['ha_content_id'],)
-                    )
-                    existing = cursor.fetchone()
-
-                    with self._conn:
-                        if existing:
-                            # Update existing pending record
-                            self._conn.execute(
-                                """
-                                UPDATE video_ratings SET
-                                    ha_title=?, ha_artist=?, ha_app_name=?, ha_duration=?,
-                                    ha_content_hash=?, yt_match_pending=?, pending_reason=?,
-                                    source=?, yt_match_requested_at=?, yt_match_attempts=?,
-                                    yt_match_last_attempt=?, yt_match_last_error=?
-                                WHERE ha_content_id=?
-                                """,
-                                (
-                                    payload['ha_title'], payload['ha_artist'], payload['ha_app_name'],
-                                    payload['ha_duration'], payload['ha_content_hash'],
-                                    payload['yt_match_pending'], payload['pending_reason'],
-                                    payload['source'], payload['yt_match_requested_at'],
-                                    payload['yt_match_attempts'], payload['yt_match_last_attempt'],
-                                    payload['yt_match_last_error'], payload['ha_content_id']
-                                )
-                            )
-                        else:
-                            # Insert new pending record (without yt_video_id to avoid NOT NULL constraint)
-                            self._conn.execute(
-                                """
-                                INSERT INTO video_ratings (
-                                    ha_content_id, ha_title, ha_artist, ha_app_name, ha_duration,
-                                    rating, ha_content_hash, date_added, date_last_played,
-                                    play_count, rating_score, yt_match_pending, pending_reason, source,
-                                    yt_match_requested_at, yt_match_attempts, yt_match_last_attempt,
-                                    yt_match_last_error
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    payload['ha_content_id'], payload['ha_title'], payload['ha_artist'],
-                                    payload['ha_app_name'], payload['ha_duration'], payload['rating'],
-                                    payload['ha_content_hash'], payload['date_added'], payload['date_added'],
-                                    payload['yt_match_pending'], payload['pending_reason'],
-                                    payload['source'], payload['yt_match_requested_at'],
-                                    payload['yt_match_attempts'], payload['yt_match_last_attempt'],
-                                    payload['yt_match_last_error']
-                                )
-                            )
-                except sqlite3.DatabaseError as exc:
-                    log_and_suppress(
-                        exc,
-                        f"Failed to upsert pending video (ha_content_id: {payload.get('ha_content_id', 'unknown')})",
-                        level="error"
-                    )
-            return
-
-        # Normal upsert for videos with yt_video_id
+        # Upsert matched video with yt_video_id
         upsert_sql = """
         INSERT INTO video_ratings (
             yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name, yt_title, yt_channel, yt_channel_id,
             yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
             yt_location, yt_recording_date,
             ha_duration, yt_duration, yt_url, rating, ha_content_hash, date_added, date_last_played,
-            play_count, rating_score, yt_match_pending, pending_reason, source,
-            yt_match_requested_at, yt_match_attempts, yt_match_last_attempt, yt_match_last_error
+            play_count, rating_score, source
         )
         VALUES (
             :yt_video_id, :ha_content_id, :ha_title, :ha_artist, :ha_app_name, :yt_title, :yt_channel, :yt_channel_id,
             :yt_description, :yt_published_at, :yt_category_id, :yt_live_broadcast,
             :yt_location, :yt_recording_date,
             :ha_duration, :yt_duration, :yt_url, :rating, :ha_content_hash, :date_added, :date_added,
-            0, 0, :yt_match_pending, :pending_reason, :source,
-            :yt_match_requested_at, :yt_match_attempts, :yt_match_last_attempt, :yt_match_last_error
+            0, 0, :source
         )
         ON CONFLICT(yt_video_id) DO UPDATE SET
             ha_content_id=excluded.ha_content_id,
@@ -193,12 +123,6 @@ class VideoOperations:
             yt_duration=excluded.yt_duration,
             yt_url=excluded.yt_url,
             ha_content_hash=excluded.ha_content_hash,
-            yt_match_pending=excluded.yt_match_pending,
-            yt_match_requested_at=excluded.yt_match_requested_at,
-            yt_match_attempts=excluded.yt_match_attempts,
-            yt_match_last_attempt=excluded.yt_match_last_attempt,
-            yt_match_last_error=excluded.yt_match_last_error,
-            pending_reason=excluded.pending_reason,
             source=excluded.source;
         """
         with self._lock:
@@ -229,15 +153,10 @@ class VideoOperations:
                         (ts, yt_video_id),
                     )
                     if cur.rowcount == 0:
-                        self._conn.execute(
-                            """
-                            INSERT INTO video_ratings (
-                                yt_video_id, ha_title, yt_title, rating,
-                                date_added, date_last_played, play_count, rating_score, yt_match_pending
-                            )
-                            VALUES (?, 'Unknown', 'Unknown', 'none', ?, ?, 1, 0, 0)
-                            """,
-                            (yt_video_id, ts, ts),
+                        # v4.0.0: Don't auto-create videos - they should be matched by queue worker first
+                        logger.warning(
+                            f"Cannot record play for {yt_video_id} - video not found in video_ratings. "
+                            "Video should be matched by queue worker before recording plays."
                         )
             except sqlite3.DatabaseError as exc:
                 log_and_suppress(
@@ -309,19 +228,10 @@ class VideoOperations:
                                 (rating, yt_video_id),
                             )
                     else:
-                        # New video - set initial score based on rating
-                        initial_score = 1 if rating == 'like' else (-1 if rating == 'dislike' else 0)
-                        initial_score = initial_score if increment_counter else 0
-
-                        self._conn.execute(
-                            """
-                            INSERT INTO video_ratings (
-                                yt_video_id, ha_title, yt_title, rating,
-                                date_added, play_count, rating_score, yt_match_pending
-                            )
-                            VALUES (?, 'Unknown', 'Unknown', ?, ?, 1, ?, 0)
-                            """,
-                            (yt_video_id, rating, ts, initial_score),
+                        # v4.0.0: Don't auto-create videos - they should be matched by queue worker first
+                        logger.warning(
+                            f"Cannot record rating for {yt_video_id} - video not found in video_ratings. "
+                            "Video should be matched by queue worker before recording ratings."
                         )
             except sqlite3.DatabaseError as exc:
                 log_and_suppress(
@@ -350,7 +260,6 @@ class VideoOperations:
         query = """
             SELECT * FROM video_ratings
             WHERE ha_title = ?
-              AND yt_match_pending = 0
               AND (
                     (ha_duration IS NOT NULL AND ha_duration = ?)
                  OR (ha_duration IS NULL AND yt_duration IS NOT NULL AND yt_duration = ?)
@@ -377,7 +286,7 @@ class VideoOperations:
             cur = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE ha_content_hash = ? AND yt_match_pending = 0
+                WHERE ha_content_hash = ?
                 ORDER BY date_last_played DESC, date_added DESC
                 LIMIT 1
                 """,
@@ -407,8 +316,7 @@ class VideoOperations:
         # Single query with OR condition combining both lookup strategies
         query = """
             SELECT * FROM video_ratings
-            WHERE yt_match_pending = 0
-              AND (
+            WHERE (
                   ha_content_hash = ?
                   OR (
                       ha_title = ?
@@ -433,134 +341,39 @@ class VideoOperations:
 
     def get_pending_videos(self, limit: int = 50, reason_filter: Optional[str] = None) -> List[Dict]:
         """
-        Get pending videos for retry after quota recovery.
+        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
+        Kept for backward compatibility but returns empty list.
 
         Args:
-            limit: Maximum number of pending videos to return
-            reason_filter: Optional filter by pending_reason (e.g., 'quota_exceeded')
+            limit: Maximum number of pending videos to return (ignored)
+            reason_filter: Optional filter by pending_reason (ignored)
 
         Returns:
-            List of pending video records
+            Empty list (pending videos are in queue table now)
         """
-        query = """
-            SELECT * FROM video_ratings
-            WHERE yt_match_pending = 1
-        """
-        params = []
-
-        if reason_filter:
-            query += " AND pending_reason = ?"
-            params.append(reason_filter)
-
-        query += " ORDER BY date_added ASC LIMIT ?"
-        params.append(limit)
-
-        with self._lock:
-            cursor = self._conn.execute(query, tuple(params))
-            return [dict(row) for row in cursor.fetchall()]
+        logger.debug("get_pending_videos() called but is deprecated in v4.0.0 - returning empty list")
+        return []
 
     def resolve_pending_video(self, ha_content_id: str, youtube_data: Dict[str, Any]) -> None:
         """
-        Update pending video with YouTube data and mark as resolved.
-        If the yt_video_id already exists (duplicate), removes the pending entry instead.
+        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
+        Kept for backward compatibility but does nothing.
 
         Args:
-            ha_content_id: The placeholder ID (ha_hash:*)
-            youtube_data: YouTube video data to populate
+            ha_content_id: The placeholder ID (ignored)
+            youtube_data: YouTube video data (ignored)
         """
-        yt_video_id = youtube_data.get('yt_video_id')
-
-        with self._lock:
-            try:
-                # Check if this yt_video_id already exists
-                cursor = self._conn.execute(
-                    "SELECT COUNT(*) as count FROM video_ratings WHERE yt_video_id = ?",
-                    (yt_video_id,)
-                )
-                existing_count = cursor.fetchone()['count']
-
-                if existing_count > 0:
-                    # Video already exists - this pending entry is a duplicate
-                    # Delete it instead of trying to update (which would violate UNIQUE constraint)
-                    with self._conn:
-                        self._conn.execute(
-                            "DELETE FROM video_ratings WHERE ha_content_id = ? AND yt_match_pending = 1",
-                            (ha_content_id,)
-                        )
-                    from logger import logger
-                    logger.info(
-                        f"Removed duplicate pending entry {ha_content_id} - video {yt_video_id} already exists"
-                    )
-                else:
-                    # Normal case - update the pending entry with YouTube data
-                    with self._conn:
-                        self._conn.execute(
-                            """
-                            UPDATE video_ratings
-                            SET yt_video_id = ?,
-                                yt_title = ?,
-                                yt_channel = ?,
-                                yt_channel_id = ?,
-                                yt_description = ?,
-                                yt_published_at = ?,
-                                yt_category_id = ?,
-                                yt_live_broadcast = ?,
-                                yt_location = ?,
-                                yt_recording_date = ?,
-                                yt_duration = ?,
-                                yt_url = ?,
-                                yt_match_pending = 0,
-                                pending_reason = NULL
-                            WHERE ha_content_id = ? AND yt_match_pending = 1
-                            """,
-                            (
-                                yt_video_id,
-                                youtube_data.get('title'),
-                                youtube_data.get('channel'),
-                                youtube_data.get('channel_id'),
-                                youtube_data.get('description'),
-                                self._timestamp(youtube_data.get('published_at')),
-                                youtube_data.get('category_id'),
-                                youtube_data.get('live_broadcast'),
-                                youtube_data.get('location'),
-                                self._timestamp(youtube_data.get('recording_date')),
-                                youtube_data.get('duration'),
-                                youtube_data.get('url'),
-                                ha_content_id
-                            )
-                        )
-            except sqlite3.DatabaseError as exc:
-                log_and_suppress(
-                    exc,
-                    f"Failed to resolve pending video {ha_content_id}",
-                    level="error"
-                )
+        logger.debug(f"resolve_pending_video() called but is deprecated in v4.0.0 - ignoring")
 
     def mark_pending_not_found(self, ha_content_id: str) -> None:
         """
-        Mark pending video as not found (no YouTube match exists).
-        Updates pending_reason to 'not_found' but keeps yt_match_pending=1.
+        v4.0.0: DEPRECATED - Pending videos are now tracked in queue table, not video_ratings.
+        Kept for backward compatibility but does nothing.
 
         Args:
-            ha_content_id: The placeholder ID (ha_hash:*)
+            ha_content_id: The placeholder ID (ignored)
         """
-        with self._lock:
-            try:
-                with self._conn:
-                    self._conn.execute(
-                        """
-                        UPDATE video_ratings
-                        SET pending_reason = 'not_found'
-                        WHERE ha_content_id = ? AND yt_match_pending = 1
-                        """,
-                        (ha_content_id,)
-                    )
-            except sqlite3.DatabaseError as exc:
-                log_and_suppress(
-                    exc,
-                    f"Failed to mark pending video as not found {ha_content_id}",
-                    level="error"
-                )
+        logger.debug(f"mark_pending_not_found() called but is deprecated in v4.0.0 - ignoring")
 
     def cleanup_unknown_entries(self) -> Dict[str, int]:
         """
