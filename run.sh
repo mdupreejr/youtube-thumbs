@@ -203,8 +203,10 @@ bashio::log.info "Running startup health checks..."
 
 # Start the queue worker as a separate background process
 # This processes ratings and searches one at a time, respecting quota limits
+# v4.0.4: Logs now visible in HA addon log viewer (no file redirection)
+# Using process substitution to add [QUEUE] prefix while preserving correct PID
 bashio::log.info "Starting queue worker process..."
-python3 queue_worker.py >> /config/youtube_thumbs/queue_worker.log 2>&1 &
+python3 -u queue_worker.py > >(while IFS= read -r line; do bashio::log.info "[QUEUE] $line"; done) 2>&1 &
 QUEUE_WORKER_PID=$!
 bashio::log.info "Queue worker started (PID ${QUEUE_WORKER_PID})"
 
