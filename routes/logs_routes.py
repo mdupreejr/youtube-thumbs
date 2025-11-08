@@ -753,9 +753,30 @@ def _handle_recent_tab():
     """Handle recently added videos tab."""
     videos = _db.get_recently_added(limit=25)
 
+    # v4.0.33: Format videos with relative time for issue #68
+    formatted_videos = []
+    for video in videos:
+        # Format relative time for date_added
+        date_added = video.get('date_added')
+        time_ago = format_relative_time(date_added) if date_added else 'unknown'
+
+        formatted_videos.append({
+            'yt_video_id': video.get('yt_video_id'),
+            'ha_title': video.get('ha_title'),
+            'ha_artist': video.get('ha_artist'),
+            'yt_title': video.get('yt_title'),
+            'yt_channel': video.get('yt_channel'),
+            'yt_url': video.get('yt_url'),
+            'rating': video.get('rating'),
+            'play_count': video.get('play_count', 0),
+            'date_added': date_added,
+            'time_ago': time_ago,
+            'source': video.get('source')
+        })
+
     return {
-        'recent_videos': videos,
-        'total_count': len(videos),
+        'recent_videos': formatted_videos,
+        'total_count': len(formatted_videos),
         'total_pages': 0  # Recent tab doesn't use pagination
     }
 

@@ -376,10 +376,11 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            {# v4.0.33: Reordered columns for issue #68 - Date Added first #}
+                            <th style="width: 15%;">Date Added</th>
                             <th style="width: 25%;">Title</th>
                             <th style="width: 15%;">Artist</th>
                             <th style="width: 20%;">Channel</th>
-                            <th style="width: 15%;">Date Added</th>
                             <th style="width: 10%;">Rating</th>
                             <th style="width: 10%;">Plays</th>
                             <th style="width: 5%;">Link</th>
@@ -388,19 +389,16 @@
                     <tbody>
                         {% for video in recent_videos %}
                         <tr>
+                            {# v4.0.33: Show relative time (e.g., "2 minutes ago") #}
+                            <td style="white-space: nowrap; font-size: 0.85em;" title="{{ video.date_added or 'Unknown' }}">
+                                {{ video.time_ago or '-' }}
+                            </td>
                             <td>
                                 <span style="font-weight: 500;">{{ video.ha_title or video.yt_title or 'Unknown' }}</span>
                                 {# v4.0.0: Removed pending status display - pending videos no longer in video_ratings #}
                             </td>
                             <td>{{ video.ha_artist or '-' }}</td>
                             <td>{{ video.yt_channel or '-' }}</td>
-                            <td style="white-space: nowrap; font-size: 0.85em;">
-                                {% if video.date_added %}
-                                    {{ (video.date_added|string)[:10] }} {{ (video.date_added|string)[11:19] }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
                             <td>
                                 {% if video.rating == 'like' %}
                                     <span style="color: #10b981;">👍 Like</span>

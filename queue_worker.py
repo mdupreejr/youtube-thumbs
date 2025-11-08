@@ -291,6 +291,11 @@ def process_next_item(db, yt_api):
                     video_data = prepare_video_upsert(video, ha_media, source='queue_search')
                     db.upsert_video(video_data)
                     logger.info(f"  → Added video {video_id} to video_ratings table")
+
+                    # v4.0.33: Record play for newly matched videos (they were playing when search was queued)
+                    # This fixes issue #68 - newly added videos showing play_count=0
+                    db.record_play(video_id)
+                    logger.debug(f"  → Recorded play for {video_id} (play_count incremented)")
                 except Exception as e:
                     logger.error(f"  ✗ Failed to add video {video_id} to database: {e}")
                     db.mark_queue_item_failed(queue_id, f"Failed to add to database: {str(e)}")
