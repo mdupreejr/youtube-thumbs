@@ -105,12 +105,22 @@ class SongTracker:
 
             if existing:
                 # Song exists - increment play count
-                self._increment_play_count(existing['yt_video_id'], content_hash)
-                logger.info(f"Tracked play: '{title}' (play_count +1)")
+                yt_video_id = existing.get('yt_video_id', '')
+
+                # Check if this is an unmatched placeholder
+                if yt_video_id.startswith('unmatched_'):
+                    # Song tracked but never matched - queue search now
+                    self._queue_search_for_song(media, content_hash)
+                    logger.info(f"Queueing YouTube search for previously unmatched: '{title}'")
+                else:
+                    # Already matched - just increment play count
+                    self._increment_play_count(yt_video_id, content_hash)
+                    logger.info(f"Tracked play: '{title}' (play_count +1)")
             else:
-                # New song - add to database without YouTube match
+                # New song - add to database AND queue YouTube search immediately
                 self._add_unmatched_song(media, content_hash)
-                logger.info(f"New song tracked: '{title}' (no YouTube match yet)")
+                self._queue_search_for_song(media, content_hash)
+                logger.info(f"New song tracked: '{title}' - queued for YouTube search")
 
         except Exception as e:
             logger.error(f"Error checking/tracking song: {e}", exc_info=True)
@@ -226,3 +236,45 @@ class SongTracker:
 
         except Exception as e:
             logger.error(f"Failed to add unmatched song '{media.get('title')}': {e}")
+
+    def _queue_search_for_song(self, media: Dict[str, Any], content_hash: str):
+        """
+        Queue a YouTube search operation for this song.
+
+        Args:
+            media: Media info from Home Assistant
+            content_hash: Content hash for the song
+        """
+        try:
+            import json
+
+            # Build search payload
+            search_payload = {
+                'title': media.get('title'),
+                'artist': media.get('artist'),
+                'duration': media.get('duration'),
+                'app_name': media.get('app_name', 'YouTube'),
+                'media_content_id': media.get('media_content_id'),
+                'content_hash': content_hash
+            }
+
+            # Add to queue with priority=2 (searches have lower priority than ratings)
+            with self.db._lock:
+                self.db._conn.execute(
+                    """
+                    INSERT INTO queue (type, priority, status, payload, requested_at, attempts)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
+                    """,
+                    (
+                        'search',
+                        2,  # Search priority (ratings are 1)
+                        'pending',
+                        json.dumps(search_payload)
+                    )
+                )
+                self.db._conn.commit()
+
+            logger.debug(f"Queued search for: '{media.get('title')}'")
+
+        except Exception as e:
+            logger.error(f"Failed to queue search for '{media.get('title')}': {e}")
