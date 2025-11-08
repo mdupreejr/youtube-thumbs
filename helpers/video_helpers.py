@@ -34,6 +34,7 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
     return {
         'yt_video_id': yt_video_id,
         'ha_content_id': ha_content_id,
+        'ha_content_hash': ha_content_id,  # v4.0.65: CRITICAL FIX - ha_content_hash must be set for cache lookups to work!
         'ha_title': ha_title,
         'ha_artist': ha_artist,
         'ha_app_name': ha_media.get('app_name', 'YouTube'),
