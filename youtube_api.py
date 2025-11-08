@@ -129,7 +129,7 @@ class YouTubeAPI:
                 os.umask(old_umask)  # Restore original umask
 
         self.youtube = build('youtube', 'v3', credentials=creds)
-        logger.debug("YouTube API authenticated successfully")
+        logger.debug("YouTube API credentials loaded successfully")
     
     @staticmethod
     def _parse_duration(duration_str: str) -> int:

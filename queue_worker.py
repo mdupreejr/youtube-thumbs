@@ -391,7 +391,7 @@ def main():
 
     logger.info("Queue worker starting (1 item/min, ratings priority=1, searches priority=2)")
 
-    # Initialize database and YouTube API
+    # Initialize database
     db = get_database()
 
     # v4.0.30: Inject database into youtube_api for API call logging
@@ -402,6 +402,10 @@ def main():
     reset_count = db.reset_stale_processing_items()
     if reset_count > 0:
         logger.info(f"Crash recovery: Reset {reset_count} items from 'processing' to 'pending'")
+
+    # v4.0.40: Delay loading YouTube API until first use to avoid authentication on startup
+    # Only the main app should authenticate during startup checks
+    yt_api = None
 
     while running:
         try:
@@ -422,13 +426,16 @@ def main():
                 time.sleep(time_until_reset)
                 continue
 
-            # Get YouTube API instance (only if quota not exceeded)
-            try:
-                yt_api = get_youtube_api()
-            except Exception as e:
-                logger.error(f"Failed to get YouTube API: {e}")
-                time.sleep(60)
-                continue
+            # v4.0.40: Load YouTube API only when first needed (lazy initialization)
+            # This prevents authentication log on startup - only main app authenticates
+            if yt_api is None:
+                try:
+                    logger.debug("Loading YouTube API credentials for queue processing")
+                    yt_api = get_youtube_api()
+                except Exception as e:
+                    logger.error(f"Failed to get YouTube API: {e}")
+                    time.sleep(60)
+                    continue
 
             # Process next item from unified queue (automatically prioritized)
             result = process_next_item(db, yt_api)
