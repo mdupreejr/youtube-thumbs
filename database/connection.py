@@ -212,6 +212,9 @@ class DatabaseConnection:
                     # v4.0.46: Migrate existing search_results_cache to include all video fields
                     self._migrate_search_cache_columns()
 
+                    # v4.0.64: Migrate existing queue table to include api_response_data
+                    self._migrate_queue_api_response_column()
+
 
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
@@ -243,6 +246,21 @@ class DatabaseConnection:
 
         except Exception as e:
             logger.warning(f"Failed to migrate search_results_cache columns: {e}")
+
+    def _migrate_queue_api_response_column(self) -> None:
+        """Add api_response_data column to queue table for existing databases."""
+        try:
+            # Check if api_response_data column exists
+            cursor = self._conn.execute("PRAGMA table_info(queue)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+            if 'api_response_data' not in columns:
+                logger.info("Adding column api_response_data to queue table")
+                self._conn.execute("ALTER TABLE queue ADD COLUMN api_response_data TEXT")
+                self._conn.commit()
+
+        except Exception as e:
+            logger.warning(f"Failed to migrate queue api_response_data column: {e}")
 
 
     @staticmethod

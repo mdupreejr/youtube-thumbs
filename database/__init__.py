@@ -106,13 +106,13 @@ class Database:
         """Claim the next item from the unified queue (for queue worker)."""
         return self._queue_ops.claim_next()
 
-    def mark_queue_item_completed(self, queue_id):
+    def mark_queue_item_completed(self, queue_id, api_response_data=None):
         """Mark a queue item as completed."""
-        return self._queue_ops.mark_completed(queue_id)
+        return self._queue_ops.mark_completed(queue_id, api_response_data)
 
-    def mark_queue_item_failed(self, queue_id, error):
+    def mark_queue_item_failed(self, queue_id, error, api_response_data=None):
         """Mark a queue item as failed."""
-        return self._queue_ops.mark_failed(queue_id, error)
+        return self._queue_ops.mark_failed(queue_id, error, api_response_data)
 
     def reset_stale_processing_items(self):
         """Reset queue items stuck in 'processing' status (crash recovery)."""
