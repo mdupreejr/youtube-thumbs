@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from logger import logger
 from database import get_database
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
+from helpers.time_helpers import get_next_quota_reset_time
+from helpers.api_helpers import check_quota_recently_exceeded
 from quota_error import (
     QuotaExceededError,
     VideoNotFoundError,
@@ -41,119 +43,6 @@ def signal_handler(signum, frame):
             logger.info("PID file removed")
     except Exception as e:
         logger.warning(f"Failed to remove PID file: {e}")
-
-
-def get_last_quota_reset_time():
-    """
-    Calculate when quota last reset (midnight Pacific Time).
-    YouTube API quota resets at midnight Pacific Time (UTC-8 or UTC-7 during DST).
-
-    Returns:
-        datetime: The last quota reset time in UTC
-    """
-    from datetime import datetime, timedelta, timezone
-
-    # Get current time in UTC
-    now_utc = datetime.now(timezone.utc)
-
-    # Convert to Pacific Time (simplified: assume PST = UTC-8)
-    # TODO: Handle PST/PDT transition properly
-    pacific_offset = timedelta(hours=-8)
-    now_pacific = now_utc + pacific_offset
-
-    # Get midnight today in Pacific Time
-    midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Convert back to UTC
-    midnight_today_utc = midnight_today_pacific - pacific_offset
-
-    # If current time is before today's reset, use yesterday's reset
-    if now_utc < midnight_today_utc:
-        last_reset_utc = midnight_today_utc - timedelta(days=1)
-    else:
-        last_reset_utc = midnight_today_utc
-
-    return last_reset_utc
-
-
-def get_next_quota_reset_time():
-    """
-    Calculate when quota will next reset (midnight Pacific Time).
-
-    Returns:
-        datetime: The next quota reset time in UTC
-    """
-    from datetime import datetime, timedelta, timezone
-
-    last_reset = get_last_quota_reset_time()
-    next_reset = last_reset + timedelta(days=1)
-    return next_reset
-
-
-def check_quota_recently_exceeded(db):
-    """
-    Check if quota was exceeded since the last quota reset.
-    YouTube API quota resets at midnight Pacific Time, so any quota error
-    since the last reset means we should skip API calls until the next reset.
-
-    Returns:
-        bool: True if quota exceeded since last reset, False otherwise
-    """
-    try:
-        from datetime import datetime, timezone
-
-        with db._lock:
-            cursor = db._conn.execute(
-                """
-                SELECT timestamp, error_message
-                FROM api_call_log
-                WHERE success = 0
-                  AND (error_message LIKE '%quota%' OR error_message LIKE '%Quota%')
-                ORDER BY timestamp DESC
-                LIMIT 1
-                """,
-            )
-            row = cursor.fetchone()
-
-            if not row:
-                return False
-
-            last_quota_error = dict(row)
-            error_time_str = last_quota_error.get('timestamp')
-
-            if not error_time_str:
-                return False
-
-            # Parse timestamp
-            if isinstance(error_time_str, str):
-                error_dt = datetime.fromisoformat(error_time_str.replace('Z', '+00:00'))
-            else:
-                error_dt = error_time_str
-
-            # Ensure error_dt has timezone
-            if error_dt.tzinfo is None:
-                error_dt = error_dt.replace(tzinfo=timezone.utc)
-
-            # Get last quota reset time
-            last_reset = get_last_quota_reset_time()
-            next_reset = get_next_quota_reset_time()
-
-            # If quota error occurred AFTER last reset, quota is still exhausted
-            if error_dt > last_reset:
-                now = datetime.now(timezone.utc)
-                time_until_reset = next_reset - now
-                hours_until = int(time_until_reset.total_seconds() / 3600)
-                minutes_until = int((time_until_reset.total_seconds() % 3600) / 60)
-
-                logger.info(f"Quota exceeded since last reset - skipping API call")
-                logger.info(f"Quota will reset in {hours_until}h {minutes_until}m (midnight Pacific Time)")
-                return True
-
-            return False
-
-    except Exception as e:
-        logger.debug(f"Error checking quota status: {e}")
-        return False  # If we can't check, allow the attempt
 
 
 def process_next_item(db, yt_api):

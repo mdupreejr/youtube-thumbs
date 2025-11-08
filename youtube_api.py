@@ -500,11 +500,10 @@ class YouTubeAPI:
         Args:
             title: Video title to search for
             expected_duration: Expected duration in seconds (±2s tolerance)
-            artist: Artist name (kept for compatibility, not used)
+            artist: Artist/channel name (optional, improves accuracy for generic titles like "Flowers", "Electric")
             return_api_response: If True, return tuple of (candidates, api_debug_data)
 
-        Note: artist parameter is kept for compatibility but not used in search
-        since ha_artist is typically just "YouTube" (the platform), not the actual artist.
+        Note: v4.0.68+ now uses artist parameter to improve search accuracy for generic titles.
 
         Returns:
             If return_api_response=False: List of candidate videos or None
