@@ -462,8 +462,8 @@ def run_pending_migrations(db):
 
                 logger.info(f"✓ Migrated {queued_count} unmatched songs to queue")
 
-        # v4.0.73: Remove obsolete columns from video_ratings table
-        # Check if obsolete columns exist
+        # v4.0.74: Remove obsolete columns from video_ratings table
+        # SQLite 3.35.0+ supports DROP COLUMN - much simpler and safer!
         obsolete_cols = [
             'yt_match_pending', 'yt_match_requested_at', 'yt_match_attempts',
             'yt_match_last_attempt', 'yt_match_last_error',
@@ -472,6 +472,14 @@ def run_pending_migrations(db):
         ]
 
         with db._lock:
+            # Clean up any leftover video_ratings_new table from failed migration
+            cursor = db._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings_new'")
+            if cursor.fetchone():
+                logger.info("Cleaning up leftover video_ratings_new table...")
+                db._conn.execute("DROP TABLE video_ratings_new")
+                db._conn.commit()
+
+            # Check which obsolete columns exist
             cursor = db._conn.execute("PRAGMA table_info(video_ratings)")
             columns = {row[1] for row in cursor.fetchall()}
 
@@ -480,76 +488,11 @@ def run_pending_migrations(db):
         if existing_obsolete:
             logger.info(f"Found {len(existing_obsolete)} obsolete columns, removing...")
 
-            # Get row count for verification
+            # Drop each column individually (SQLite 3.35.0+)
             with db._lock:
-                cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
-                row_count = cursor.fetchone()['count']
-
-            # Create new table with clean schema, copy data, drop old, rename
-            with db._lock:
-                db._conn.execute("""
-                    CREATE TABLE video_ratings_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        yt_video_id TEXT NOT NULL UNIQUE,
-                        ha_content_id TEXT,
-                        ha_title TEXT NOT NULL,
-                        ha_artist TEXT,
-                        ha_app_name TEXT,
-                        yt_title TEXT NOT NULL,
-                        yt_channel TEXT,
-                        yt_channel_id TEXT,
-                        yt_description TEXT,
-                        yt_published_at TIMESTAMP,
-                        yt_category_id INTEGER,
-                        yt_live_broadcast TEXT,
-                        yt_location TEXT,
-                        yt_recording_date TIMESTAMP,
-                        ha_duration INTEGER,
-                        yt_duration INTEGER,
-                        yt_url TEXT NOT NULL,
-                        rating TEXT DEFAULT 'none',
-                        ha_content_hash TEXT,
-                        date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        date_last_played TIMESTAMP,
-                        play_count INTEGER DEFAULT 1,
-                        rating_score INTEGER DEFAULT 0,
-                        source TEXT DEFAULT 'ha_live'
-                    )
-                """)
-
-                db._conn.execute("""
-                    INSERT INTO video_ratings_new (
-                        id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
-                        yt_title, yt_channel, yt_channel_id, yt_description,
-                        yt_published_at, yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
-                        ha_duration, yt_duration, yt_url, rating, ha_content_hash,
-                        date_added, date_last_played, play_count, rating_score, source
-                    )
-                    SELECT
-                        id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
-                        yt_title, yt_channel, yt_channel_id, yt_description,
-                        yt_published_at, yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
-                        ha_duration, yt_duration, yt_url, rating, ha_content_hash,
-                        date_added, date_last_played, play_count, rating_score, source
-                    FROM video_ratings
-                """)
-
-                # Verify row count
-                cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings_new")
-                new_count = cursor.fetchone()['count']
-
-                if new_count != row_count:
-                    raise Exception(f"Row count mismatch! Old: {row_count}, New: {new_count}")
-
-                db._conn.execute("DROP TABLE video_ratings")
-                db._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
-
-                # Recreate indexes
-                db._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id)")
-                db._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title)")
-                db._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id)")
-                db._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id)")
-
+                for col in existing_obsolete:
+                    logger.debug(f"Dropping column: {col}")
+                    db._conn.execute(f"ALTER TABLE video_ratings DROP COLUMN {col}")
                 db._conn.commit()
 
             logger.info(f"✓ Removed {len(existing_obsolete)} obsolete columns from video_ratings")
