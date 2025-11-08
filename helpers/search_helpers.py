@@ -122,31 +122,31 @@ def search_and_match_video(
     if cached_result:
         logger.info(f"Opportunistic cache HIT: '{title}' → {cached_result['yt_video_id']} (saved 101 quota units!)")
         metrics.record_cache_hit('search_results')
-        # Return in same format as YouTube search results
+        # v4.0.46: Return ALL cached video fields, not just 5
         return {
             'yt_video_id': cached_result['yt_video_id'],
             'title': cached_result['yt_title'],
             'channel': cached_result['yt_channel'],
             'channel_id': cached_result['yt_channel_id'],
-            'duration': cached_result['yt_duration']
+            'duration': cached_result['yt_duration'],
+            'description': cached_result.get('yt_description'),
+            'published_at': cached_result.get('yt_published_at'),
+            'category_id': cached_result.get('yt_category_id'),
+            'live_broadcast': cached_result.get('yt_live_broadcast'),
+            'location': cached_result.get('yt_location'),
+            'recording_date': cached_result.get('yt_recording_date')
         }
 
     # v4.0.11: Removed should_skip_search() - not-found cache disabled, always search
     # Step 3: Search YouTube (with exact duration matching)
+    # v4.0.46: Caching now happens inside search_youtube_for_video (youtube_api.py)
+    #          to cache ALL fetched videos, not just duration-matched candidates
     candidates = search_youtube_for_video(yt_api, title, duration)
     if not candidates:
         # v4.0.11: No longer recording not-found - queue table tracks failed searches
         return None
 
-    # Step 5: Opportunistically cache ALL search results (not just the match!)
-    # This costs 0 extra API units and might help with future searches
-    try:
-        cached_count = db.cache_search_results(candidates, ttl_days=30)
-        logger.debug(f"Cached {cached_count} videos from search results for future lookups")
-    except Exception as exc:
-        logger.warning(f"Failed to cache search results: {exc}")
-
-    # Step 6: Select best match (just take first result)
+    # Step 4: Select best match (just take first result)
     video = select_best_match(candidates, title)
     if not video:
         # v4.0.11: No longer recording not-found - queue table tracks failed searches

@@ -40,12 +40,14 @@ class SearchCacheOperations:
                     if not yt_video_id:
                         continue
 
-                    # Insert or update cache entry
+                    # v4.0.46: Insert or update cache entry with ALL video fields
                     self._conn.execute(
                         """
                         INSERT OR REPLACE INTO search_results_cache
-                        (yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration, expires_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        (yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration,
+                         yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
+                         yt_location, yt_recording_date, expires_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             yt_video_id,
@@ -53,6 +55,12 @@ class SearchCacheOperations:
                             video.get('channel'),
                             video.get('channel_id'),
                             video.get('duration'),
+                            video.get('description'),
+                            video.get('published_at'),
+                            video.get('category_id'),
+                            video.get('live_broadcast'),
+                            video.get('location'),
+                            video.get('recording_date'),
                             expires_at
                         )
                     )
@@ -85,7 +93,9 @@ class SearchCacheOperations:
         with self._lock:
             cursor = self._conn.execute(
                 """
-                SELECT yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration
+                SELECT yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration,
+                       yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
+                       yt_location, yt_recording_date
                 FROM search_results_cache
                 WHERE yt_duration BETWEEN ? AND ?
                   AND expires_at > datetime('now')
@@ -119,7 +129,9 @@ class SearchCacheOperations:
         with self._lock:
             cursor = self._conn.execute(
                 """
-                SELECT yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration
+                SELECT yt_video_id, yt_title, yt_channel, yt_channel_id, yt_duration,
+                       yt_description, yt_published_at, yt_category_id, yt_live_broadcast,
+                       yt_location, yt_recording_date
                 FROM search_results_cache
                 WHERE yt_duration BETWEEN ? AND ?
                   AND yt_title LIKE ?

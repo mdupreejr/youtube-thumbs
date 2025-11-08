@@ -530,6 +530,7 @@ class YouTubeAPI:
             PHASE_1_LIMIT = 10  # High-confidence check
             PHASE_2_LIMIT = 25  # Extended search if needed
             candidates = []
+            all_fetched_videos = []  # v4.0.46: Track ALL videos fetched for caching
             videos_checked = 0
 
             def check_video(idx: int, video_id: str, phase: str) -> bool:
@@ -537,7 +538,7 @@ class YouTubeAPI:
                 Check a single video for duration match.
                 Returns True if match found (to stop early), False to continue.
                 """
-                nonlocal videos_checked, candidates
+                nonlocal videos_checked, candidates, all_fetched_videos
 
                 logger.debug(f"[{phase}] Checking video {idx+1}: {video_id}")
 
@@ -564,8 +565,14 @@ class YouTubeAPI:
 
                     videos_checked += 1
 
-                    # Process video and check for duration match
+                    # v4.0.46: Process ALL fetched videos for caching, regardless of duration match
                     for video in details.get('items', []):
+                        # First, get video info WITHOUT duration filtering for caching
+                        video_info_all = self._process_search_result(video, expected_duration=None)
+                        if video_info_all:
+                            all_fetched_videos.append(video_info_all)
+
+                        # Then check for duration match for candidates
                         video_info = self._process_search_result(video, expected_duration)
                         if video_info:
                             candidates.append(video_info)
@@ -661,6 +668,15 @@ class YouTubeAPI:
                     "Trimmed candidates to %s to minimize API comparisons",
                     self.MAX_CANDIDATES,
                 )
+
+            # v4.0.46: Cache ALL fetched videos, not just duration-matched candidates
+            # This ensures we don't waste the API quota we already spent
+            if _db and all_fetched_videos:
+                try:
+                    cached_count = _db.cache_search_results(all_fetched_videos, ttl_days=30)
+                    logger.info(f"Opportunistically cached {cached_count} videos from API queries (checked {videos_checked} videos, found {len(candidates)} matches)")
+                except Exception as exc:
+                    logger.warning(f"Failed to cache fetched videos: {exc}")
 
             logger.debug(f"Found {len(candidates)} duration-matched candidates")
             return candidates
