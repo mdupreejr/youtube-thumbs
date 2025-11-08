@@ -241,7 +241,8 @@
 
             try {
                 // SECURITY: Include CSRF token in POST request
-                const response = await fetch('{{ ingress_path }}/api/pending/retry?batch_size=1', {
+                // v4.0.2: Removed batch_size parameter - queue processes items individually
+                const response = await fetch('{{ ingress_path }}/api/pending/retry', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token() }}'

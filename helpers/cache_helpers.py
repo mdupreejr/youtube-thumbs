@@ -19,7 +19,7 @@ def build_video_result(video_data: Dict[str, Any], fallback_title: str) -> Dict[
 
     Note:
         location and recording_date may be None even for cached videos,
-        as batch_get_videos() does not fetch recordingDetails to save quota.
+        as individual video fetches may not include recordingDetails to save quota.
         Only search_video_globally() fetches these fields.
     """
     return {

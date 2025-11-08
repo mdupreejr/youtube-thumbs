@@ -19,7 +19,7 @@ from youtube_api import get_youtube_api, set_database as set_youtube_api_databas
 from database import get_database
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
-from constants import FALSE_VALUES, MAX_BATCH_SIZE, MEDIA_INACTIVITY_TIMEOUT
+from constants import FALSE_VALUES, MEDIA_INACTIVITY_TIMEOUT
 from helpers.video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
 from helpers.search_helpers import search_and_match_video

@@ -12,7 +12,6 @@ from helpers.response_helpers import error_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.request_helpers import get_real_ip
-from constants import MAX_BATCH_SIZE
 
 bp = Blueprint('rating', __name__)
 

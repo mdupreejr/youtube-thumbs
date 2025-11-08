@@ -40,7 +40,7 @@ bashio::log.info "sqlite_web binding: ${SQLITE_WEB_HOST}"
 
 export LOG_LEVEL=$(bashio::config 'log_level')
 export PENDING_VIDEO_RETRY_ENABLED=$(bashio::config 'pending_video_retry_enabled')
-export PENDING_VIDEO_RETRY_BATCH_SIZE=$(bashio::config 'pending_video_retry_batch_size')
+# v4.0.2: PENDING_VIDEO_RETRY_BATCH_SIZE removed - no batch processing in queue architecture
 
 # YouTube search configuration
 SEARCH_MAX_RESULTS_CONFIG=$(bashio::config 'search_max_results')
@@ -62,7 +62,7 @@ fi
 
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
-bashio::log.info "Pending retry: enabled=${PENDING_VIDEO_RETRY_ENABLED}, batch_size=${PENDING_VIDEO_RETRY_BATCH_SIZE}"
+bashio::log.info "Pending retry: enabled=${PENDING_VIDEO_RETRY_ENABLED}"
 
 # Check what files exist and where
 bashio::log.info "Checking for OAuth credentials in /config/youtube_thumbs (add-on config directory)..."

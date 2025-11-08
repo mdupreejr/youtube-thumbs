@@ -522,61 +522,63 @@ class YouTubeAPI:
 
             video_ids = [item['id']['videoId'] for score, item in scored_items]
 
-            # OPTIMIZATION: Batch duration checks to save API quota
-            # Check 5 videos at a time, stop early if we find a match
-            # Now checking the 5 BEST title matches first, not just first 5 results
-            # Maximum 30 videos checked (6 batches of 5)
-            BATCH_SIZE = 5
+            # v4.0.2: Check videos individually (no batch processing in queue architecture)
+            # Check BEST title matches first, stop early when match found
+            # Maximum 30 videos checked
             MAX_VIDEOS_TO_CHECK = 30
             candidates = []
             videos_checked = 0
 
-            for batch_start in range(0, min(len(video_ids), MAX_VIDEOS_TO_CHECK), BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, len(video_ids), MAX_VIDEOS_TO_CHECK)
-                batch_ids = video_ids[batch_start:batch_end]
+            for idx, video_id in enumerate(video_ids[:MAX_VIDEOS_TO_CHECK]):
+                logger.debug(f"Checking video {idx+1}/{min(len(video_ids), MAX_VIDEOS_TO_CHECK)}: {video_id}")
 
-                logger.debug(f"Checking batch {batch_start//BATCH_SIZE + 1}: videos {batch_start+1}-{batch_end}")
+                # Fetch details for this single video
+                try:
+                    details = self.youtube.videos().list(
+                        part='contentDetails,snippet,recordingDetails',
+                        id=video_id,
+                        fields=self.VIDEO_FIELDS,
+                    ).execute()
 
-                # Fetch details for this batch only
-                details = self.youtube.videos().list(
-                    part='contentDetails,snippet,recordingDetails',
-                    id=','.join(batch_ids),
-                    fields=self.VIDEO_FIELDS,
-                ).execute()
+                    # Track API usage (both old and new methods for compatibility)
+                    if _db:
+                        _db.record_api_call('videos.list', success=True, quota_cost=1)
+                        _db.log_api_call_detailed(
+                            api_method='videos.list',
+                            operation_type='get_video_details',
+                            query_params=f"id={video_id}",
+                            quota_cost=1,
+                            success=True,
+                            results_count=len(details.get('items', [])),
+                            context=f"video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"video {idx+1} of search for '{title}'"
+                        )
 
-                # Track API usage (both old and new methods for compatibility)
-                if _db:
-                    _db.record_api_call('videos.list', success=True, quota_cost=1)
-                    _db.log_api_call_detailed(
-                        api_method='videos.list',
-                        operation_type='get_video_details',
-                        query_params=f"ids={','.join(batch_ids[:3])}{'...' if len(batch_ids) > 3 else ''}",
-                        quota_cost=1,
-                        success=True,
-                        results_count=len(details.get('items', [])),
-                        context=f"batch {batch_start//BATCH_SIZE + 1} of search for '{title[:30]}...'" if len(title) > 30 else f"batch {batch_start//BATCH_SIZE + 1} of search for '{title}'"
-                    )
+                    videos_checked += 1
 
-                videos_checked += len(batch_ids)
+                    # Process video and check for duration match
+                    for video in details.get('items', []):
+                        video_info = self._process_search_result(video, expected_duration)
+                        if video_info:
+                            candidates.append(video_info)
 
-                # Process this batch and check for duration matches
-                batch_candidates = []
-                for video in details.get('items', []):
-                    video_info = self._process_search_result(video, expected_duration)
-                    if video_info:
-                        batch_candidates.append(video_info)
+                    # If we found a match, stop early (save quota)
+                    if candidates:
+                        logger.debug(f"Found {len(candidates)} match(es), stopping early (saved checking {len(video_ids[:MAX_VIDEOS_TO_CHECK]) - videos_checked} videos)")
+                        break
 
-                candidates.extend(batch_candidates)
+                    # If we have enough candidates, stop
+                    if len(candidates) >= self.MAX_CANDIDATES:
+                        logger.debug(f"Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
+                        break
 
-                # If we found matches in this batch, we can stop early
-                if batch_candidates:
-                    logger.debug(f"Found {len(batch_candidates)} match(es) in batch, stopping early (saved checking {len(video_ids) - videos_checked} videos)")
-                    break
-
-                # If we have enough candidates, stop
-                if len(candidates) >= self.MAX_CANDIDATES:
-                    logger.debug(f"Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
-                    break
+                except HttpError as e:
+                    # Handle quota errors by re-raising
+                    detail = self._quota_error_detail(e)
+                    if detail is not None:
+                        raise QuotaExceededError("YouTube quota exceeded")
+                    # Log and continue on other errors
+                    logger.warning(f"Error fetching video {video_id}: {e}")
+                    continue
 
             if not candidates and expected_duration:
                 logger.error(
@@ -679,118 +681,33 @@ class YouTubeAPI:
 
     def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        Fetch video details for multiple videos in a single API call.
-        YouTube API allows up to 50 video IDs per call.
+        v4.0.2: DEPRECATED - No batch processing in queue-based architecture.
 
-        Args:
-            video_ids: List of YouTube video IDs to fetch
+        This method is deprecated and will be removed in v5.0.0.
+        Use individual get_video_details() calls instead.
 
-        Returns:
-            Dict mapping video ID to video details (or None if not found)
+        Returns empty dict with warning.
         """
-        if not video_ids:
-            return {}
-
-        # YouTube API allows max 50 IDs per call
-        batch_size = 50
-        all_videos = {}
-
-        for i in range(0, len(video_ids), batch_size):
-            batch = video_ids[i:i + batch_size]
-            try:
-                logger.info(f"Fetching batch of {len(batch)} videos")
-
-                request = self.youtube.videos().list(
-                    part='snippet,contentDetails',
-                    id=','.join(batch)
-                )
-                response = request.execute()
-
-                # Track API usage
-                if _db:
-                    _db.record_api_call('videos.list', success=True, quota_cost=1)
-
-                # Process response
-                for item in response.get('items', []):
-                    video_id = item['id']
-                    snippet = item.get('snippet', {})
-                    content_details = item.get('contentDetails', {})
-
-                    all_videos[video_id] = {
-                        'yt_video_id': video_id,
-                        'yt_title': snippet.get('title'),
-                        'yt_channel': snippet.get('channelTitle'),
-                        'yt_channel_id': snippet.get('channelId'),
-                        'yt_description': snippet.get('description'),
-                        'yt_published_at': snippet.get('publishedAt'),
-                        'yt_category_id': snippet.get('categoryId'),
-                        'yt_live_broadcast': snippet.get('liveBroadcastContent'),
-                        'yt_duration': self._parse_duration(content_details.get('duration')),
-                        'yt_url': f"https://www.youtube.com/watch?v={video_id}",
-                        'exists': True
-                    }
-
-                # Mark videos not found in response
-                for vid in batch:
-                    if vid not in all_videos:
-                        all_videos[vid] = {'yt_video_id': vid, 'exists': False}
-
-                logger.info(f"Successfully fetched {len(response.get('items', []))} videos from batch of {len(batch)}")
-
-            except HttpError as e:
-                detail = self._quota_error_detail(e)
-                is_quota_error = detail is not None
-                if is_quota_error:
-                    # Raise exception - worker will catch and sleep for 1 hour
-                    raise QuotaExceededError("YouTube quota exceeded")
-                log_and_suppress(
-                    e,
-                    f"YouTube API error fetching batch of videos",
-                    level="error",
-                    log_traceback=not is_quota_error  # Skip traceback for quota errors
-                )
-                # Return partial results if we hit quota
-                break
-            except Exception as e:
-                log_and_suppress(
-                    e,
-                    f"Unexpected error fetching batch of videos",
-                    level="error"
-                )
-                # Continue with next batch on other errors
-                continue
-
-        return all_videos
+        logger.warning(
+            "batch_get_videos() is DEPRECATED (v4.0.2) - no batch logic in queue architecture. "
+            "Use individual get_video_details() calls instead. Returning empty dict."
+        )
+        return {}
 
     def batch_set_ratings(self, ratings: List[Tuple[str, str]]) -> Dict[str, bool]:
         """
-        Set ratings for multiple videos. Optimized with early exit on quota exhaustion.
+        v4.0.2: DEPRECATED - No batch processing in queue-based architecture.
 
-        Args:
-            ratings: List of (video_id, rating) tuples
+        This method is deprecated and will be removed in v5.0.0.
+        Queue worker processes one rating at a time.
 
-        Returns:
-            Dict mapping video ID to success status
+        Returns empty dict with warning.
         """
-        if not ratings:
-            return {}
-
-        results = {}
-
-        # Process ratings one by one - QuotaExceededError will propagate to caller
-        for idx, (video_id, rating) in enumerate(ratings):
-            try:
-                success = self.set_video_rating(video_id, rating)
-                results[video_id] = success
-            except QuotaExceededError:
-                # Quota exceeded - mark current and remaining as failed and re-raise
-                results[video_id] = False
-                # Mark only the remaining unprocessed items as failed
-                for remaining_vid, _ in ratings[idx + 1:]:
-                    results[remaining_vid] = False
-                raise
-
-        return results
+        logger.warning(
+            "batch_set_ratings() is DEPRECATED (v4.0.2) - no batch logic in queue architecture. "
+            "Queue worker handles ratings individually. Returning empty dict."
+        )
+        return {}
 
 # Create global instance (will be initialized when module is imported)
 yt_api = None
