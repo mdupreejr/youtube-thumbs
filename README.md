@@ -1,29 +1,46 @@
 # YouTube Thumbs - Home Assistant Add-on
 
-A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs playing on your AppleTV. Perfect for Lutron remote integration or any automation that needs to rate music.
+Rate YouTube videos (👍/👎) for songs playing on your AppleTV through Home Assistant. Perfect for Lutron Pico remote integration or any automation that needs to rate music.
 
 ## Features
 
-- 🎵 **Rate YouTube videos** via REST API based on currently playing content
-- ⚡ **Bulk Rating Interface** - Quickly rate up to 50 unrated songs at once
-- 🔍 **Smart matching** - Automatic YouTube video matching with caching
-- 📊 **Database Viewer** - Built-in sqlite_web interface
-- 🛡️ **Quota protection** - Queue-based processing with automatic quota recovery
-- 💾 **SQLite storage** - Local database with comprehensive metadata
+- 🎵 **Rate YouTube videos** - Like/dislike songs via REST API or Web UI
+- ⚡ **Bulk Rating Interface** - Rate multiple unrated songs at once
+- 🔍 **Smart video matching** - Automatic YouTube search with duration matching and caching
+- 📊 **Statistics & Analytics** - Track playback stats, most played songs, and rating distribution
+- 🛡️ **Quota protection** - Queue-based processing prevents quota exhaustion
+- 💾 **SQLite database** - Local storage with comprehensive metadata tracking
+- 📈 **API monitoring** - Detailed logging of all YouTube API calls and quota usage
 
 ## Quick Start
 
-See **[INSTALL.md](INSTALL.md)** for complete installation instructions including OAuth setup.
+See **[INSTALL.md](INSTALL.md)** for complete installation and OAuth setup instructions.
 
 ### Basic Steps
 
 1. Add this repository to Home Assistant
 2. Install "YouTube Thumbs Rating" add-on
 3. Copy `credentials.json` to `/addon_configs/XXXXXXXX_youtube_thumbs/`
-4. Configure media player entity
+4. Configure media player entity in add-on configuration
 5. Start the add-on
 
+**First run**: The add-on will automatically generate `token.json` and prompt you to authorize via the OAuth flow.
+
 ## Configuration
+
+### Add-on Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `media_player_entity` | (required) | Your AppleTV media player entity ID |
+| `log_level` | INFO | Logging verbosity (DEBUG, INFO, WARNING, ERROR) |
+| `sqlite_web_host` | 127.0.0.1 | Database viewer bind address |
+| `sqlite_web_port` | 8080 | Database viewer port |
+| `search_max_results` | 25 | Max YouTube search results to fetch |
+| `search_max_candidates` | 10 | Max duration-matched candidates to check |
+| `debug_endpoints_enabled` | false | Enable debug API endpoints |
+
+### Home Assistant Integration
 
 Add REST commands to your `configuration.yaml`:
 
@@ -40,125 +57,191 @@ rest_command:
     timeout: 30
 ```
 
-Then create automations to call these services. Example for Lutron remote:
+Create automations to call these services:
 
 ```yaml
 automation:
-  - alias: "Thumbs Up Button"
+  - alias: "Lutron Pico - Thumbs Up"
     trigger:
       - platform: device
-        device_id: your_device_id
+        device_id: your_pico_remote_id
         type: press
         subtype: button_1
     action:
       - service: rest_command.youtube_thumbs_up
+
+  - alias: "Lutron Pico - Thumbs Down"
+    trigger:
+      - platform: device
+        device_id: your_pico_remote_id
+        type: press
+        subtype: button_2
+    action:
+      - service: rest_command.youtube_thumbs_down
 ```
-
-### Addon Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `media_player_entity` | (required) | Media player entity ID |
-| `log_level` | INFO | Logging level |
-
-For all options, see config.json.
 
 ## Web Interface
 
-Access the web interface by clicking **OPEN WEB UI** in the addon page:
+Access via **OPEN WEB UI** button in the add-on page:
 
-- **System Tests** - Test connectivity and view system status
-- **Bulk Rating** - Rate multiple unrated songs quickly
-- **Statistics** - View playback stats and top songs
-- **Logs** - Browse activity logs
-- **Data Viewer** - Browse database (column selection, sorting, pagination)
-- **Database Viewer** - Full sqlite_web interface
+- **System Tests** - Health check with live status of Home Assistant, YouTube API, and database
+- **Bulk Rating** - Rate unrated songs with pagination
+- **Statistics** - Playback stats, rating distribution, most played videos, top channels
+- **Logs** - Browse activity logs, API calls, matches, and recent activity
+- **Data Viewer** - Browse database tables with sorting and filtering
+- **Database Admin** - Full sqlite_web interface for advanced queries
 
 ## How It Works
 
-1. Fetches current media from Home Assistant (YouTube content only)
-2. Checks SQLite cache for exact matches (content hash or title+duration)
-3. If no cache hit, searches YouTube with cleaned title
-4. Filters results by exact duration match
-5. Rates the best match on YouTube and stores in database
+### Rating Flow
 
-### Quota Protection
+1. **User triggers rating** (via REST API or Web UI)
+2. **Fetch current media** from Home Assistant
+3. **Check database cache** for exact match (content hash or title+duration)
+4. **If no cache hit**: Enqueue search operation
+5. **Queue worker processes**:
+   - Searches YouTube with cleaned title
+   - Filters by duration match (±2 seconds)
+   - Caches match for future lookups
+6. **Enqueue rating operation**
+7. **Queue worker rates** the video on YouTube
+8. **Update database** with rating and metadata
 
-- Queue pauses until YouTube API quota resets at midnight Pacific Time
-- HTTP endpoints return `503` during quota pause
-- Videos stored as "pending" during quota exhaustion
-- Automatic quota recovery detection and retry after midnight reset
-- See [ARCHITECTURE.md](ARCHITECTURE.md) for details
+### Queue Architecture
+
+**All YouTube API calls go through a single background queue worker:**
+
+- **Queue worker** - Separate process that processes 1 item per minute
+- **Priority system** - Ratings (priority 1) processed before searches (priority 2)
+- **Quota protection** - Automatically pauses until midnight PT when quota exceeded
+- **Crash recovery** - Resets stuck items on restart
+- **No threading** - Simple, reliable processing
+
+**Why this matters:** The queue prevents quota exhaustion by rate-limiting API calls and provides a central point for logging, monitoring, and quota management.
+
+## Quota Management
+
+YouTube Data API v3 has a daily quota of **10,000 units** that resets at **midnight Pacific Time**.
+
+### Quota Costs
+
+- Search: **100 units**
+- Get video details: **1 unit**
+- Rate video: **50 units**
+- Get rating: **1 unit**
+- Channel info (startup check): **1 unit**
+
+### When Quota is Exceeded
+
+1. Queue worker detects quota error
+2. Worker pauses until midnight Pacific Time
+3. New requests continue to queue but aren't processed
+4. Web UI shows quota exceeded status
+5. Automatic resume after quota resets
+
+**Check quota usage**: View API Calls page in web UI for detailed quota tracking.
 
 ## API Endpoints
 
 ### Rate Current Song
+
 - `POST /thumbs_up` - Rate currently playing song as like
 - `POST /thumbs_down` - Rate currently playing song as dislike
 
-### Direct Rating
-- `POST /api/rate/<video_id>/like` - Rate specific video as like
-- `POST /api/rate/<video_id>/dislike` - Rate specific video as dislike
+### Direct Video Rating
 
-### System
-- `GET /health` - Health check with quota stats
-- `GET /metrics` - Comprehensive metrics for monitoring
+- `POST /api/rate/<video_id>/like` - Rate specific YouTube video as like
+- `POST /api/rate/<video_id>/dislike` - Rate specific YouTube video as dislike
 
-### Bulk Rating
-- `GET /api/unrated?page=1` - Get paginated unrated songs
+### System Status
+
+- `GET /health` - Health check with detailed system stats
+- `GET /metrics` - Prometheus-compatible metrics
+
+### Data Access
+
+- `GET /api/unrated?page=1` - Paginated list of unrated songs
+- `GET /api/stats/summary` - Statistics summary
 
 For complete API documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Data Storage
+## Database Schema
 
 All data stored in `/config/youtube_thumbs/ratings.db`:
 
-- **video_ratings** - All matched videos with metadata, ratings, play counts, pending videos
-- **api_usage** - YouTube API call tracking
-- **api_call_log** - Detailed API call logs for debugging
-- **stats_cache** - Cached statistics for performance
-- **search_results_cache** - Cached search results (30 days)
+| Table | Purpose |
+|-------|---------|
+| `video_ratings` | All matched videos with metadata, ratings, and play counts |
+| `queue` | Unified queue for search and rating operations |
+| `api_call_log` | Detailed log of every YouTube API call with timestamps and quota costs |
+| `search_results_cache` | Cached YouTube search results (30 day TTL) |
+| `stats_cache` | Cached statistics for web UI performance |
 
-Access via the **Database Viewer** link in the web interface.
-
-For database schema details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+Access via **Database Admin** in the web interface or explore using the **Data Viewer** page.
 
 ## Troubleshooting
 
-### No videos being added
-- Check `/addon_configs/XXXXXXXX_youtube_thumbs/` for `credentials.json` and `token.pickle`
-- Restart addon after copying credentials
+### No videos being rated
+
+**Check credentials:**
+```bash
+# Verify files exist in addon_configs directory
+ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
+# Should show: credentials.json and token.json
+```
+
+**Check queue worker:**
+- Open add-on **Log** tab
+- Look for `[QUEUE]` prefixed messages
+- Worker should process 1 item per minute
 
 ### "No media currently playing"
-- Verify AppleTV is playing music
-- Check media player entity ID in configuration
 
-### OAuth/Credentials errors
+- Verify media player is playing YouTube content on AppleTV
+- Check `media_player_entity` in add-on configuration
+- Test entity in Home Assistant Developer Tools
+
+### OAuth/Authentication errors
+
 - Ensure `credentials.json` is from Google Cloud Console
-- YouTube Data API v3 must be enabled
+- Verify YouTube Data API v3 is enabled in your Google Cloud project
+- Delete `token.json` and restart to re-authenticate
 
-### Quota exceeded / 503 errors
-- Queue paused until midnight Pacific Time (when YouTube quota resets)
-- Wait for midnight reset or delete `/config/youtube_thumbs/quota_guard.json` (only if quota manually reset)
+### Quota exceeded
 
-### Test buttons not working
-- Rebuild the addon (Settings → Add-ons → 3 dots → Rebuild)
+- **Wait**: Quota automatically resets at midnight Pacific Time
+- **Check usage**: View API Calls page in web UI
+- **Optimize**: Reduce `search_max_results` in configuration
 
-**Check Logs**: Settings → Add-ons → YouTube Thumbs Rating → Log tab
+### Web UI shows errors
 
-## Documentation
+- Check add-on logs for stack traces
+- Try clearing browser cache
+- Rebuild add-on: Settings → Add-ons → YouTube Thumbs → ⋮ → Rebuild
 
-- **[INSTALL.md](INSTALL.md)** - Installation and OAuth setup
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical details, database schema, matching system, retry system
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history and updates
+**Always check logs first**: Settings → Add-ons → YouTube Thumbs Rating → Log
 
 ## Security
 
-- OAuth credentials stored in `/addon_configs/` (persistent)
-- Authentication via Supervisor token (automatic)
-- Rating API bound to `127.0.0.1` (localhost only)
-- Database viewer accessible through ingress only
-- ⚠️ Never share your `credentials.json` file
+- OAuth credentials stored in `/addon_configs/` (persistent across updates)
+- Authentication via Home Assistant Supervisor token (automatic)
+- Web UI accessible through Home Assistant ingress only
+- Database viewer bound to localhost by default
+- ⚠️ **Never share your `credentials.json` or `token.json` files**
+
+## Documentation
+
+- **[INSTALL.md](INSTALL.md)** - Detailed installation and OAuth setup guide
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture, database schema, and implementation details
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+
+## Contributing
+
+Issues and pull requests welcome! Please include:
+- Home Assistant version
+- Add-on version
+- Relevant log excerpts
+- Steps to reproduce
 
 ## License
 
