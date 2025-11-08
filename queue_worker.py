@@ -180,14 +180,23 @@ def process_next_item(db, yt_api):
             rating = payload['rating']
             logger.info(f"Processing rating: {video_id} as {rating}")
 
-            success = yt_api.set_video_rating(video_id, rating)
-            if success:
+            # Check current rating first to avoid unnecessary API calls
+            current_rating = yt_api.get_video_rating(video_id)
+            if current_rating == rating:
+                # Already rated with desired rating - mark as complete
+                logger.info(f"✓ Video {video_id} already rated as {rating} - marking complete")
                 db.record_rating(video_id, rating)
                 db.mark_queue_item_completed(queue_id)
-                logger.info(f"✓ Successfully rated {video_id} as {rating}")
             else:
-                db.mark_queue_item_failed(queue_id, "YouTube API returned False")
-                logger.warning(f"✗ YouTube API rejected rating for {video_id}")
+                # Needs rating - attempt the API call
+                success = yt_api.set_video_rating(video_id, rating)
+                if success:
+                    db.record_rating(video_id, rating)
+                    db.mark_queue_item_completed(queue_id)
+                    logger.info(f"✓ Successfully rated {video_id} as {rating}")
+                else:
+                    db.mark_queue_item_failed(queue_id, "YouTube API returned False")
+                    logger.warning(f"✗ YouTube API rejected rating for {video_id}")
 
         elif item_type == 'search':
             # Process search
