@@ -2,9 +2,6 @@ configuration:
   media_player_entity:
     name: Media player entity
     description: Entity ID of the Apple TV (or other player) to monitor, e.g. media_player.apple_tv.
-  port:
-    name: Rating API port
-    description: TCP port that Home Assistant automations call for /thumbs_up or /thumbs_down. Change only if 21812 conflicts with something else.
   sqlite_web_host:
     name: sqlite_web host
     description: Bind address for the sqlite_web UI. Keep 127.0.0.1 for local-only access; use 0.0.0.0 to expose the DB UI to your LAN.

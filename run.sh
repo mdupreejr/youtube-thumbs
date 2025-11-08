@@ -20,12 +20,8 @@ else
     bashio::log.warning "SUPERVISOR_TOKEN not available - authentication may fail"
 fi
 
-PORT_CONFIG=$(bashio::config 'port')
-if bashio::var.has_value "${PORT_CONFIG}"; then
-    export PORT="${PORT_CONFIG}"
-else
-    export PORT=21812
-fi
+# Port is fixed for ingress compatibility
+export PORT=21812
 
 # Bind to all interfaces so ingress and direct access work
 export HOST="0.0.0.0"
