@@ -278,8 +278,8 @@ class StatsOperations:
         Returns:
             Dictionary with all summary metrics
 
-        Note: total_videos and unique_channels only count successfully matched videos (yt_match_pending = 0),
-              but rating counts include ALL videos to accurately reflect user's rating history.
+        Note: v4.0.0+ All videos in video_ratings are matched (yt_video_id NOT NULL).
+              Rating counts accurately reflect user's rating history.
         """
         with self._lock:
             # Get matched video statistics
@@ -600,7 +600,8 @@ class StatsOperations:
         """
         with self._lock:
             # Build WHERE clauses dynamically
-            where_clauses = ["yt_match_pending = 0"]
+            # v4.0.0: All videos in video_ratings are matched, no need to filter on yt_match_pending
+            where_clauses = []
             params = []
 
             if filters.get('rating'):

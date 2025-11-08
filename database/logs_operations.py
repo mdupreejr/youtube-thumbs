@@ -271,9 +271,8 @@ class LogsOperations:
                     v.rating,
                     v.date_added,
                     COALESCE(agg.total_play_count, v.play_count) as play_count,
-                    v.source,
-                    v.yt_match_pending,
-                    v.pending_reason
+                    v.source
+                    -- v4.0.0: Removed yt_match_pending, pending_reason (schema fields removed)
                 FROM video_ratings v
                 LEFT JOIN (
                     SELECT

@@ -240,44 +240,23 @@ class Database:
 
     def cleanup_old_not_found(self, days: int = 2) -> int:
         """
-        Remove old not found entries from video_ratings.
-        Now operates on video_ratings table instead of separate not_found_searches table.
+        v4.0.0: DEPRECATED - Not found entries no longer stored in video_ratings.
+
+        OLD BEHAVIOR (pre-v4.0.0):
+        Removed old not found entries from video_ratings table where pending_reason='not_found'.
+
+        NEW BEHAVIOR (v4.0.0+):
+        Returns 0. Not found entries are tracked in queue table and automatically age out.
 
         Args:
-            days: Remove entries older than this many days
+            days: Remove entries older than this many days (ignored)
 
         Returns:
-            Number of entries removed
+            0 (no entries to remove)
         """
-        with self._lock:
-            try:
-                with self._conn:
-                    cur = self._conn.execute(
-                        """
-                        DELETE FROM video_ratings
-                        WHERE yt_video_id IS NULL
-                          AND pending_reason = 'not_found'
-                          AND datetime(yt_match_last_attempt, '+' || ? || ' days') < datetime('now')
-                        """,
-                        (days,)
-                    )
-                    deleted = cur.rowcount
-                    if deleted > 0:
-                        from logger import logger
-                        logger.info(
-                            "Cleaned up %d old not found entries (older than %d days)",
-                            deleted, days
-                        )
-                    return deleted
-            except Exception as exc:
-                from logger import logger
-                from error_handler import log_and_suppress
-                return log_and_suppress(
-                    exc,
-                    "Failed to cleanup not found cache",
-                    level="error",
-                    return_value=0
-                )
+        from logger import logger
+        logger.debug("cleanup_old_not_found() called but is DEPRECATED in v4.0.0 - returning 0")
+        return 0
 
     # Stats operations
     def get_total_videos(self) -> int:

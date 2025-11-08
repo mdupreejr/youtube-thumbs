@@ -618,7 +618,7 @@ def _handle_matches_tab(page, period_filter):
             'yt_published_at': yt_published_formatted,
             'duration_diff': duration_diff,
             'match_quality': match_quality,
-            'match_attempts': match.get('yt_match_attempts', 0),
+            # v4.0.0: Removed match_attempts (yt_match_attempts field removed from schema)
             'play_count': match.get('play_count', 0),
             'time_ago': time_ago,
             'timestamp': activity_timestamp,

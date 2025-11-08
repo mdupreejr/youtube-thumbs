@@ -171,7 +171,7 @@ def format_videos_for_display(videos: List[Dict], base_fields: List[str] = None,
     Args:
         videos: List of video dicts from database
         base_fields: Base fields to include from video dict (default: ['yt_video_id', 'play_count', 'date_last_played'])
-        additional_fields: Additional fields to copy from video dict (e.g., ['pending_reason', 'yt_match_attempts'])
+        additional_fields: Additional fields to copy from video dict (e.g., ['rating_score', 'source'])
 
     Returns:
         List of formatted video dicts with 'title' and 'artist' extracted
