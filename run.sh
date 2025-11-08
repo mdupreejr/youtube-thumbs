@@ -162,6 +162,27 @@ else
     bashio::log.info "Found existing SQLite database at ${DB_PATH}"
 fi
 
+# v4.0.69: Auto-retry failed queue items on startup
+# This retries items that failed due to temporary issues (quota, API errors, etc.)
+bashio::log.info "Checking for failed queue items to retry..."
+FAILED_COUNT=$(sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM queue WHERE status = 'failed';" 2>/dev/null || echo "0")
+
+if [ "${FAILED_COUNT}" -gt 0 ]; then
+    bashio::log.info "Found ${FAILED_COUNT} failed queue items - resetting to pending status"
+    RETRIED=$(sqlite3 "${DB_PATH}" <<'EOF'
+UPDATE queue
+SET status = 'pending',
+    last_error = NULL,
+    last_attempt = NULL
+WHERE status = 'failed';
+SELECT changes();
+EOF
+)
+    bashio::log.info "Reset ${RETRIED} failed items to pending - queue worker will retry them"
+else
+    bashio::log.info "No failed queue items to retry"
+fi
+
 SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
 SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 
