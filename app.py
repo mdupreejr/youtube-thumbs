@@ -601,12 +601,9 @@ except Exception as e:
     logger.error(traceback.format_exc())
     logger.warning("App starting despite health check failures - some features may not work")
 
-# Clear stats cache on startup to prevent stale data issues
-try:
-    logger.debug("Clearing stats cache...")
-    db.invalidate_stats_cache()
-except Exception as e:
-    logger.error(f"Failed to clear stats cache: {str(e)}")
+# v4.0.22: Removed redundant cache clear - stats refresher already does initial refresh
+# The stats refresher populates the cache immediately on startup (line 385)
+# Clearing it here would just empty what we just populated
 
 logger.info("YouTube Thumbs application initialized and ready")
 
