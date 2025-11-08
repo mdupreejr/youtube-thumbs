@@ -65,23 +65,33 @@ def check_home_assistant_api(ha_api) -> Tuple[bool, dict]:
 
 def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
     """Test YouTube API authentication and quota with detailed statistics."""
+    # Check queue worker status (even if API check fails, we want to report worker status)
+    import os
+    worker_running = False
+    worker_pid = None
+    pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
+    if os.path.exists(pid_file):
+        try:
+            with open(pid_file, 'r') as f:
+                worker_pid = int(f.read().strip())
+            os.kill(worker_pid, 0)  # Check if process exists
+            worker_running = True
+        except (OSError, ValueError):
+            pass
+
     try:
         if not yt_api or not yt_api.youtube:
-            return False, {'message': "Not authenticated", 'details': {}}
-
-        # Check queue worker status
-        import os
-        worker_running = False
-        worker_pid = None
-        pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
-        if os.path.exists(pid_file):
-            try:
-                with open(pid_file, 'r') as f:
-                    worker_pid = int(f.read().strip())
-                os.kill(worker_pid, 0)  # Check if process exists
-                worker_running = True
-            except (OSError, ValueError):
-                pass
+            # Return minimal details even on auth failure
+            details = {
+                'authenticated': False,
+                'worker_running': worker_running,
+                'worker_pid': worker_pid if worker_running else None,
+                'quota': {},
+                'queue': {},
+                'performance': {},
+                'api_stats': {}
+            }
+            return False, {'message': "Not authenticated", 'details': details}
 
         # Default details structure
         details = {
@@ -209,7 +219,17 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
         return True, {'message': message, 'details': details}
 
     except Exception as e:
-        return False, {'message': str(e), 'details': {}}
+        # Even on error, include worker status
+        details = {
+            'authenticated': False,
+            'worker_running': worker_running,
+            'worker_pid': worker_pid if worker_running else None,
+            'quota': {},
+            'queue': {},
+            'performance': {},
+            'api_stats': {}
+        }
+        return False, {'message': str(e), 'details': details}
 
 
 def check_database(db) -> Tuple[bool, str]:

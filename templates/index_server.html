@@ -173,7 +173,7 @@
                     <div class="test-status {{ 'status-success' if ha_test.success else 'status-error' }}">
                         {{ ha_test.message }}
                     </div>
-                    {% if ha_test.details %}
+                    {% if ha_test.details and ha_test.details.get('entity') %}
                     <div style="margin-top: 15px; font-size: 0.85em;">
                         <div style="margin: 5px 0;"><strong>Entity:</strong> {{ ha_test.details.entity }}</div>
                         <div style="margin: 5px 0;"><strong>State:</strong> {{ ha_test.details.state }}</div>
@@ -203,12 +203,12 @@
                     <div class="test-status {{ 'status-success' if yt_test.success else 'status-error' }}">
                         {{ yt_test.message }}
                     </div>
-                    {% if yt_test.details %}
+                    {% if yt_test.details and yt_test.details.get('worker_running') is not none %}
                     <div style="margin-top: 15px; font-size: 0.85em;">
                         <!-- Worker Status -->
                         <div style="margin: 8px 0; padding: 8px; background: {{ '#dcfce7' if yt_test.details.worker_running else '#fef2f2' }}; border-radius: 4px;">
                             <strong>Queue Worker:</strong> {{ 'Running' if yt_test.details.worker_running else 'NOT RUNNING' }}
-                            {% if yt_test.details.worker_pid %} (PID: {{ yt_test.details.worker_pid }}){% endif %}
+                            {% if yt_test.details.get('worker_pid') %} (PID: {{ yt_test.details.worker_pid }}){% endif %}
                         </div>
 
                         <!-- Quota Information -->
