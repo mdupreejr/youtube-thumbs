@@ -580,8 +580,9 @@ def index() -> str:
 
 # Database proxy routes - delegates to database_proxy module
 # Allow all HTTP methods (GET, POST, etc.) for sqlite_web functionality like exports
-app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
-app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler(), methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+# v4.0.6: Pass csrf instance to enable CSRF exemption for sqlite_web proxy
+app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(csrf), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler(csrf), methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
 
 # ============================================================================
 # APPLICATION INITIALIZATION

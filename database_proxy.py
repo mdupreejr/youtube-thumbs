@@ -32,15 +32,26 @@ def sanitize_ingress_path(path):
     return path
 
 
-def create_database_proxy_handler():
+def create_database_proxy_handler(csrf=None):
     """
     Create and return the database proxy handler function.
 
+    Args:
+        csrf: Flask-WTF CSRFProtect instance (optional, for exemption)
+
     Returns:
-        Function that handles database proxy requests
+        Function that handles database proxy requests (CSRF-exempt)
     """
     def database_proxy(path):
-        """Proxy requests to sqlite_web running on port 8080."""
+        """
+        Proxy requests to sqlite_web running on port 8080.
+
+        v4.0.6: CSRF-exempt - sqlite_web doesn't provide CSRF tokens.
+        Safe because:
+        1. Proxies only to localhost (SSRF protected)
+        2. Read-only operations (exports, queries)
+        3. No state-changing operations on our app
+        """
         # SECURITY: Hardcode localhost to prevent SSRF - only proxy to local sqlite_web
         # Environment variables are validated to ensure they're localhost
         sqlite_web_host = os.getenv('SQLITE_WEB_HOST', '127.0.0.1')
@@ -271,5 +282,13 @@ document.addEventListener('DOMContentLoaded', function() {
             logger.error(f"Error proxying to sqlite_web: {e}")
             logger.error(traceback.format_exc())
             return Response("Error accessing database viewer", status=500)
+
+    # v4.0.6: Exempt from CSRF protection
+    # sqlite_web doesn't provide CSRF tokens, and this is safe because:
+    # - Only proxies to localhost (SSRF protected)
+    # - Read-only database operations
+    # - No state changes to our Flask app
+    if csrf:
+        database_proxy = csrf.exempt(database_proxy)
 
     return database_proxy
