@@ -43,7 +43,23 @@ def handle_youtube_error(context: str, return_value: Any = None, api_method: str
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             try:
-                return func(self, *args, **kwargs)
+                result = func(self, *args, **kwargs)
+
+                # v4.0.26: Log successful API calls (not just failures!)
+                if api_method and _db:
+                    _db.record_api_call(api_method, success=True, quota_cost=quota_cost)
+                    _db.log_api_call_detailed(
+                        api_method=api_method,
+                        operation_type=context,
+                        query_params=str(args[0]) if args else None,
+                        quota_cost=quota_cost,
+                        success=True,
+                        error_message=None,
+                        results_count=None,
+                        context=context
+                    )
+
+                return result
 
             except YouTubeAPIError:
                 # Already converted to specific type - just re-raise
