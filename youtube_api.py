@@ -374,24 +374,22 @@ class YouTubeAPI:
 
         return phrases
 
-    def _build_smart_search_query(self, title: str, artist: str = None) -> str:
+    def _sanitize_title(self, title: str) -> str:
         """
-        Build a simple, effective search query for YouTube.
+        Sanitize and validate title for security.
 
-        Going back to the proven approach that worked successfully:
-        - Remove problematic characters (emojis, special chars)
-        - Keep it simple - let YouTube's search algorithm do the work
-        - Don't use restrictive operators like intitle:
-        - v4.0.68: Now includes artist/channel when provided (not "YouTube")
+        Handles Unicode normalization, type validation, and length checks to prevent
+        normalization attacks and DoS via excessive length.
 
         Args:
-            title: The song/video title to search for
-            artist: Artist/channel name (optional, improves accuracy for generic titles)
+            title: Raw title string from user input
 
         Returns:
-            Cleaned search query string
-        """
+            Sanitized title string
 
+        Raises:
+            ValueError: If title is not a string
+        """
         # SECURITY: Validate input type
         if not isinstance(title, str):
             raise ValueError("Title must be a string")
@@ -407,12 +405,21 @@ class YouTubeAPI:
             logger.warning(f"Title exceeds maximum length ({len(title)} > {MAX_TITLE_LENGTH}), truncating")
             title = title[:MAX_TITLE_LENGTH]
 
-        # Clean the title first
-        clean_title = title.strip()
+        return title.strip()
 
+    def _clean_title(self, title: str) -> str:
+        """
+        Remove noise from title: emojis, special chars, noise words, suffixes.
+
+        Args:
+            title: Title to clean
+
+        Returns:
+            Cleaned title string
+        """
         # v4.0.61: OPTIMIZED - Use regex for emoji/special char removal (2-3x faster)
         # Remove emojis first
-        clean_title = self.EMOJI_PATTERN.sub('', clean_title)
+        clean_title = self.EMOJI_PATTERN.sub('', title)
         # Remove special characters, keeping alphanumeric, spaces, hyphens, quotes
         clean_title = self.SPECIAL_CHARS_PATTERN.sub(' ', clean_title)
 
@@ -432,60 +439,122 @@ class YouTubeAPI:
 
         # Remove common suffixes that might interfere with search
         suffixes_to_remove = [
-            ' (Official Video)',
-            ' (Official Audio)',
-            ' (Lyric Video)',
-            ' (Lyrics Video)',
-            ' (Audio)',
-            ' (Video)',
-            ' [Official Video]',
-            ' [Official Audio]',
-            ' [Lyric Video]',
-            ' [Audio]',
-            ' [Video]',
+            ' (Official Video)', ' (Official Audio)', ' (Lyric Video)', ' (Lyrics Video)',
+            ' (Audio)', ' (Video)',
+            ' [Official Video]', ' [Official Audio]', ' [Lyric Video]', ' [Audio]', ' [Video]',
         ]
         for suffix in suffixes_to_remove:
             if clean_title.endswith(suffix):
                 clean_title = clean_title[:-len(suffix)].strip()
                 break
 
-        # v4.0.61: OPTIMIZED - Extracted to helper methods for lower complexity
-        # For very long titles (>100 chars), try to extract key terms
-        if len(clean_title) > 100:
-            important_parts = []
+        return clean_title
 
-            # Extract artist name if present
-            artist = self._extract_artist_name(clean_title)
-            if artist:
-                important_parts.append(artist)
+    def _simplify_long_title(self, title: str, original_title: str) -> str:
+        """
+        Extract key terms from overly long titles (>100 chars).
 
-            # Extract event phrases
-            event_phrases = self._extract_event_phrases(clean_title)
-            important_parts.extend(event_phrases)
+        For long titles, extract artist names and event phrases to create
+        a more focused search query.
 
-            if important_parts:
-                clean_title = ' '.join(important_parts)
-                logger.debug(f"Long title simplified: '{title[:80]}...' -> '{clean_title}'")
+        Args:
+            title: Cleaned title to simplify
+            original_title: Original title for logging purposes
 
-        # Clean up excessive whitespace
+        Returns:
+            Simplified title or original if no simplification needed
+        """
+        if len(title) <= 100:
+            return title
+
+        important_parts = []
+
+        # Extract artist name if present (e.g., "Artist's Song")
+        artist_name = self._extract_artist_name(title)
+        if artist_name:
+            important_parts.append(artist_name)
+
+        # Extract event phrases (e.g., "Super Bowl", "Live Performance")
+        event_phrases = self._extract_event_phrases(title)
+        important_parts.extend(event_phrases)
+
+        if important_parts:
+            simplified = ' '.join(important_parts)
+            logger.debug(f"Long title simplified: '{original_title[:80]}...' -> '{simplified}'")
+            return simplified
+
+        return title
+
+    def _enhance_with_artist(self, query: str, artist: str = None) -> str:
+        """
+        Enhance search query with artist name if useful.
+
+        Adds artist/channel name to the query to improve accuracy for generic titles
+        like "Flowers", "Electric", etc. Filters out generic artist names.
+
+        Args:
+            query: Base search query
+            artist: Artist/channel name (optional)
+
+        Returns:
+            Enhanced query with artist, or original query if artist not useful
+        """
+        if not artist or not isinstance(artist, str):
+            return query
+
+        artist_clean = artist.strip()
+        # Only use artist if it's not "YouTube" (the platform) or other generic values
+        if not artist_clean or artist_clean.lower() in ['youtube', 'unknown', '']:
+            return query
+
+        # Clean artist name (remove emojis, special chars)
+        artist_clean = self.EMOJI_PATTERN.sub('', artist_clean)
+        artist_clean = self.SPECIAL_CHARS_PATTERN.sub(' ', artist_clean)
+        artist_clean = ' '.join(artist_clean.split())  # Remove extra whitespace
+
+        if artist_clean:
+            enhanced_query = f"{query} {artist_clean}"
+            logger.debug(f"Enhanced search query with artist: '{enhanced_query}'")
+            return enhanced_query
+
+        return query
+
+    def _build_smart_search_query(self, title: str, artist: str = None) -> str:
+        """
+        Build a simple, effective search query for YouTube.
+
+        Orchestrates the query building process through focused helper methods:
+        1. Sanitize: Security validation and normalization
+        2. Clean: Remove noise (emojis, special chars, suffixes)
+        3. Simplify: Extract key terms from long titles
+        4. Enhance: Add artist if useful
+
+        v4.0.75: Refactored into smaller methods for maintainability.
+
+        Args:
+            title: The song/video title to search for
+            artist: Artist/channel name (optional, improves accuracy for generic titles)
+
+        Returns:
+            Cleaned search query string
+        """
+        # Step 1: Sanitize and validate (security)
+        original_title = title
+        title = self._sanitize_title(title)
+
+        # Step 2: Clean the title (remove noise)
+        clean_title = self._clean_title(title)
+
+        # Step 3: Simplify if too long (extract key terms)
+        clean_title = self._simplify_long_title(clean_title, original_title)
+
+        # Step 4: Clean up excessive whitespace
         search_query = ' '.join(clean_title.split())
 
-        # v4.0.68: Append artist/channel to search query if provided and useful
-        # This dramatically improves search accuracy for generic titles like "Flowers", "Electric", etc.
-        if artist and isinstance(artist, str):
-            artist_clean = artist.strip()
-            # Only use artist if it's not "YouTube" (the platform) or other generic values
-            if artist_clean and artist_clean.lower() not in ['youtube', 'unknown', '']:
-                # Clean artist name (remove emojis, special chars)
-                artist_clean = self.EMOJI_PATTERN.sub('', artist_clean)
-                artist_clean = self.SPECIAL_CHARS_PATTERN.sub(' ', artist_clean)
-                artist_clean = ' '.join(artist_clean.split())  # Remove extra whitespace
+        # Step 5: Enhance with artist if provided and useful
+        search_query = self._enhance_with_artist(search_query, artist)
 
-                if artist_clean:
-                    search_query = f"{search_query} {artist_clean}"
-                    logger.debug(f"Enhanced search query with artist: '{search_query}'")
-
-        # Validate and limit query length (YouTube limit is ~500 chars)
+        # Step 6: Final validation - limit query length (YouTube limit is ~500 chars)
         MAX_QUERY_LENGTH = 500
         if len(search_query) > MAX_QUERY_LENGTH:
             logger.warning("Search query too long (%d chars), truncating", len(search_query))
