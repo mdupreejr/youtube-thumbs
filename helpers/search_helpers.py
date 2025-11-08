@@ -35,6 +35,7 @@ def search_youtube_for_video(
     yt_api,
     title: str,
     duration: int,
+    artist: str = None,
     return_api_response: bool = False
 ):
     """
@@ -44,19 +45,20 @@ def search_youtube_for_video(
         yt_api: YouTube API instance
         title: Video title
         duration: Video duration (HA duration, YouTube will be +1)
+        artist: Artist/channel name (improves search accuracy for generic titles)
         return_api_response: If True, return tuple of (candidates, api_debug_data)
 
     Returns:
         If return_api_response=False: List of candidate videos or None if not found
         If return_api_response=True: Tuple of (candidates or None, api_debug_data dict)
     """
-    logger.debug(f"Searching YouTube: title='{title}', expected YT duration={duration + 1}s")
+    logger.debug(f"Searching YouTube: title='{title}', artist='{artist}', expected YT duration={duration + 1}s")
 
     if return_api_response:
-        result = yt_api.search_video_globally(title, duration, None, return_api_response=True)
+        result = yt_api.search_video_globally(title, duration, artist, return_api_response=True)
         candidates, api_debug_data = result if result else (None, {})
     else:
-        candidates = yt_api.search_video_globally(title, duration, None)
+        candidates = yt_api.search_video_globally(title, duration, artist)
         api_debug_data = None
 
     if not candidates:
@@ -155,11 +157,13 @@ def search_and_match_video(
     # Step 3: Search YouTube (with exact duration matching)
     # v4.0.46: Caching now happens inside search_youtube_for_video (youtube_api.py)
     #          to cache ALL fetched videos, not just duration-matched candidates
+    # v4.0.68: Pass artist to improve search accuracy for generic titles
+    artist = ha_media.get('artist')
     if return_api_response:
-        result = search_youtube_for_video(yt_api, title, duration, return_api_response=True)
+        result = search_youtube_for_video(yt_api, title, duration, artist, return_api_response=True)
         candidates, api_debug_data = result if result else (None, {})
     else:
-        candidates = search_youtube_for_video(yt_api, title, duration)
+        candidates = search_youtube_for_video(yt_api, title, duration, artist)
         api_debug_data = None
 
     if not candidates:

@@ -374,7 +374,7 @@ class YouTubeAPI:
 
         return phrases
 
-    def _build_smart_search_query(self, title: str) -> str:
+    def _build_smart_search_query(self, title: str, artist: str = None) -> str:
         """
         Build a simple, effective search query for YouTube.
 
@@ -382,10 +382,11 @@ class YouTubeAPI:
         - Remove problematic characters (emojis, special chars)
         - Keep it simple - let YouTube's search algorithm do the work
         - Don't use restrictive operators like intitle:
-        - Don't use ha_artist since it's just "YouTube" (the platform)
+        - v4.0.68: Now includes artist/channel when provided (not "YouTube")
 
         Args:
             title: The song/video title to search for
+            artist: Artist/channel name (optional, improves accuracy for generic titles)
 
         Returns:
             Cleaned search query string
@@ -469,6 +470,21 @@ class YouTubeAPI:
         # Clean up excessive whitespace
         search_query = ' '.join(clean_title.split())
 
+        # v4.0.68: Append artist/channel to search query if provided and useful
+        # This dramatically improves search accuracy for generic titles like "Flowers", "Electric", etc.
+        if artist and isinstance(artist, str):
+            artist_clean = artist.strip()
+            # Only use artist if it's not "YouTube" (the platform) or other generic values
+            if artist_clean and artist_clean.lower() not in ['youtube', 'unknown', '']:
+                # Clean artist name (remove emojis, special chars)
+                artist_clean = self.EMOJI_PATTERN.sub('', artist_clean)
+                artist_clean = self.SPECIAL_CHARS_PATTERN.sub(' ', artist_clean)
+                artist_clean = ' '.join(artist_clean.split())  # Remove extra whitespace
+
+                if artist_clean:
+                    search_query = f"{search_query} {artist_clean}"
+                    logger.debug(f"Enhanced search query with artist: '{search_query}'")
+
         # Validate and limit query length (YouTube limit is ~500 chars)
         MAX_QUERY_LENGTH = 500
         if len(search_query) > MAX_QUERY_LENGTH:
@@ -503,9 +519,10 @@ class YouTubeAPI:
         }
 
         try:
-            # Build search query (cleaned and simplified) - don't use artist since it's just "YouTube"
-            search_query = self._build_smart_search_query(title)
-            logger.debug(f"YouTube Search: Original='{title}' | Cleaned query='{search_query}'")
+            # Build search query (cleaned and simplified)
+            # v4.0.68: Now includes artist when provided (improves accuracy for generic titles)
+            search_query = self._build_smart_search_query(title, artist)
+            logger.debug(f"YouTube Search: Original='{title}' | Artist='{artist}' | Query='{search_query}'")
 
             api_debug_data['search_query'] = search_query
 
