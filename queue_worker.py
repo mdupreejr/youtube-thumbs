@@ -166,6 +166,9 @@ def process_next_item(db, yt_api):
         'quota': Quota exceeded during processing
         'quota_recent': Quota exceeded recently (no attempt made)
     """
+    # v4.0.5: Enhanced DEBUG logging for complete queue visibility
+    logger.debug("Checking queue for next item...")
+
     # Check if quota was exceeded since last reset (midnight Pacific)
     if check_quota_recently_exceeded(db):
         logger.debug("Skipping queue processing - quota exceeded since last reset")
@@ -174,11 +177,17 @@ def process_next_item(db, yt_api):
     # Claim next item from unified queue
     item = db.claim_next_queue_item()
     if not item:
+        logger.debug("Queue is empty - no items to process")
         return 'empty'
 
     queue_id = item['id']
     item_type = item['type']
     payload = item['payload']
+    priority = item.get('priority', 'unknown')
+
+    # v4.0.5: Log detailed queue item info at DEBUG level
+    logger.debug(f"Claimed queue item #{queue_id} | Type: {item_type} | Priority: {priority}")
+    logger.debug(f"Payload: {payload}")
 
     try:
         if item_type == 'rating':
@@ -196,6 +205,7 @@ def process_next_item(db, yt_api):
                     logger.info(f"✓ Video {video_id} already rated as {rating} - marking complete")
                     db.record_rating(video_id, rating)
                     db.mark_queue_item_completed(queue_id)
+                    logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
                 else:
                     # Needs rating - attempt the API call
                     success = yt_api.set_video_rating(video_id, rating)
@@ -203,11 +213,13 @@ def process_next_item(db, yt_api):
                         db.record_rating(video_id, rating)
                         db.mark_queue_item_completed(queue_id)
                         logger.info(f"✓ Successfully rated {video_id} as {rating}")
+                        logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
                     else:
                         # API returned False (unexpected - should raise exception instead)
                         error_msg = "YouTube API returned False (unexpected)"
                         logger.error(f"✗ {error_msg} for {video_id}")
                         db.mark_queue_item_failed(queue_id, error_msg)
+                        logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
 
             except QuotaExceededError:
                 # Re-raise quota errors to outer handler (will sleep until midnight)
@@ -218,6 +230,7 @@ def process_next_item(db, yt_api):
                 error_msg = f"Video not found: {video_id}"
                 logger.warning(f"✗ {error_msg} - marking as permanently failed")
                 db.mark_queue_item_failed(queue_id, error_msg)
+                logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
                 # Don't return quota error - continue processing
 
             except AuthenticationError as e:
@@ -226,6 +239,7 @@ def process_next_item(db, yt_api):
                 logger.error(f"CRITICAL: {error_msg}")
                 logger.error("Stopping queue worker - fix authentication before restarting")
                 db.mark_queue_item_failed(queue_id, error_msg)
+                logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
                 # Re-raise to stop the worker
                 raise
 
@@ -234,6 +248,7 @@ def process_next_item(db, yt_api):
                 error_msg = f"Network error: {str(e)}"
                 logger.warning(f"✗ {error_msg} for {video_id} - will retry")
                 db.mark_queue_item_failed(queue_id, error_msg)
+                logger.debug(f"Marked queue item #{queue_id} as FAILED (will retry): {error_msg}")
                 # Continue processing other items
 
             except InvalidRequestError as e:
@@ -241,6 +256,7 @@ def process_next_item(db, yt_api):
                 error_msg = f"Invalid request: {str(e)}"
                 logger.error(f"✗ {error_msg} for {video_id} - marking as permanently failed")
                 db.mark_queue_item_failed(queue_id, error_msg)
+                logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
                 # This indicates a bug - we should see this in logs
 
             except YouTubeAPIError as e:
@@ -248,6 +264,7 @@ def process_next_item(db, yt_api):
                 error_msg = f"YouTube API error: {str(e)}"
                 logger.error(f"✗ {error_msg} for {video_id}")
                 db.mark_queue_item_failed(queue_id, error_msg)
+                logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
 
         elif item_type == 'search':
             # Process search
@@ -289,15 +306,19 @@ def process_next_item(db, yt_api):
                 if callback_rating:
                     db.enqueue_rating(video_id, callback_rating)
                     logger.info(f"  → Enqueued {callback_rating} rating for {video_id}")
+                    logger.debug(f"Added rating to queue for {video_id}")
 
                 db.mark_queue_item_completed(queue_id)
+                logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
             else:
                 db.mark_queue_item_failed(queue_id, "No matching video found")
                 logger.warning(f"✗ No video found for '{title}'")
+                logger.debug(f"Marked queue item #{queue_id} as FAILED: No matching video found")
 
         else:
             logger.error(f"Unknown queue item type: {item_type}")
             db.mark_queue_item_failed(queue_id, f"Unknown item type: {item_type}")
+            logger.debug(f"Marked queue item #{queue_id} as FAILED: Unknown type")
 
         return 'success'
 
@@ -306,6 +327,7 @@ def process_next_item(db, yt_api):
         error_msg = "Quota exceeded - will retry when quota resets"
         db.mark_queue_item_failed(queue_id, error_msg)
         logger.warning(f"YouTube quota exceeded during processing - will sleep until midnight Pacific")
+        logger.debug(f"Marked queue item #{queue_id} as FAILED (quota): {error_msg}")
         return 'quota'
 
     except AuthenticationError as e:
@@ -314,6 +336,7 @@ def process_next_item(db, yt_api):
         db.mark_queue_item_failed(queue_id, str(e))
         logger.error(error_msg)
         logger.error("Stopping queue worker - fix authentication before restarting")
+        logger.debug(f"Marked queue item #{queue_id} as FAILED (auth): {error_msg}")
         # Re-raise to stop worker
         raise
 
@@ -324,6 +347,7 @@ def process_next_item(db, yt_api):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         db.mark_queue_item_failed(queue_id, str(e))
+        logger.debug(f"Marked queue item #{queue_id} as FAILED (unexpected): {str(e)}")
         return 'success'  # Continue processing other items
 
 
