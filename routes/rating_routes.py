@@ -313,7 +313,11 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
                 'score_incremented': True
             })
 
-        # Queue rating for background worker (no immediate submission)
+        # Record rating locally immediately so it disappears from unrated list
+        # The queued YouTube API call will sync this rating to YouTube later
+        _db.record_rating(video_id, rating_type)
+
+        # Queue rating for background worker (YouTube API sync happens later)
         result = enqueue_rating_unified(video_id, rating_type, title)
         return jsonify(result)
 

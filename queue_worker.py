@@ -390,10 +390,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    logger.info("Queue worker starting (UNIFIED QUEUE MODE: 1 item per minute)")
-    logger.info("This is a standalone process, not a thread")
-    logger.info("ONLY ONE queue worker runs - enforced by PID lock")
-    logger.info("Processing from unified queue (ratings priority=1, searches priority=2)")
+    logger.info("Queue worker starting (1 item/min, ratings priority=1, searches priority=2)")
 
     # Initialize database and YouTube API
     db = get_database()
