@@ -16,6 +16,7 @@ from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
 from stats_refresher import StatsRefresher
+from song_tracker import SongTracker
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
 from constants import FALSE_VALUES
 from helpers.video_helpers import is_youtube_content, get_video_title, get_video_artist
@@ -380,6 +381,20 @@ logger.debug("Starting stats refresher...")
 stats_refresher.start()
 atexit.register(stats_refresher.stop)
 logger.debug("Stats refresher started successfully")
+
+# Start song tracker background task (polls HA every 30 seconds)
+song_tracking_enabled = os.environ.get('SONG_TRACKING_ENABLED', 'true').lower() not in FALSE_VALUES
+song_tracking_interval = int(os.environ.get('SONG_TRACKING_POLL_INTERVAL', '30'))
+
+if song_tracking_enabled:
+    logger.debug(f"Initializing song tracker (poll interval: {song_tracking_interval}s)...")
+    song_tracker = SongTracker(ha_api=ha_api, db=db, poll_interval=song_tracking_interval)
+    logger.debug("Starting song tracker...")
+    song_tracker.start()
+    atexit.register(song_tracker.stop)
+    logger.info(f"Song tracker started (polling every {song_tracking_interval}s)")
+else:
+    logger.info("Song tracker disabled (song_tracking_enabled=false)")
 
 # NOTE: Queue worker runs as a separate process (queue_worker.py), not a thread
 # This eliminates threading complexity and ensures only ONE worker processes the queue
