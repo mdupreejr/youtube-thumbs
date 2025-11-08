@@ -225,8 +225,10 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 
 - OAuth credentials stored in `/addon_configs/` (persistent across updates)
 - Authentication via Home Assistant Supervisor token (automatic)
-- Web UI accessible through Home Assistant ingress only
-- Database viewer bound to localhost by default
+- Uses host networking (`host_network: true`) for seamless HA integration
+- API bound to `0.0.0.0:21812` (accessible via `localhost:21812` from Home Assistant)
+- Web UI accessible through Home Assistant ingress proxy
+- Database viewer bound to `127.0.0.1` by default (localhost only)
 - ⚠️ **Never share your `credentials.json` or `token.json` files**
 
 ## Documentation
