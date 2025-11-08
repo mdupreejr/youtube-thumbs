@@ -289,17 +289,11 @@ jobs:
           # Stage all changes
           git add .
 
-          # Create commit message
-          COMMIT_MSG="v${NEW_VERSION}: ${ISSUE_TITLE}
-
-Changes made by Claude Code to address issue #${ISSUE_NUMBER}
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
           # Commit changes
-          git commit -m "$COMMIT_MSG"
+          git commit -m "v${NEW_VERSION}: ${ISSUE_TITLE}" \
+            -m "Changes made by Claude Code to address issue #${ISSUE_NUMBER}" \
+            -m "🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
+            -m "Co-Authored-By: Claude <noreply@anthropic.com>"
 
           # Push branch
           echo "Pushing branch to origin..."
@@ -307,18 +301,20 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
           # Create PR
           echo "Creating pull request..."
+          PR_BODY="Fixes #${ISSUE_NUMBER}
+
+          ## Changes
+          Claude Code made changes to address this issue.
+
+          See commit for details.
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+
           PR_URL=$(gh pr create \
             --base master \
             --head "$BRANCH_NAME" \
             --title "v${NEW_VERSION}: ${ISSUE_TITLE}" \
-            --body "Fixes #${ISSUE_NUMBER}
-
-## Changes
-Claude Code made changes to address this issue.
-
-See commit for details.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
+            --body "$PR_BODY" \
             --reviewer @me)
 
           # Extract PR number from URL
