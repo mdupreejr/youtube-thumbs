@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any, List
 
 from .connection import DatabaseConnection, DEFAULT_DB_PATH
 from .video_operations import VideoOperations
-from .pending_operations import PendingOperations
 from .stats_operations import StatsOperations
 from .api_usage_operations import APIUsageOperations
 from .stats_cache_operations import StatsCacheOperations
@@ -36,7 +35,6 @@ class Database:
 
         # Initialize operation modules
         self._video_ops = VideoOperations(self._connection)
-        self._pending_ops = PendingOperations(self._connection, self._video_ops)
         self._stats_ops = StatsOperations(self._connection)
         self._api_usage_ops = APIUsageOperations(self._conn, self._lock)
         self._stats_cache_ops = StatsCacheOperations(self._conn, self._lock)
@@ -91,10 +89,6 @@ class Database:
 
     def mark_pending_not_found(self, ha_content_id: str):
         return self._video_ops.mark_pending_not_found(ha_content_id)
-
-    # Pending operations
-    def upsert_pending_media(self, media, reason: str = 'quota_exceeded'):
-        return self._pending_ops.upsert_pending_media(media, reason)
 
     # ========================================================================
     # UNIFIED QUEUE OPERATIONS (NEW - routes to unified queue)
