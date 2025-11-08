@@ -123,8 +123,9 @@ def api_calls_log():
             else:
                 context_text = '-'
 
+            formatted_timestamp = format_absolute_timestamp(log.get('timestamp'))
             cells = [
-                TableCell(format_absolute_timestamp(log.get('timestamp')), format_time_ago(format_absolute_timestamp(log.get('timestamp')))),
+                TableCell(formatted_timestamp, format_time_ago(formatted_timestamp)),
                 TableCell(log.get('api_method', ''), method_html),
                 TableCell(log.get('operation_type') or '-'),
                 TableCell(query_text if query_text else '-'),

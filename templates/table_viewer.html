@@ -69,7 +69,7 @@
                     {% for stat in summary_stats.main_stats %}
                     <div class="stat-card">
                         <div class="stat-label">{{ stat.label }}</div>
-                        <div class="stat-value" style="{{ stat.style if stat.style else '' }}">{{ stat.value }}</div>
+                        <div class="stat-value" {% if stat.style %}style="{{ stat.style }}"{% endif %}>{{ stat.value }}</div>
                     </div>
                     {% endfor %}
                 </div>
@@ -230,9 +230,9 @@
     </div>
 
     <!-- Modal for detailed views -->
-    <div id="detailModal" class="modal" style="display: none;">
+    <div id="detailModal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content" style="max-width: 700px;">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <button type="button" class="close" onclick="closeModal()" aria-label="Close">&times;</button>
             <h2 id="modalTitle">Details</h2>
             <div id="modalBody" style="margin-top: 20px;">
                 <p style="text-align: center; color: #64748b;">Loading...</p>
@@ -283,11 +283,17 @@
             modalTitle.textContent = '{{ page_config.modal_title or "Details" }}';
 
             try {
-                const response = await fetch('{{ ingress_path }}{{ page_config.modal_api_url }}'.replace('{id}', rowId));
+                const response = await fetch('{{ ingress_path }}{{ page_config.modal_api_url }}'.replace('{id}', encodeURIComponent(rowId)));
                 const result = await response.json();
 
                 if (!result.success) {
-                    modalBody.innerHTML = `<p style="color: #ef4444;">Error: ${result.error}</p>`;
+                    // Safely display error message to prevent XSS
+                    modalBody.textContent = "";
+                    const errorP = document.createElement("p");
+                    errorP.style.color = "#ef4444";
+                    errorP.textContent = "Error: " + result.error;
+                    errorP.style.textAlign = "center";
+                    modalBody.appendChild(errorP);
                     return;
                 }
 
@@ -302,7 +308,11 @@
                 modalBody.innerHTML = formatterFn(result.data);
 
             } catch (error) {
-                modalBody.innerHTML = `<p style="color: #ef4444;">Error loading details: ${error.message}</p>`;
+                const errorP = document.createElement('p');
+                errorP.style.color = '#ef4444';
+                errorP.textContent = `Error loading details: ${error.message}`;
+                modalBody.innerHTML = '';
+                modalBody.appendChild(errorP);
             }
         }
         {% endif %}

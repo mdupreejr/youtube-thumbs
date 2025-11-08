@@ -5,7 +5,7 @@ Provides utilities to format data for the table_viewer.html template.
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+import html
 
 
 class TableColumn:
@@ -244,10 +244,16 @@ def create_stats_page_config(rating_type: str, ingress_path: str) -> PageConfig:
 def format_youtube_link(video_id: str, title: str, icon: bool = True) -> str:
     """Format a YouTube link with optional icon."""
     if not video_id:
-        return title or 'Unknown'
+        return html.escape(title or 'Unknown')
     
+    # Validate video_id format (basic YouTube ID validation)
+    if not isinstance(video_id, str) or not video_id.replace('-', '').replace('_', '').isalnum():
+        return html.escape(title or 'Unknown')
+    
+    escaped_video_id = html.escape(video_id)
+    escaped_title = html.escape(title or video_id)
     icon_html = ' 🔗' if icon else ''
-    return f'<a href="https://www.youtube.com/watch?v={video_id}" target="_blank" rel="noopener noreferrer">{title or video_id}{icon_html}</a>'
+    return f'<a href="https://www.youtube.com/watch?v={escaped_video_id}" target="_blank" rel="noopener noreferrer">{escaped_title}{icon_html}</a>'
 
 
 def format_badge(text: str, badge_type: str = 'default') -> str:
@@ -262,8 +268,13 @@ def format_badge(text: str, badge_type: str = 'default') -> str:
         'count': 'badge-count'
     }
     
+    # Validate badge_type to prevent injection
+    if badge_type not in badge_classes and badge_type != 'default':
+        badge_type = 'default'
+    
     css_class = badge_classes.get(badge_type, 'badge')
-    return f'<span class="badge {css_class}">{text}</span>'
+    escaped_text = html.escape(str(text))
+    return f'<span class="badge {css_class}">{escaped_text}</span>'
 
 
 def format_time_ago(timestamp: str) -> str:
@@ -271,12 +282,26 @@ def format_time_ago(timestamp: str) -> str:
     if not timestamp:
         return '-'
     
-    return f'<span class="time-ago" title="{timestamp}">{timestamp}</span>'
+    escaped_timestamp = html.escape(str(timestamp))
+    return f'<span class="time-ago" title="{escaped_timestamp}">{escaped_timestamp}</span>'
 
 
 def truncate_text(text: str, max_length: int = 80, suffix: str = '...') -> str:
-    """Truncate text with optional suffix."""
-    if not text or len(text) <= max_length:
+    """
+    Truncate text with optional suffix.
+    
+    Args:
+        text: The text to truncate
+        max_length: Maximum length before truncation
+        suffix: Suffix to add when truncating
+        
+    Returns:
+        Truncated text with suffix if needed
+    """
+    if not text or not isinstance(text, str):
+        return text or ''
+    
+    if len(text) <= max_length:
         return text
     
     return text[:max_length] + suffix
