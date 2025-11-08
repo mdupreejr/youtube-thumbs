@@ -88,7 +88,7 @@ class SongTracker:
                 logger.debug("Missing title or duration, skipping track")
                 return
 
-            # Calculate content hash for deduplication
+            # Calculate content hash for deduplication (throttling purposes)
             from helpers.video_helpers import get_content_hash
             content_hash = get_content_hash(
                 title=title,
@@ -100,18 +100,20 @@ class SongTracker:
             if not self._should_increment_play_count(content_hash):
                 return
 
-            # Check if song exists in database
-            existing = self.db.find_video_by_content_hash(content_hash)
+            # Use same cache lookup logic as rating endpoints
+            # This checks BOTH content_hash AND title+duration matching
+            from helpers.cache_helpers import find_cached_video
+            cached_video = find_cached_video(self.db, media)
 
-            if existing:
-                # Song exists in database - increment play count
-                yt_video_id = existing.get('yt_video_id', '')
+            if cached_video and cached_video.get('yt_video_id'):
+                # Song found in cache - increment play count
+                yt_video_id = cached_video['yt_video_id']
                 self._increment_play_count(yt_video_id, content_hash)
-                logger.info(f"Tracked play: '{title}' (play_count +1)")
+                logger.info(f"Tracked play: '{title}' (play_count +1, ID: {yt_video_id})")
             else:
-                # New song - just queue YouTube search
-                # Queue worker will add to database after finding match
-                self._queue_search_for_song(media, content_hash)
+                # Not in cache - queue YouTube search (same as rating endpoints)
+                # This uses the established queue logic and caching strategy
+                self.db.enqueue_search(media)
                 logger.info(f"New song detected: '{title}' - queued for YouTube search")
 
         except Exception as e:
@@ -170,45 +172,3 @@ class SongTracker:
                 self.db._conn.commit()
         except Exception as e:
             logger.error(f"Failed to increment play count for {yt_video_id}: {e}")
-
-    def _queue_search_for_song(self, media: Dict[str, Any], content_hash: str):
-        """
-        Queue a YouTube search operation for this song.
-
-        Args:
-            media: Media info from Home Assistant
-            content_hash: Content hash for the song
-        """
-        try:
-            import json
-
-            # Build search payload
-            search_payload = {
-                'title': media.get('title'),
-                'artist': media.get('artist'),
-                'duration': media.get('duration'),
-                'app_name': media.get('app_name', 'YouTube'),
-                'media_content_id': media.get('media_content_id'),
-                'content_hash': content_hash
-            }
-
-            # Add to queue with priority=2 (searches have lower priority than ratings)
-            with self.db._lock:
-                self.db._conn.execute(
-                    """
-                    INSERT INTO queue (type, priority, status, payload, requested_at, attempts)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
-                    """,
-                    (
-                        'search',
-                        2,  # Search priority (ratings are 1)
-                        'pending',
-                        json.dumps(search_payload)
-                    )
-                )
-                self.db._conn.commit()
-
-            logger.debug(f"Queued search for: '{media.get('title')}'")
-
-        except Exception as e:
-            logger.error(f"Failed to queue search for '{media.get('title')}': {e}")
