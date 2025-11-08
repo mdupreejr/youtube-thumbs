@@ -5,12 +5,6 @@ configuration:
   port:
     name: Rating API port
     description: TCP port that Home Assistant automations call for /thumbs_up or /thumbs_down. Change only if 21812 conflicts with something else.
-  sqlite_web_host:
-    name: sqlite_web host
-    description: Bind address for the sqlite_web UI. Keep 127.0.0.1 for local-only access; use 0.0.0.0 to expose the DB UI to your LAN.
-  sqlite_web_port:
-    name: sqlite_web port
-    description: Port for the sqlite_web database viewer when exposed to your LAN; ignored while using HA ingress (default).
   rate_limit_per_minute:
     name: Rate limit per minute
     description: Maximum YouTube Data API calls allowed every 60 seconds.
