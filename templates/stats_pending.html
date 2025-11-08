@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Thumbs - Pending Videos</title>
+    <title>YouTube Thumbs - Unmatched Videos</title>
     <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
 </head>
 <body>
@@ -26,11 +26,14 @@
 
         <div class="card">
             <h2>
-                <span>⏳ All Pending Videos</span>
+                <span>⏳ Unmatched Videos</span>
                 <span style="margin-left: auto; font-weight: 400; font-size: 0.9em; color: #64748b;">
                     {{ total_count }} total
                 </span>
             </h2>
+            <p style="color: #64748b; margin-top: -0.5em; margin-bottom: 1.5em; font-size: 0.95em;">
+                Videos that haven't been matched to YouTube yet. The queue system will automatically retry these when quota allows.
+            </p>
 
             {% if videos %}
                 <table>
@@ -99,7 +102,7 @@
             {% else %}
                 <div class="empty-state">
                     <div class="empty-state-icon">✅</div>
-                    <h3>No pending videos</h3>
+                    <h3>No unmatched videos</h3>
                     <p>All your videos have been successfully matched on YouTube!</p>
                 </div>
             {% endif %}
