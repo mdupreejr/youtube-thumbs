@@ -288,7 +288,9 @@ def process_next_item(db, yt_api):
 
             if video and video.get('yt_video_id'):
                 video_id = video['yt_video_id']
-                logger.info(f"✓ Search found video {video_id} for '{title}'")
+                video_title = video.get('yt_title', title)
+                artist = payload.get('ha_artist', '')
+                logger.info(f"✓ Matched: '{video_title}' by {artist} | YouTube ID: {video_id}")
 
                 # v4.0.0: Add matched video to video_ratings table
                 try:

@@ -61,9 +61,11 @@ def handle_youtube_error(context: str, return_value: Any = None, api_method: str
                 detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
                 if detail:
                     logger.error(f"Quota exceeded: {error_context}")
-                    # v4.0.12: Record quota error to BOTH aggregate and detailed logs
+                    # v4.0.13: Record quota error to BOTH aggregate and detailed logs
+                    # Aggregate: quota_cost=1 for visibility (shows call was made)
+                    # Detailed: quota_cost=0 for accuracy (YouTube didn't charge us)
                     if api_method and _db:
-                        _db.record_api_call(api_method, success=False, quota_cost=0, error_message="Quota exceeded")
+                        _db.record_api_call(api_method, success=False, quota_cost=1, error_message="Quota exceeded")
                         _db.log_api_call_detailed(
                             api_method=api_method,
                             operation_type=context,
@@ -75,10 +77,12 @@ def handle_youtube_error(context: str, return_value: Any = None, api_method: str
                         )
                     raise QuotaExceededError("YouTube API quota exceeded")
 
-                # v4.0.12: Record API call error to BOTH aggregate and detailed logs
+                # v4.0.13: Record API call error to BOTH aggregate and detailed logs
+                # Aggregate: quota_cost=1 for visibility (shows call was made)
+                # Detailed: quota_cost=0 for accuracy (YouTube didn't charge us)
                 error_msg = f"{context} | Status: {status_code}"
                 if api_method and _db:
-                    _db.record_api_call(api_method, success=False, quota_cost=0, error_message=error_msg)
+                    _db.record_api_call(api_method, success=False, quota_cost=1, error_message=error_msg)
                     _db.log_api_call_detailed(
                         api_method=api_method,
                         operation_type=context,

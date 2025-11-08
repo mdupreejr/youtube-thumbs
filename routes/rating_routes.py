@@ -210,6 +210,9 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             artist = ha_media.get('artist', '')
             media_info = format_media_info(video_title, artist)
 
+            # v4.0.13: Log playback for visibility in HA app page
+            logger.info(f"Now playing (cache hit): {media_info} | ID: {yt_video_id}")
+
             # v4.0.8: Record play (increment play_count and update last played)
             # This happens on every cache hit since the video is currently playing
             _db.record_play(yt_video_id)
