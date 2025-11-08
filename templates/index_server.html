@@ -215,7 +215,7 @@
                         {% if yt_test.details.quota %}
                         <div style="margin: 10px 0;">
                             <div style="font-weight: 600; margin-bottom: 5px;">Quota Usage (24h):</div>
-                            <div style="margin: 5px 0;">{{ yt_test.details.quota.used:,}} / {{ yt_test.details.quota.total:,}} ({{ "%.1f"|format(yt_test.details.quota.percent) }}%)</div>
+                            <div style="margin: 5px 0;">{{ "{:,}".format(yt_test.details.quota.used) }} / {{ "{:,}".format(yt_test.details.quota.total) }} ({{ "%.1f"|format(yt_test.details.quota.percent) }}%)</div>
                             <div style="width: 100%; background: #e5e7eb; border-radius: 4px; height: 8px; margin-top: 5px;">
                                 <div style="width: {{ yt_test.details.quota.percent }}%; background: {{ '#ef4444' if yt_test.details.quota.exceeded else '#3b82f6' }}; height: 100%; border-radius: 4px;"></div>
                             </div>
