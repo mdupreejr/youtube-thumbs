@@ -13,8 +13,8 @@ from helpers.validation_helpers import validate_page_param
 from helpers.response_helpers import error_response
 from helpers.request_helpers import get_real_ip
 from helpers.template_helpers import (
-    PageConfig, TableData, TableColumn, TableRow, TableCell,
-    create_stats_page_config, format_youtube_link, format_badge
+    TableData, TableColumn, TableRow, TableCell,
+    create_stats_page_config, format_youtube_link
 )
 
 bp = Blueprint('stats', __name__)
