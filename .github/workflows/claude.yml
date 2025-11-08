@@ -165,13 +165,15 @@ jobs:
               echo "  Skipping and trying next issue..."
 
               # Post conflict warning on issue
-              gh issue comment "$CANDIDATE_ISSUE" --body "⚠️ **Conflict Detected**
+              CONFLICT_MSG="⚠️ **Conflict Detected**
 
-Cannot process this issue yet due to conflicts with open PRs.
+              Cannot process this issue yet due to conflicts with open PRs.
 
-**Details:** ${CONFLICT_RESULT}
+              **Details:** ${CONFLICT_RESULT}
 
-The issue will remain in the queue and be retried once conflicting PRs are merged/closed." || true
+              The issue will remain in the queue and be retried once conflicting PRs are merged/closed."
+
+              gh issue comment "$CANDIDATE_ISSUE" --body "$CONFLICT_MSG" || true
             fi
           done <<< "$QUEUED_ISSUES"
 
