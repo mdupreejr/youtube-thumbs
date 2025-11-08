@@ -588,16 +588,17 @@ _cached_health_checks = {
 }
 
 try:
-    run_startup_checks(ha_api, yt_api, db)
+    # v4.0.35: run_startup_checks now returns check results to avoid duplicate API calls
+    all_ok, check_results = run_startup_checks(ha_api, yt_api, db)
 
     # Cache the results for display in webui (avoid re-running on every page load)
-    ha_success, ha_data = check_home_assistant_api(ha_api)
+    ha_success, ha_data = check_results['ha']
     _cached_health_checks['ha_test'] = {'success': ha_success, **ha_data}
 
-    yt_success, yt_data = check_youtube_api(yt_api, db=db)
+    yt_success, yt_data = check_results['yt']
     _cached_health_checks['yt_test'] = {'success': yt_success, **yt_data}
 
-    db_success, db_message = check_database(db)
+    db_success, db_message = check_results['db']
     _cached_health_checks['db_test'] = {'success': db_success, 'message': db_message}
 
 except Exception as e:
