@@ -12,7 +12,7 @@ import os
 import signal
 from logger import logger
 from database import get_database
-from youtube_api import get_youtube_api
+from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from quota_error import (
     QuotaExceededError,
     VideoNotFoundError,
@@ -387,6 +387,10 @@ def main():
 
     # Initialize database and YouTube API
     db = get_database()
+
+    # v4.0.30: Inject database into youtube_api for API call logging
+    # This is critical - without it, queue worker API calls don't get logged!
+    set_youtube_api_database(db)
 
     # v4.0.9: Reset any items stuck in 'processing' status (crash recovery)
     reset_count = db.reset_stale_processing_items()
