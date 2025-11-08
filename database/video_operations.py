@@ -295,7 +295,7 @@ class VideoOperations:
             row = cur.fetchone()
         return dict(row) if row else None
 
-    def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None, return_hash: bool = False):
         """
         Optimized cache lookup combining content hash and title+duration in a single query.
         Tries content hash first (more flexible), falls back to exact title+duration match.
@@ -304,12 +304,14 @@ class VideoOperations:
             title: Video title
             duration: Video duration in seconds
             artist: Optional artist/channel name
+            return_hash: If True, returns tuple of (result, content_hash) to avoid recomputation
 
         Returns:
-            Cached video dict if found, None otherwise
+            If return_hash=False: Cached video dict if found, None otherwise
+            If return_hash=True: Tuple of (cached_video_dict or None, content_hash)
         """
         if not title:
-            return None
+            return (None, None) if return_hash else None
 
         content_hash = get_content_hash(title, duration, artist)
 
@@ -337,5 +339,9 @@ class VideoOperations:
             cur = self._conn.execute(query, (content_hash, title, duration, duration, content_hash))
             row = cur.fetchone()
 
-        return dict(row) if row else None
+        result = dict(row) if row else None
+
+        if return_hash:
+            return (result, content_hash)
+        return result
 

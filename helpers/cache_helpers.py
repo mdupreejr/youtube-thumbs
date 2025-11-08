@@ -68,13 +68,10 @@ def find_cached_video(db, ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     artist = ha_media.get('artist')
 
-    # Use optimized combined query (single database call instead of two)
-    cached_video = db.find_cached_video_combined(title, duration, artist)
+    # v4.0.61: OPTIMIZED - get hash from DB call to avoid duplicate computation
+    cached_video, content_hash = db.find_cached_video_combined(title, duration, artist, return_hash=True)
     if cached_video:
         # Determine which strategy found the match for metrics
-        from .video_helpers import get_content_hash
-        content_hash = get_content_hash(title, duration, artist)
-
         # More robust cache type detection
         if cached_video.get('ha_content_hash') == content_hash:
             cache_type = 'content_hash'
