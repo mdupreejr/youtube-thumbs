@@ -203,12 +203,16 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
         # Step 3: Check cache first (no API call)
         video = _cache_wrapper(ha_media)
 
-        if video and video.get('id'):
+        if video and video.get('yt_video_id'):
             # Found in cache - queue rating directly
-            yt_video_id = video['id']
+            yt_video_id = video['yt_video_id']
             video_title = video.get('title', 'Unknown')
             artist = ha_media.get('artist', '')
             media_info = format_media_info(video_title, artist)
+
+            # v4.0.8: Record play (increment play_count and update last played)
+            # This happens on every cache hit since the video is currently playing
+            _db.record_play(yt_video_id)
 
             # Check if already rated with same rating
             existing_rating = _db.get_video(yt_video_id)
