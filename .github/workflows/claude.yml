@@ -6,35 +6,25 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned, labeled]
+    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
   pull_request:
     types: [closed]
-  schedule:
-    # Run hourly to check for queue progression
-    - cron: '0 * * * *'
-  workflow_dispatch:
-    # Allow manual triggering
 
 # Ensure only one Claude worker runs at a time
 concurrency:
-  group: claude-worker
+  group: claude-worker-${{ github.event.issue.number || github.event.pull_request.number || 'default' }}
   cancel-in-progress: false
 
 jobs:
   claude:
-    # For PR comments and reviews, run immediately if @claude mentioned
-    # For issues, only process if they have the 'claude-queue' label
-    # For PR close and scheduled runs, always process queue
+    # Only run when @claude is mentioned
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'claude-queue') ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
       contents: write      # Allow commits and pushes
@@ -49,175 +39,9 @@ jobs:
           fetch-depth: 0  # Full history for better context
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Configure git to use GITHUB_TOKEN for authentication
-          git config --global credential.helper store
-          echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
-          # Allow Claude to push to any branch
-          git config --global --add safe.directory /github/workspace
-          git config --global --add safe.directory '*'
-
-      # Queue Management Logic with Smart Parallel Processing
-      - name: Check and manage issue queue
-        id: queue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Make helper scripts executable
-          chmod +x .github/scripts/manage-claude-queue.sh
-          chmod +x .github/scripts/update-metrics.sh
-
-          echo "🔍 Checking queue status (Smart Parallel Mode)..."
-
-          # === STEP 1: Clean up completed/timeout in-progress issues ===
-          echo ""
-          echo "📋 Step 1: Checking in-progress issues..."
-          IN_PROGRESS_ISSUES=$(.github/scripts/manage-claude-queue.sh get-all-in-progress)
-
-          if [ -n "$IN_PROGRESS_ISSUES" ]; then
-            while IFS= read -r ISSUE_NUM; do
-              [ -z "$ISSUE_NUM" ] && continue
-              echo "  Checking issue #${ISSUE_NUM}..."
-
-              # Check for timeout (>24h)
-              TIMEOUT_STATUS=$(.github/scripts/manage-claude-queue.sh check-timeout "$ISSUE_NUM")
-              if [ "$TIMEOUT_STATUS" = "timeout" ]; then
-                echo "  ⏰ Issue #${ISSUE_NUM} timed out (>24h), resetting..."
-                .github/scripts/manage-claude-queue.sh mark-failed "$ISSUE_NUM" "Processing timed out after 24 hours"
-                continue
-              fi
-
-              # Find PR for this issue
-              PR_NUMBER=$(gh pr list --search "issue #${ISSUE_NUM}" --json number --jq '.[0].number // empty')
-
-              if [ -n "$PR_NUMBER" ]; then
-                PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
-                echo "  Found PR #${PR_NUMBER} with state: ${PR_STATE}"
-
-                if [ "$PR_STATE" = "MERGED" ] || [ "$PR_STATE" = "CLOSED" ]; then
-                  echo "  ✅ PR is ${PR_STATE}, completing issue #${ISSUE_NUM}"
-                  .github/scripts/manage-claude-queue.sh complete "$ISSUE_NUM"
-                fi
-              fi
-            done <<< "$IN_PROGRESS_ISSUES"
-          fi
-
-          # === STEP 2: Check how many slots available for new issues ===
-          echo ""
-          echo "📊 Step 2: Checking available slots..."
-          CURRENT_IN_PROGRESS=$(.github/scripts/manage-claude-queue.sh count-in-progress)
-          MAX_CONCURRENT=3
-          AVAILABLE_SLOTS=$((MAX_CONCURRENT - CURRENT_IN_PROGRESS))
-
-          echo "  Currently in progress: ${CURRENT_IN_PROGRESS}/${MAX_CONCURRENT}"
-          echo "  Available slots: ${AVAILABLE_SLOTS}"
-
-          if [ $AVAILABLE_SLOTS -le 0 ]; then
-            echo "  ⏳ All slots full, waiting for PRs to merge..."
-            echo "skip_claude=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # === STEP 3: Find and start next issues (with conflict detection) ===
-          echo ""
-          echo "🔎 Step 3: Finding next issues to process..."
-
-          # Get all queued issues
-          QUEUED_ISSUES=$(gh issue list --label "claude-queue" --json number --jq 'sort_by(.number) | .[].number')
-
-          if [ -z "$QUEUED_ISSUES" ]; then
-            echo "  ℹ️ No issues in queue"
-            echo "skip_claude=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Try to fill available slots
-          ISSUES_TO_PROCESS=""
-          SLOTS_FILLED=0
-
-          while IFS= read -r CANDIDATE_ISSUE; do
-            [ -z "$CANDIDATE_ISSUE" ] && continue
-            [ $SLOTS_FILLED -ge $AVAILABLE_SLOTS ] && break
-
-            echo ""
-            echo "  Evaluating issue #${CANDIDATE_ISSUE}..."
-
-            # Run conflict detection (log messages go to stderr, result to stdout)
-            CONFLICT_RESULT=$(.github/scripts/manage-claude-queue.sh detect-conflicts "$CANDIDATE_ISSUE" 2>/dev/null || echo "conflict")
-
-            if [[ "$CONFLICT_RESULT" == "no-conflicts" ]]; then
-              echo "  ✅ No conflicts detected, safe to process"
-
-              # Get issue details
-              ISSUE_TITLE=$(gh issue view "$CANDIDATE_ISSUE" --json title --jq '.title')
-              ISSUE_BODY=$(gh issue view "$CANDIDATE_ISSUE" --json body --jq '.body')
-              BRANCH_NAME=$(.github/scripts/manage-claude-queue.sh generate-branch "$CANDIDATE_ISSUE" "$ISSUE_TITLE")
-
-              # Start processing
-              .github/scripts/manage-claude-queue.sh start-processing "$CANDIDATE_ISSUE"
-
-              # Assign to repository owner
-              .github/scripts/manage-claude-queue.sh assign-to-owner "$CANDIDATE_ISSUE" || echo "  ⚠️ Could not assign issue"
-
-              # Add to processing list
-              if [ -z "$ISSUES_TO_PROCESS" ]; then
-                ISSUES_TO_PROCESS="${CANDIDATE_ISSUE}:${ISSUE_TITLE}:${BRANCH_NAME}"
-              else
-                ISSUES_TO_PROCESS="${ISSUES_TO_PROCESS}|${CANDIDATE_ISSUE}:${ISSUE_TITLE}:${BRANCH_NAME}"
-              fi
-
-              SLOTS_FILLED=$((SLOTS_FILLED + 1))
-              echo "  ✓ Added to processing queue (${SLOTS_FILLED}/${AVAILABLE_SLOTS} slots filled)"
-            else
-              echo "  ⚠️ Conflicts detected: ${CONFLICT_RESULT}"
-              echo "  Skipping and trying next issue..."
-
-              # Post conflict warning on issue
-              CONFLICT_MSG="⚠️ **Conflict Detected**
-
-              Cannot process this issue yet due to conflicts with open PRs.
-
-              **Details:** ${CONFLICT_RESULT}
-
-              The issue will remain in the queue and be retried once conflicting PRs are merged/closed."
-
-              gh issue comment "$CANDIDATE_ISSUE" --body "$CONFLICT_MSG" || true
-            fi
-          done <<< "$QUEUED_ISSUES"
-
-          # === STEP 4: Export results ===
-          echo ""
-          echo "📤 Step 4: Exporting results..."
-
-          if [ -n "$ISSUES_TO_PROCESS" ]; then
-            # For now, process first issue only (Claude action runs once per workflow)
-            FIRST_ISSUE=$(echo "$ISSUES_TO_PROCESS" | cut -d'|' -f1)
-            ISSUE_NUMBER=$(echo "$FIRST_ISSUE" | cut -d':' -f1)
-            ISSUE_TITLE=$(echo "$FIRST_ISSUE" | cut -d':' -f2)
-            BRANCH_NAME=$(echo "$FIRST_ISSUE" | cut -d':' -f3)
-
-            echo "  Processing issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-
-            echo "issue_number=${ISSUE_NUMBER}" >> $GITHUB_OUTPUT
-            echo "issue_title=${ISSUE_TITLE}" >> $GITHUB_OUTPUT
-            echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-            echo "skip_claude=false" >> $GITHUB_OUTPUT
-          else
-            echo "  No suitable issues found to process"
-            echo "skip_claude=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Run Claude Code
         id: claude
-        if: steps.queue.outputs.skip_claude != 'true'
-        continue-on-error: true
         uses: anthropics/claude-code-action@aaa4b4c42c41206c0bff3334d5cdfb91267cb695 # v1.0.1
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
@@ -225,105 +49,8 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # Provide specific instructions for queue-based processing
-          prompt: |
-            You are processing issue #${{ steps.queue.outputs.issue_number }}: "${{ steps.queue.outputs.issue_title }}"
-
-            IMPORTANT: Follow these steps exactly:
-
-            1. Read the issue details and understand what needs to be done
-            2. Make the necessary code changes
-            3. Update the version in config.json following semantic versioning
-            4. Use the Write or Edit tools to make all necessary file changes
-            5. When done, confirm that you have completed the changes
-
-            DO NOT use git commands. DO NOT push branches. DO NOT create PRs.
-            Just make the file changes using the Write/Edit tools.
-
-            The workflow will handle git operations and PR creation after you're done.
-
-            Follow all instructions in CLAUDE.md regarding version bumping and commit message format.
-
-      - name: Handle Claude failure
-        if: steps.queue.outputs.skip_claude != 'true' && steps.claude.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ISSUE_NUMBER="${{ steps.queue.outputs.issue_number }}"
-
-          echo "❌ Claude failed to process issue #${ISSUE_NUMBER}"
-
-          # Mark as failed (fail-fast policy)
-          .github/scripts/manage-claude-queue.sh mark-failed "$ISSUE_NUMBER" "Claude Code action failed during processing. Check workflow logs for details."
-
-          echo "Issue marked as failed and removed from queue"
-
-      - name: Create branch and PR
-        if: steps.queue.outputs.skip_claude != 'true' && steps.claude.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ISSUE_NUMBER="${{ steps.queue.outputs.issue_number }}"
-          BRANCH_NAME="${{ steps.queue.outputs.branch_name }}"
-          ISSUE_TITLE="${{ steps.queue.outputs.issue_title }}"
-
-          echo "🔍 Checking for changes made by Claude..."
-
-          # Check if there are any changes
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "⚠️ No changes detected"
-            gh issue comment "$ISSUE_NUMBER" --body "⚠️ Claude completed but made no changes. The issue may already be resolved or Claude couldn't determine what changes to make."
-            .github/scripts/manage-claude-queue.sh mark-failed "$ISSUE_NUMBER" "No changes made"
-            exit 0
-          fi
-
-          echo "✅ Changes detected, creating branch and PR..."
-
-          # Get the new version from config.json for PR title
-          NEW_VERSION=$(jq -r '.version' config.json)
-
-          # Create and checkout branch
-          git checkout -b "$BRANCH_NAME"
-
-          # Stage all changes
-          git add .
-
-          # Commit changes
-          git commit -m "v${NEW_VERSION}: ${ISSUE_TITLE}" \
-            -m "Changes made by Claude Code to address issue #${ISSUE_NUMBER}" \
-            -m "🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
-            -m "Co-Authored-By: Claude <noreply@anthropic.com>"
-
-          # Push branch
-          echo "Pushing branch to origin..."
-          git push -u origin "$BRANCH_NAME"
-
-          # Create PR
-          echo "Creating pull request..."
-          PR_BODY="Fixes #${ISSUE_NUMBER}
-
-          ## Changes
-          Claude Code made changes to address this issue.
-
-          See commit for details.
-
-          🤖 Generated with [Claude Code](https://claude.com/claude-code)"
-
-          PR_URL=$(gh pr create \
-            --base master \
-            --head "$BRANCH_NAME" \
-            --title "v${NEW_VERSION}: ${ISSUE_TITLE}" \
-            --body "$PR_BODY" \
-            --reviewer @me)
-
-          # Extract PR number from URL
-          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-
-          echo "✅ Created PR #${PR_NUMBER}: $PR_URL"
-
-          # Mark PR as created
-          .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
+          # Instructions are provided in CLAUDE.md in the repository root
+          # This includes version bumping requirements and commit message formatting
 
       - name: Update metrics dashboard
         if: always()

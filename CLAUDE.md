@@ -84,29 +84,36 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## Git Workflow
 
-### Queue-Based Processing
+### Working with @claude Mentions
 
-Issues are processed through a queue system using GitHub labels:
-- **`claude-queue`** - Issue is waiting to be processed
-- **`claude-in-progress`** - Currently being worked on
-- **`claude-pr-created`** - Pull request has been created, awaiting review
+Claude is triggered by mentioning `@claude` in issues, pull requests, or comments. When you @mention Claude:
 
-Only ONE issue is processed at a time. When a PR is merged or closed, the system automatically moves to the next queued issue.
+1. **Claude reads** the issue/PR and all context
+2. **Makes necessary code changes** directly in the repository
+3. **Commits changes** with proper formatting
+4. **Creates a Pull Request** (if working on an issue) or updates existing PR
 
 ### PR-Based Workflow
 
 **IMPORTANT:** All changes MUST be submitted via Pull Requests. DO NOT push directly to master.
 
-When processing an issue from the queue:
+When Claude processes an issue:
 
-1. **Read and understand** the issue or request thoroughly
-2. **Make the necessary code changes**
-3. **Bump the version** in `config.json` appropriately
-4. **Test if possible** (check for syntax errors, validate JSON, etc.)
-5. **Create a new branch** with the format: `claude/issue-{number}-{title-slug}`
-6. **Commit changes** to the new branch with proper commit message format
-7. **Push the branch** to origin
-8. **Create a Pull Request** linking back to the original issue
+1. **Reads and understands** the issue or request thoroughly
+2. **Makes the necessary code changes**
+3. **Bumps the version** in `config.json` appropriately
+4. **Tests if possible** (checks for syntax errors, validates JSON, etc.)
+5. **Creates a new branch** with the format: `claude/issue-{number}-{title-slug}`
+6. **Commits changes** to the new branch with proper commit message format
+7. **Pushes the branch** to origin
+8. **Creates a Pull Request** linking back to the original issue
+
+### How to Use
+
+Simply comment `@claude` on any issue when you're ready for it to be processed:
+- Add context in your comment about what needs to be done
+- Claude will respond and make the necessary changes
+- Review the PR Claude creates before merging
 
 ### Git Commands for PR Workflow
 
@@ -186,74 +193,35 @@ gh pr create \
 
 ## Notes for GitHub Issues
 
-### How the Queue System Works
+### Working with Claude on Issues
 
-#### Smart Parallel Processing (Up to 3 Concurrent Issues)
+When you have an issue that needs work:
 
-The queue system can process up to **3 issues simultaneously** using intelligent conflict detection:
+1. **Comment with @claude** on the issue
+2. **Add context** - Explain what needs to be done (Claude reads the full issue too)
+3. **Claude responds** and begins working
+4. **Claude creates a PR** when done
+5. **Review and merge** the PR
 
-1. **Adding to Queue:** Label an issue with `claude-queue` to add it to the processing queue
-2. **Smart Processing:** The system:
-   - Processes issues in order by issue number (oldest first)
-   - Can work on up to 3 issues concurrently
-   - Runs **conflict detection** before starting each issue
-   - Only processes issues that won't conflict with active PRs
-   - Automatically skips conflicting issues and tries the next one
-3. **Status Updates:** The system automatically:
-   - Assigns issue to repository owner
-   - Adds `claude-in-progress` label when work begins
-   - Posts a comment when starting work
-   - Creates a pull request with review request when work is complete
-   - Adds `claude-pr-created` label and posts PR link
-   - Removes all labels when PR is merged/closed
-   - Moves to next issues in queue automatically
+### Best Practices
 
-#### Conflict Detection
+- **Be Specific:** Clearly describe what needs to change in your @claude comment
+- **One Thing at a Time:** Focus each issue on a single concern
+- **Review PRs:** Always review Claude's changes before merging
+- **Provide Feedback:** If the solution isn't quite right, comment on the PR with guidance
 
-Before processing an issue, the system checks:
-- **Version Conflicts:** If any open PR modifies `config.json`, blocks processing to avoid version conflicts
-- **File Conflicts:** Scans issue description for file mentions and checks against files changed in open PRs
-- **Smart Queuing:** If conflicts detected, skips that issue and tries the next queued issue
+### Optional Labels for Organization
 
-This allows the system to safely process multiple non-conflicting issues in parallel!
+You can use labels to organize issues:
+- `claude-queue` - Issues waiting for you to @mention Claude
+- `documentation` - Documentation improvements
+- `bug` - Bug fixes
+- `enhancement` - New features or improvements
 
-#### Error Handling & Timeout Protection
+### Helper Utilities Available
 
-- **Fail-Fast Policy:** If processing fails, issue is immediately marked as `claude-failed` and removed from queue
-- **Timeout Protection:** Issues in-progress for >24 hours are automatically failed
-- **Auto-Recovery:** Queue checks run hourly to recover from missed events
-- **Branch Cleanup:** Merged PR branches are automatically deleted
+The repository includes useful utilities in `.github/scripts/`:
+- `manage-claude-queue.sh` - Helper functions for issue management
+- `update-metrics.sh` - Generate metrics reports about issue processing
 
-### When Working on Issues
-
-- Read the entire issue description and any comments carefully
-- Ask clarifying questions if requirements are unclear
-- Reference the issue number in PR title and body (use "Fixes #123")
-- Provide clear explanations of changes in the PR description
-- The PR will be reviewed by a human before merging
-- Once merged, the system automatically processes the next queued issue
-
-### Queue Labels
-
-The system uses these labels to track issue status:
-- `claude-queue` - Issue is waiting to be processed
-- `claude-in-progress` - Issue is currently being worked on (max 3 at a time)
-- `claude-pr-created` - Pull request has been created, awaiting review
-- `claude-failed` - Issue failed processing and needs attention
-
-### Metrics Dashboard
-
-Track queue performance and status in the **📊 Claude Queue Metrics & Analytics** issue (pinned):
-- Current queue status (queued, in-progress, failed)
-- Processing statistics (success rate, total processed)
-- Recent activity and completed PRs
-- Failed issues requiring attention
-
-The dashboard updates automatically after each queue action.
-
-### For Direct Assistance (Not Queued)
-
-You can still mention @claude in PR comments or review comments for immediate assistance without going through the queue system. This is useful for:
-- Requesting changes to an existing PR
-- Getting help with code reviews
-- Quick questions or clarifications
+These can be run manually if needed for reporting or management.
