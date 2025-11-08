@@ -13,10 +13,10 @@ configuration:
     description: Controls verbosity in the add-on logs (DEBUG provides the most detail).
   force_quota_unlock:
     name: Force quota unlock
-    description: Allow queue worker to resume API calls immediately on startup, ignoring any previous quota exceeded errors.
+    description: Ignore previous quota exceeded state on startup. Only enable if you've manually reset your YouTube API quota (not recommended for normal use).
   pending_video_retry_enabled:
     name: Pending video retry enabled
-    description: Automatically retry matching pending videos after quota recovery. When quota is exhausted, unmatched videos are stored as pending. After quota recovers, this automatically searches YouTube for them.
+    description: Process pending videos from the queue after quota resets at midnight Pacific Time. Disable only if you want to prevent automatic queue processing.
   search_max_results:
     name: Search max results
     description: Maximum number of search results to fetch from YouTube API per query (1-50). Higher values consume more quota but may improve match quality.
