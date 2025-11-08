@@ -15,9 +15,9 @@ from helpers.time_helpers import format_relative_time, parse_timestamp, format_a
 from helpers.validation_helpers import validate_page_param
 from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.template_helpers import (
-    PageConfig, TableData, TableColumn, TableRow, TableCell,
-    create_logs_page_config, create_queue_page_config, create_api_calls_page_config,
-    format_youtube_link, format_badge, format_time_ago, truncate_text
+    TableData, TableColumn, TableRow, TableCell,
+    create_api_calls_page_config,
+    format_badge, format_time_ago, truncate_text
 )
 
 bp = Blueprint('logs', __name__)
