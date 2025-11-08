@@ -53,6 +53,12 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Configure git to use GITHUB_TOKEN for authentication
+          git config --global credential.helper store
+          echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
+          # Allow Claude to push to any branch
+          git config --global --add safe.directory /github/workspace
+          git config --global --add safe.directory '*'
 
       # Queue Management Logic with Smart Parallel Processing
       - name: Check and manage issue queue
