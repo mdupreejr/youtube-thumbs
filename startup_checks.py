@@ -93,6 +93,63 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
             }
             return False, {'message': "Not authenticated", 'details': details}
 
+        # v4.0.27: Test authentication with a real API call
+        # Make a minimal API call to verify credentials work (costs 1 quota unit)
+        try:
+            import time
+            start_time = time.time()
+
+            # Get channel info for authenticated user (minimal quota cost = 1 unit)
+            request = yt_api.youtube.channels().list(
+                part='snippet',
+                mine=True,
+                maxResults=1,
+                fields='items(id,snippet(title))'
+            )
+            response = request.execute()
+
+            response_time = int((time.time() - start_time) * 1000)  # ms
+
+            # Log the API call
+            if db:
+                channel_name = response.get('items', [{}])[0].get('snippet', {}).get('title', 'Unknown')
+                db.record_api_call('channels.list', success=True, quota_cost=1)
+                db.log_api_call_detailed(
+                    api_method='channels.list',
+                    operation_type='auth_check',
+                    query_params='mine=True',
+                    quota_cost=1,
+                    success=True,
+                    results_count=len(response.get('items', [])),
+                    context=f'startup_check (authenticated as: {channel_name})'
+                )
+
+            logger.debug(f"YouTube API authentication verified ({response_time}ms)")
+
+        except Exception as e:
+            logger.error(f"YouTube API authentication test failed: {e}")
+            # Log the failed API call
+            if db:
+                db.record_api_call('channels.list', success=False, quota_cost=1, error_message=str(e))
+                db.log_api_call_detailed(
+                    api_method='channels.list',
+                    operation_type='auth_check',
+                    query_params='mine=True',
+                    quota_cost=0,  # YouTube doesn't charge for failed auth
+                    success=False,
+                    error_message=str(e)[:500],
+                    context='startup_check'
+                )
+            return False, {'message': f"Authentication test failed: {str(e)}", 'details': {
+                'authenticated': False,
+                'worker_running': worker_running,
+                'worker_pid': worker_pid if worker_running else None,
+                'quota': {},
+                'queue': {},
+                'performance': {},
+                'api_stats': {}
+            }}
+
         # Default details structure
         details = {
             'authenticated': True,
