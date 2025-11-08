@@ -288,7 +288,14 @@
                 }
 
                 // Format modal content based on page configuration
-                modalBody.innerHTML = {{ page_config.modal_formatter or 'formatModalContent' }}(result.data);
+                const allowedFormatters = {
+                    formatModalContent: formatModalContent,
+                    // Add other allowed formatter functions here, e.g.:
+                    // customFormatter: customFormatter,
+                };
+                const formatterName = "{{ page_config.modal_formatter or 'formatModalContent' }}";
+                const formatterFn = allowedFormatters[formatterName] || formatModalContent;
+                modalBody.innerHTML = formatterFn(result.data);
 
             } catch (error) {
                 modalBody.innerHTML = `<p style="color: #ef4444;">Error loading details: ${error.message}</p>`;
