@@ -78,8 +78,8 @@ class Database:
     def find_by_content_hash(self, title, duration, artist=None):
         return self._video_ops.find_by_content_hash(title, duration, artist)
 
-    def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None):
-        return self._video_ops.find_cached_video_combined(title, duration, artist)
+    def find_cached_video_combined(self, title: str, duration: int, artist: Optional[str] = None, return_hash: bool = False):
+        return self._video_ops.find_cached_video_combined(title, duration, artist, return_hash)
 
     def get_pending_videos(self, limit: int = 50, reason_filter: Optional[str] = None):
         return self._video_ops.get_pending_videos(limit, reason_filter)
