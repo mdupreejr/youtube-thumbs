@@ -547,8 +547,8 @@ class QueueOperations:
                 
                 recent_searches.append({
                     'id': item['id'],
-                    'ha_title': payload.get('title', 'Unknown'),
-                    'ha_artist': payload.get('artist', 'Unknown'),
+                    'ha_title': payload.get('ha_title', 'Unknown'),
+                    'ha_artist': payload.get('ha_artist', 'Unknown'),
                     'status': item['status'],
                     'requested_at': item['requested_at'],
                     'attempts': item['attempts'],
@@ -628,8 +628,8 @@ class QueueOperations:
                 
                 search_errors.append({
                     'id': item['id'],
-                    'ha_title': payload.get('title', 'Unknown'),
-                    'ha_artist': payload.get('artist', 'Unknown'),
+                    'ha_title': payload.get('ha_title', 'Unknown'),
+                    'ha_artist': payload.get('ha_artist', 'Unknown'),
                     'attempts': item['attempts'],
                     'last_attempt': item['last_attempt'],
                     'error_message': item['last_error'],

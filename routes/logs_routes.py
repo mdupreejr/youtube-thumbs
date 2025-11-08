@@ -117,13 +117,14 @@ def pending_ratings_log():
                 formatted_items.append({
                     'type': 'search',
                     'id': str(item['id']),
-                    'ha_title': ha_media.get('title', 'Unknown'),
-                    'ha_artist': ha_media.get('artist'),
+                    'ha_title': ha_media.get('ha_title', 'Unknown'),
+                    'ha_artist': ha_media.get('ha_artist'),
                     'operation': 'Search for YouTube match',
                     'callback': f"then rate {callback_rating}" if callback_rating else None,
                     'requested_at': item.get('requested_at'),
                     'attempts': item.get('attempts', 0),
-                    'last_error': item.get('last_error')
+                    'last_error': item.get('last_error'),
+                    'yt_video_id': None
                 })
                 
             elif item['type'] == 'rating':
@@ -148,7 +149,7 @@ def pending_ratings_log():
                 })
 
         # Sort by requested_at (newest first, but prioritize by queue priority)
-        formatted_items.sort(key=lambda x: (x.get('requested_at') or ''))
+        formatted_items.sort(key=lambda x: x.get('requested_at') or '', reverse=True)
 
         return render_template(
             'logs_queue.html',
@@ -218,11 +219,11 @@ def get_queue_item_details(queue_id: int):
             details = {
                 'type': 'search',
                 'queue_id': queue_id,
-                'ha_title': ha_media.get('title', 'Unknown'),
-                'ha_artist': ha_media.get('artist', 'Unknown'),
-                'ha_album': ha_media.get('album'),
-                'ha_duration': ha_media.get('duration'),
-                'ha_app_name': ha_media.get('app_name'),
+                'ha_title': ha_media.get('ha_title', 'Unknown'),
+                'ha_artist': ha_media.get('ha_artist', 'Unknown'),
+                'ha_album': ha_media.get('ha_album'),
+                'ha_duration': ha_media.get('ha_duration'),
+                'ha_app_name': ha_media.get('ha_app_name'),
                 'operation': 'Search for YouTube match',
                 'callback_rating': callback_rating,
                 'status': queue_item.get('status'),

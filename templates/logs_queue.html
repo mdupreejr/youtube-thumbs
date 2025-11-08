@@ -227,7 +227,7 @@
             modalBody.innerHTML = '<p style="text-align: center; color: #64748b;">Loading details...</p>';
 
             try {
-                const response = await fetch(`${ingressPath}/api/queue-item/${itemType}/${itemId}`);
+                const response = await fetch(`${ingressPath}/api/queue-item/${itemId}`);
                 const result = await response.json();
 
                 if (!result.success) {
