@@ -20,12 +20,12 @@ class DatabaseConnection:
     VIDEO_RATINGS_SCHEMA = """
         CREATE TABLE IF NOT EXISTS video_ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            yt_video_id TEXT UNIQUE,
+            yt_video_id TEXT NOT NULL UNIQUE,
             ha_content_id TEXT,
             ha_title TEXT NOT NULL,
             ha_artist TEXT,
             ha_app_name TEXT,
-            yt_title TEXT,
+            yt_title TEXT NOT NULL,
             yt_channel TEXT,
             yt_channel_id TEXT,
             yt_description TEXT,
@@ -36,25 +36,14 @@ class DatabaseConnection:
             yt_recording_date TIMESTAMP,
             ha_duration INTEGER,
             yt_duration INTEGER,
-            yt_url TEXT,
+            yt_url TEXT NOT NULL,
             rating TEXT DEFAULT 'none',
             ha_content_hash TEXT,
             date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             date_last_played TIMESTAMP,
             play_count INTEGER DEFAULT 1,
             rating_score INTEGER DEFAULT 0,
-            pending_reason TEXT,
-            source TEXT DEFAULT 'ha_live',
-            yt_match_pending INTEGER DEFAULT 1,
-            yt_match_requested_at TIMESTAMP,
-            yt_match_attempts INTEGER DEFAULT 0,
-            yt_match_last_attempt TIMESTAMP,
-            yt_match_last_error TEXT,
-            rating_queue_pending TEXT,
-            rating_queue_requested_at TIMESTAMP,
-            rating_queue_attempts INTEGER DEFAULT 0,
-            rating_queue_last_attempt TIMESTAMP,
-            rating_queue_last_error TEXT
+            source TEXT DEFAULT 'ha_live'
         );
         CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id);
         CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title);
@@ -152,27 +141,6 @@ class DatabaseConnection:
         CREATE INDEX IF NOT EXISTS idx_queue_type ON queue(type);
     """
 
-    # Legacy table schemas - kept for migration purposes, will be removed in future version
-    SEARCH_QUEUE_SCHEMA = """
-        CREATE TABLE IF NOT EXISTS search_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ha_title TEXT NOT NULL,
-            ha_artist TEXT,
-            ha_album TEXT,
-            ha_content_id TEXT,
-            ha_duration INTEGER,
-            ha_app_name TEXT,
-            status TEXT DEFAULT 'pending',
-            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            attempts INTEGER DEFAULT 0,
-            last_attempt TIMESTAMP,
-            last_error TEXT,
-            found_video_id TEXT,
-            callback_rating TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_search_queue_status ON search_queue(status, requested_at);
-        CREATE INDEX IF NOT EXISTS idx_search_queue_content_id ON search_queue(ha_content_id);
-    """
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
@@ -211,7 +179,6 @@ class DatabaseConnection:
                     self._conn.executescript(self.STATS_CACHE_SCHEMA)
                     self._conn.executescript(self.SEARCH_RESULTS_CACHE_SCHEMA)
                     self._conn.executescript(self.UNIFIED_QUEUE_SCHEMA)
-                    self._conn.executescript(self.SEARCH_QUEUE_SCHEMA)  # Legacy - for migration
 
                     # Create indexes
                     self._conn.execute(
@@ -221,114 +188,9 @@ class DatabaseConnection:
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
                     )
 
-                    # Run migration to unified queue if needed
-                    self._migrate_to_unified_queue()
-
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
-
-    def _migrate_to_unified_queue(self) -> None:
-        """
-        Migrate data from legacy queue tables to unified queue table.
-        This is a one-time migration that moves:
-        1. search_queue entries -> queue table with type='search'
-        2. video_ratings entries with rating_queue_pending -> queue table with type='rating'
-        """
-        import json
-
-        try:
-            # Check if migration has already been done by looking for a migration marker
-            cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM queue"
-            )
-            queue_count = cursor.fetchone()['count']
-
-            # Only migrate if queue is empty (first run or clean database)
-            if queue_count > 0:
-                logger.debug("Unified queue already has data, skipping migration")
-                return
-
-            # Migrate search_queue to unified queue
-            cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM search_queue WHERE status = 'pending'"
-            )
-            search_count = cursor.fetchone()['count']
-
-            if search_count > 0:
-                logger.info(f"Migrating {search_count} search queue entries to unified queue...")
-                cursor = self._conn.execute(
-                    """
-                    SELECT * FROM search_queue WHERE status = 'pending'
-                    ORDER BY requested_at ASC
-                    """
-                )
-                for row in cursor.fetchall():
-                    search_data = dict(row)
-                    payload = {
-                        'ha_title': search_data['ha_title'],
-                        'ha_artist': search_data['ha_artist'],
-                        'ha_album': search_data['ha_album'],
-                        'ha_content_id': search_data['ha_content_id'],
-                        'ha_duration': search_data['ha_duration'],
-                        'ha_app_name': search_data['ha_app_name'],
-                        'callback_rating': search_data.get('callback_rating')
-                    }
-                    self._conn.execute(
-                        """
-                        INSERT INTO queue (type, priority, status, payload, requested_at, attempts, last_attempt, last_error)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        ('search', 2, 'pending', json.dumps(payload),
-                         search_data['requested_at'], search_data['attempts'],
-                         search_data['last_attempt'], search_data['last_error'])
-                    )
-                logger.info(f"✓ Migrated {search_count} search entries")
-
-            # Migrate rating queue from video_ratings to unified queue
-            cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM video_ratings WHERE rating_queue_pending IS NOT NULL"
-            )
-            rating_count = cursor.fetchone()['count']
-
-            if rating_count > 0:
-                logger.info(f"Migrating {rating_count} rating queue entries to unified queue...")
-                cursor = self._conn.execute(
-                    """
-                    SELECT yt_video_id, rating_queue_pending, rating_queue_requested_at,
-                           rating_queue_attempts, rating_queue_last_attempt, rating_queue_last_error
-                    FROM video_ratings
-                    WHERE rating_queue_pending IS NOT NULL
-                    ORDER BY rating_queue_requested_at ASC
-                    """
-                )
-                for row in cursor.fetchall():
-                    rating_data = dict(row)
-                    payload = {
-                        'yt_video_id': rating_data['yt_video_id'],
-                        'rating': rating_data['rating_queue_pending']
-                    }
-                    self._conn.execute(
-                        """
-                        INSERT INTO queue (type, priority, status, payload, requested_at, attempts, last_attempt, last_error)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        ('rating', 1, 'pending', json.dumps(payload),
-                         rating_data['rating_queue_requested_at'], rating_data['rating_queue_attempts'],
-                         rating_data['rating_queue_last_attempt'], rating_data['rating_queue_last_error'])
-                    )
-                logger.info(f"✓ Migrated {rating_count} rating entries")
-
-            self._conn.commit()
-
-            if search_count > 0 or rating_count > 0:
-                logger.info(f"Migration complete: {search_count} searches + {rating_count} ratings = {search_count + rating_count} total queue items")
-
-        except Exception as e:
-            logger.error(f"Error during queue migration: {e}")
-            # Don't fail startup on migration errors
-            import traceback
-            logger.error(traceback.format_exc())
 
     @staticmethod
     def timestamp(ts = None) -> str:

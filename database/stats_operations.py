@@ -25,11 +25,11 @@ class StatsOperations:
         Get total count of matched videos.
 
         Returns:
-            Total number of videos with yt_match_pending = 0
+            Total number of videos (all videos in video_ratings are matched)
         """
         with self._lock:
             cursor = self._conn.execute(
-                "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings WHERE yt_match_pending = 0"
+                "SELECT COUNT(DISTINCT yt_video_id) as count FROM video_ratings "
             )
             result = cursor.fetchone()
             return result['count'] if result else 0
@@ -43,7 +43,7 @@ class StatsOperations:
         """
         with self._lock:
             cursor = self._conn.execute(
-                "SELECT SUM(play_count) as total FROM video_ratings WHERE yt_match_pending = 0"
+                "SELECT SUM(play_count) as total FROM video_ratings "
             )
             result = cursor.fetchone()
             return result['total'] if result and result['total'] is not None else 0
@@ -60,8 +60,7 @@ class StatsOperations:
                 """
                 SELECT rating, COUNT(*) as count
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY rating
+                               GROUP BY rating
                 """
             )
             rows = cursor.fetchall()
@@ -82,8 +81,7 @@ class StatsOperations:
                 """
                 SELECT *, ha_title, ha_artist, yt_channel, play_count, rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                ORDER BY play_count DESC
+                               ORDER BY play_count DESC
                 LIMIT ?
                 """,
                 (limit,)
@@ -105,7 +103,7 @@ class StatsOperations:
                 """
                 SELECT *, ha_title, ha_artist, yt_channel, rating_score, rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND rating != 'none'
+                WHERE rating != 'none'
                 ORDER BY rating_score DESC
                 LIMIT ?
                 """,
@@ -128,7 +126,7 @@ class StatsOperations:
                 """
                 SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND date_last_played IS NOT NULL
+                WHERE date_last_played IS NOT NULL
                 ORDER BY date_last_played DESC
                 LIMIT ?
                 """,
@@ -154,7 +152,7 @@ class StatsOperations:
                 """
                 SELECT COUNT(*) as count
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND rating = ?
+                WHERE rating = ?
                 """,
                 (rating,)
             )
@@ -167,101 +165,11 @@ class StatsOperations:
                 """
                 SELECT *
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND rating = ?
+                WHERE rating = ?
                 ORDER BY date_last_played DESC, play_count DESC
                 LIMIT ? OFFSET ?
                 """,
                 (rating, per_page, offset)
-            )
-            videos = [dict(row) for row in cursor.fetchall()]
-
-            return {
-                'videos': videos,
-                'total_count': total_count,
-                'total_pages': total_pages,
-                'current_page': page,
-                'per_page': per_page
-            }
-
-    def get_not_found_videos(self, page: int = 1, per_page: int = 50) -> Dict:
-        """
-        Get videos marked as not_found with pagination.
-
-        Args:
-            page: Page number (1-indexed)
-            per_page: Number of results per page
-
-        Returns:
-            Dictionary with videos list, total count, and page info
-        """
-        with self._lock:
-            # Get total count
-            cursor = self._conn.execute(
-                """
-                SELECT COUNT(*) as count
-                FROM video_ratings
-                WHERE yt_match_pending = 1 AND pending_reason = 'not_found'
-                """,
-            )
-            total_count = cursor.fetchone()['count']
-            total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
-
-            # Get paginated results
-            offset = (page - 1) * per_page
-            cursor = self._conn.execute(
-                """
-                SELECT *
-                FROM video_ratings
-                WHERE yt_match_pending = 1 AND pending_reason = 'not_found'
-                ORDER BY date_added DESC, play_count DESC
-                LIMIT ? OFFSET ?
-                """,
-                (per_page, offset)
-            )
-            videos = [dict(row) for row in cursor.fetchall()]
-
-            return {
-                'videos': videos,
-                'total_count': total_count,
-                'total_pages': total_pages,
-                'current_page': page,
-                'per_page': per_page
-            }
-
-    def get_all_pending_videos(self, page: int = 1, per_page: int = 50) -> Dict:
-        """
-        Get all pending videos (all reasons) with pagination.
-
-        Args:
-            page: Page number (1-indexed)
-            per_page: Number of results per page
-
-        Returns:
-            Dictionary with videos list, total count, and page info
-        """
-        with self._lock:
-            # Get total count
-            cursor = self._conn.execute(
-                """
-                SELECT COUNT(*) as count
-                FROM video_ratings
-                WHERE yt_match_pending = 1
-                """,
-            )
-            total_count = cursor.fetchone()['count']
-            total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
-
-            # Get paginated results
-            offset = (page - 1) * per_page
-            cursor = self._conn.execute(
-                """
-                SELECT *
-                FROM video_ratings
-                WHERE yt_match_pending = 1
-                ORDER BY date_added DESC, play_count DESC
-                LIMIT ? OFFSET ?
-                """,
-                (per_page, offset)
             )
             videos = [dict(row) for row in cursor.fetchall()]
 
@@ -291,7 +199,7 @@ class StatsOperations:
                        SUM(play_count) as total_plays,
                        AVG(rating_score) as avg_rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND yt_channel IS NOT NULL
+                WHERE yt_channel IS NOT NULL
                 GROUP BY yt_channel_id
                 ORDER BY video_count DESC
                 LIMIT ?
@@ -312,7 +220,7 @@ class StatsOperations:
                 """
                 SELECT yt_category_id, COUNT(*) as count
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND yt_category_id IS NOT NULL
+                WHERE yt_category_id IS NOT NULL
                 GROUP BY yt_category_id
                 ORDER BY count DESC
                 """
@@ -334,8 +242,7 @@ class StatsOperations:
                 """
                 SELECT DATE(date_last_played) as date, COUNT(*) as play_count
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                  AND date_last_played >= datetime('now', '-' || ? || ' days')
+                                 AND date_last_played >= datetime('now', '-' || ? || ' days')
                 GROUP BY DATE(date_last_played)
                 ORDER BY date
                 """,
@@ -357,8 +264,7 @@ class StatsOperations:
             cursor = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE yt_match_pending = 0
-                  AND date_added >= datetime('now', '-' || ? || ' days')
+                                 AND date_added >= datetime('now', '-' || ? || ' days')
                 ORDER BY date_added DESC
                 """,
                 (days,)
@@ -385,8 +291,7 @@ class StatsOperations:
                     COUNT(DISTINCT yt_channel_id) as unique_channels,
                     AVG(rating_score) as avg_rating_score
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                """
+                               """
             )
             matched_stats = cursor.fetchone()
 
@@ -444,8 +349,7 @@ class StatsOperations:
                 """
                 SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                  AND date_last_played IS NOT NULL
+                                 AND date_last_played IS NOT NULL
                   AND (? IS NULL OR date_last_played >= ?)
                   AND (? IS NULL OR date_last_played <= ?)
                 ORDER BY date_last_played DESC
@@ -471,7 +375,7 @@ class StatsOperations:
                 """
                 SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND rating != 'none'
+                WHERE rating != 'none'
                 ORDER BY date_last_played DESC
                 LIMIT ? OFFSET ?
                 """,
@@ -495,8 +399,7 @@ class StatsOperations:
             cursor = self._conn.execute(
                 """
                 SELECT * FROM video_ratings
-                WHERE yt_match_pending = 0
-                  AND (ha_title LIKE ? OR ha_artist LIKE ? OR yt_channel LIKE ?)
+                                 AND (ha_title LIKE ? OR ha_artist LIKE ? OR yt_channel LIKE ?)
                 ORDER BY date_last_played DESC
                 LIMIT ?
                 """,
@@ -519,7 +422,7 @@ class StatsOperations:
                     CAST(strftime('%w', date_last_played) AS INTEGER) as day_of_week,
                     COUNT(*) as play_count
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND date_last_played IS NOT NULL
+                WHERE date_last_played IS NOT NULL
                 GROUP BY day_of_week
                 ORDER BY day_of_week
                 """
@@ -533,7 +436,7 @@ class StatsOperations:
                     CAST(strftime('%H', date_last_played) AS INTEGER) as hour,
                     COUNT(*) as play_count
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND date_last_played IS NOT NULL
+                WHERE date_last_played IS NOT NULL
                 GROUP BY hour
                 ORDER BY hour
                 """
@@ -559,8 +462,7 @@ class StatsOperations:
                     strftime('%Y-%W', date_added) as week,
                     COUNT(*) as new_videos
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY week
+                               GROUP BY week
                 ORDER BY week DESC
                 LIMIT 12
                 """
@@ -587,8 +489,7 @@ class StatsOperations:
                     END as play_range,
                     COUNT(*) as video_count
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY play_range
+                               GROUP BY play_range
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
@@ -608,8 +509,7 @@ class StatsOperations:
                     AVG(play_count) as avg_play_count,
                     COUNT(*) as video_count
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY rating
+                               GROUP BY rating
                 """
             )
             rows = cursor.fetchall()
@@ -637,10 +537,9 @@ class StatsOperations:
                         ELSE 'Repeat play'
                     END as retention_type,
                     COUNT(*) as count,
-                    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM video_ratings WHERE yt_match_pending = 0), 2) as percentage
+                    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM video_ratings ), 2) as percentage
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY retention_type
+                               GROUP BY retention_type
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
@@ -657,8 +556,7 @@ class StatsOperations:
                 """
                 SELECT source, COUNT(*) as count
                 FROM video_ratings
-                WHERE yt_match_pending = 0
-                GROUP BY source
+                               GROUP BY source
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
@@ -684,7 +582,7 @@ class StatsOperations:
                     AVG(play_count) as avg_plays,
                     SUM(CASE WHEN rating = 'like' THEN 1 ELSE 0 END) as likes
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND yt_duration IS NOT NULL
+                WHERE yt_duration IS NOT NULL
                 GROUP BY duration_bucket
                 """
             )
@@ -814,7 +712,7 @@ class StatsOperations:
                 """
                 SELECT DISTINCT yt_channel, yt_channel_id
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND yt_channel IS NOT NULL
+                WHERE yt_channel IS NOT NULL
                 ORDER BY yt_channel
                 """
             )
@@ -832,7 +730,7 @@ class StatsOperations:
                 """
                 SELECT DISTINCT yt_category_id
                 FROM video_ratings
-                WHERE yt_match_pending = 0 AND yt_category_id IS NOT NULL
+                WHERE yt_category_id IS NOT NULL
                 ORDER BY yt_category_id
                 """
             )
@@ -858,12 +756,10 @@ class StatsOperations:
                     WHERE yt_channel_id IN (
                         SELECT DISTINCT yt_channel_id
                         FROM video_ratings
-                        WHERE rating = 'like' AND yt_match_pending = 0
-                    )
+                        WHERE rating = 'like'                    )
                     AND play_count < 3
                     AND rating = 'none'
-                    AND yt_match_pending = 0
-                    ORDER BY RANDOM()
+                                       ORDER BY RANDOM()
                     LIMIT ?
                     """,
                     (limit,)
@@ -876,13 +772,11 @@ class StatsOperations:
                     WHERE yt_category_id IN (
                         SELECT DISTINCT yt_category_id
                         FROM video_ratings
-                        WHERE yt_match_pending = 0
-                        ORDER BY play_count DESC
+                                               ORDER BY play_count DESC
                         LIMIT 5
                     )
                     AND play_count < 2
-                    AND yt_match_pending = 0
-                    ORDER BY date_added DESC
+                                       ORDER BY date_added DESC
                     LIMIT ?
                     """,
                     (limit,)
@@ -895,11 +789,9 @@ class StatsOperations:
                     WHERE yt_channel_id IN (
                         SELECT DISTINCT yt_channel_id
                         FROM video_ratings
-                        WHERE rating = 'like' AND yt_match_pending = 0
-                    )
+                        WHERE rating = 'like'                    )
                     AND play_count = 0
-                    AND yt_match_pending = 0
-                    ORDER BY date_added DESC
+                                       ORDER BY date_added DESC
                     LIMIT ?
                     """,
                     (limit,)
@@ -923,7 +815,7 @@ class StatsOperations:
         with self._lock:
             # Get total count of unrated songs
             cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' AND yt_match_pending = 0"
+                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' "
             )
             total_count = cursor.fetchone()['count']
 
@@ -947,8 +839,7 @@ class StatsOperations:
                 """
                 SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url, ha_duration, yt_duration
                 FROM video_ratings
-                WHERE rating = 'none' AND yt_match_pending = 0
-                ORDER BY play_count DESC, date_last_played DESC
+                WHERE rating = 'none'                ORDER BY play_count DESC, date_last_played DESC
                 LIMIT ? OFFSET ?
                 """,
                 (limit, offset)
@@ -970,40 +861,4 @@ class StatsOperations:
             'total_count': total_count
         }
 
-    def get_pending_summary(self) -> Dict[str, Any]:
-        """
-        Get summary of pending videos grouped by reason.
-
-        Returns:
-            Dict with counts by reason and total pending count
-        """
-        with self._lock:
-            # Get total pending count
-            cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM video_ratings WHERE yt_match_pending = 1"
-            )
-            total_pending = cursor.fetchone()['count']
-
-            # Get breakdown by reason
-            cursor = self._conn.execute(
-                """
-                SELECT
-                    pending_reason,
-                    COUNT(*) as count
-                FROM video_ratings
-                WHERE yt_match_pending = 1
-                GROUP BY pending_reason
-                """
-            )
-            by_reason = {}
-            for row in cursor.fetchall():
-                reason = row['pending_reason'] or 'unknown'
-                by_reason[reason] = row['count']
-
-        return {
-            'total': total_pending,
-            'quota_exceeded': by_reason.get('quota_exceeded', 0),
-            'not_found': by_reason.get('not_found', 0),
-            'search_failed': by_reason.get('search_failed', 0),
-            'unknown': by_reason.get('unknown', 0)
-        }
+    

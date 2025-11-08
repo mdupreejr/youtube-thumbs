@@ -162,16 +162,16 @@ class LogsOperations:
             Dictionary with matches list, pagination info, and total count
         """
         # Build WHERE clause
-        where_conditions = ["yt_match_pending = 0", "yt_video_id IS NOT NULL"]
+        where_conditions = []
         params = []
 
         # Add period filter - use most recent activity timestamp
         period_timestamp = self._get_period_timestamp(period)
         if period_timestamp:
-            where_conditions.append("COALESCE(date_last_played, yt_match_last_attempt, date_added) >= ?")
+            where_conditions.append("COALESCE(date_last_played, date_added) >= ?")
             params.append(period_timestamp)
 
-        where_clause = " AND ".join(where_conditions)
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
         with self._lock:
             # Get total count
@@ -200,9 +200,8 @@ class LogsOperations:
             query = f"""
                 SELECT yt_video_id, ha_title, ha_artist, ha_duration,
                        yt_title, yt_channel, yt_duration, yt_published_at,
-                       date_added, date_last_played, yt_match_last_attempt,
-                       yt_match_attempts, play_count,
-                       COALESCE(date_last_played, yt_match_last_attempt, date_added) as sort_timestamp
+                       date_added, date_last_played, play_count,
+                       COALESCE(date_last_played, date_added) as sort_timestamp
                 FROM video_ratings
                 WHERE {where_clause}
                 ORDER BY sort_timestamp DESC
@@ -236,8 +235,8 @@ class LogsOperations:
                 """
                 SELECT yt_video_id, ha_title, ha_artist, ha_duration,
                        yt_title, yt_channel, yt_duration, yt_url,
-                       date_added, yt_match_attempts, play_count,
-                       yt_match_pending, source
+                       date_added, play_count,
+                       source
                 FROM video_ratings
                 WHERE yt_video_id = ?
                 """,

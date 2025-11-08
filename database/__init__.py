@@ -175,48 +175,24 @@ class Database:
         """LEGACY: Mark search failed in old queue structure."""
         return self._pending_ops.mark_search_failed(search_id, error)
 
-    # Not found cache operations (v1.64.0: consolidated into video_ratings table)
+    # Not found cache operations (v4.0.0: disabled - TODO implement queue-based caching)
     def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
         """
         Check if this content was recently searched and not found.
-        Now queries video_ratings table instead of separate not_found_searches table.
+
+        v4.0.0: Temporarily disabled. TODO: Re-implement by querying queue for failed searches.
 
         Args:
             title: Media title
-            artist: Media artist (optional, used in hash for accurate matching)
+            artist: Media artist (optional)
             duration: Media duration in seconds (optional)
 
         Returns:
-            True if search failed within cache period, False otherwise
+            Always returns False (not-found caching temporarily disabled)
         """
-        if not title:
-            return False
-
-        # Use content hash for consistent identification (MUST include artist to match recording)
-        content_hash = get_content_hash(title, duration, artist)
-
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT ha_content_id, yt_match_last_attempt, yt_match_attempts
-                FROM video_ratings
-                WHERE ha_content_hash = ?
-                  AND yt_video_id IS NULL
-                  AND pending_reason = 'not_found'
-                  AND yt_match_last_attempt > datetime('now', '-' || ? || ' hours')
-                """,
-                (content_hash, self._not_found_cache_hours)
-            )
-            row = cur.fetchone()
-
-        if row:
-            from logger import logger
-            logger.debug(
-                "Skipping search for '%s' - not found %d times, last attempt: %s",
-                title, row['yt_match_attempts'], row['yt_match_last_attempt']
-            )
-            return True
-
+        # TODO v4.1.0: Re-implement by querying queue table for failed search attempts
+        # Should check queue items with status='failed' and type='search'
+        # within the cache period (default 24 hours)
         return False
 
     def record_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None, search_query: Optional[str] = None) -> bool:
@@ -325,12 +301,6 @@ class Database:
     def get_rated_videos(self, rating: str, page: int = 1, per_page: int = 50) -> Dict:
         return self._stats_ops.get_rated_videos(rating, page, per_page)
 
-    def get_not_found_videos(self, page: int = 1, per_page: int = 50) -> Dict:
-        return self._stats_ops.get_not_found_videos(page, per_page)
-
-    def get_all_pending_videos(self, page: int = 1, per_page: int = 50) -> Dict:
-        return self._stats_ops.get_all_pending_videos(page, per_page)
-
     def get_top_channels(self, limit: int = 10) -> List[Dict]:
         return self._stats_ops.get_top_channels(limit)
 
@@ -392,9 +362,6 @@ class Database:
 
     def get_unrated_videos(self, page: int = 1, limit: int = 50) -> Dict[str, Any]:
         return self._stats_ops.get_unrated_videos(page, limit)
-
-    def get_pending_summary(self) -> Dict[str, Any]:
-        return self._stats_ops.get_pending_summary()
 
     # API Usage Operations
     def record_api_call(self, api_method: str, success: bool = True, quota_cost: int = 1, error_message: str = None) -> None:

@@ -50,7 +50,6 @@ def stats_page() -> str:
         most_played = _db.get_most_played(10)
         top_channels = _db.get_top_channels(10)
         recent = _db.get_recent_activity(15)
-        pending_summary = _db.get_pending_summary()
 
         # Calculate rating percentages (ensure integers to avoid type errors)
         liked = int(summary.get('liked', 0) or 0)
@@ -112,7 +111,6 @@ def stats_page() -> str:
             'most_played': formatted_most_played,
             'top_channels': top_channels,
             'recent_activity': recent_activity,
-            'pending_summary': pending_summary,
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
@@ -184,68 +182,6 @@ def stats_disliked_page() -> str:
     except Exception as e:
         logger.error(f"Error rendering disliked stats: {e}")
         return "<h1>Error loading disliked videos</h1>", 500
-
-
-@bp.route('/stats/pending')
-def stats_pending_page() -> str:
-    """Show paginated list of all pending videos."""
-    try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-        page, error = validate_page_param(request.args)
-        if error:
-            return error_response('Invalid page parameter', 400)
-        if not page:
-            page = 1
-
-        result = _db.get_all_pending_videos(page=page, per_page=50)
-
-        # Format videos
-        formatted_videos = format_videos_for_display(
-            result['videos'],
-            base_fields=['play_count', 'date_added'],
-            additional_fields=['pending_reason', 'yt_match_attempts']
-        )
-
-        return render_template('stats_pending.html',
-                             ingress_path=ingress_path,
-                             videos=formatted_videos,
-                             total_count=result['total_count'],
-                             current_page=result['current_page'],
-                             total_pages=result['total_pages'])
-    except Exception as e:
-        logger.error(f"Error rendering pending stats: {e}")
-        return "<h1>Error loading pending videos</h1>", 500
-
-
-@bp.route('/stats/not_found')
-def stats_not_found_page() -> str:
-    """Show paginated list of not found videos."""
-    try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-        page, error = validate_page_param(request.args)
-        if error:
-            return error_response('Invalid page parameter', 400)
-        if not page:
-            page = 1
-
-        result = _db.get_not_found_videos(page=page, per_page=50)
-
-        # Format videos
-        formatted_videos = format_videos_for_display(
-            result['videos'],
-            base_fields=['yt_video_id', 'play_count', 'date_added'],
-            additional_fields=['yt_match_attempts']
-        )
-
-        return render_template('stats_not_found.html',
-                             ingress_path=ingress_path,
-                             videos=formatted_videos,
-                             total_count=result['total_count'],
-                             current_page=result['current_page'],
-                             total_pages=result['total_pages'])
-    except Exception as e:
-        logger.error(f"Error rendering not found stats: {e}")
-        return "<h1>Error loading not found videos</h1>", 500
 
 
 # ============================================================================
