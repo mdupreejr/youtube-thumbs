@@ -97,24 +97,23 @@ def api_calls_log():
 
 @bp.route('/logs/pending-ratings')
 def pending_ratings_log():
-    """Display queue - both search and rating operations."""
+    """
+    Display comprehensive queue viewer with multiple tabs.
+    Architecture spec: Pending, History, Errors, Statistics tabs.
+    """
     ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    current_tab = request.args.get('tab', 'pending')
 
     try:
-        # Get all pending items from unified queue
-        pending_items = _db.list_pending_queue_items(limit=1000)
-
-        # Format queue items
-        formatted_items = []
-        for item in pending_items:
+        # Helper function to format queue items
+        def format_queue_item(item):
             payload = item.get('payload', {})
-            
+
             if item['type'] == 'search':
-                # Extract search info from payload
                 ha_media = payload
                 callback_rating = ha_media.get('callback_rating')
-                
-                formatted_items.append({
+
+                return {
                     'type': 'search',
                     'id': str(item['id']),
                     'ha_title': ha_media.get('ha_title', 'Unknown'),
@@ -122,20 +121,19 @@ def pending_ratings_log():
                     'operation': 'Search for YouTube match',
                     'callback': f"then rate {callback_rating}" if callback_rating else None,
                     'requested_at': item.get('requested_at'),
+                    'completed_at': item.get('completed_at'),
                     'attempts': item.get('attempts', 0),
                     'last_error': item.get('last_error'),
+                    'status': item.get('status'),
                     'yt_video_id': None
-                })
-                
+                }
+
             elif item['type'] == 'rating':
-                # Extract rating info from payload
                 yt_video_id = payload.get('yt_video_id')
                 rating = payload.get('rating')
-                
-                # Get video details if available
                 video = _db.get_video(yt_video_id) if yt_video_id else None
-                
-                formatted_items.append({
+
+                return {
                     'type': 'rating',
                     'id': str(item['id']),
                     'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
@@ -143,18 +141,44 @@ def pending_ratings_log():
                     'operation': f"Rate as {rating}",
                     'callback': None,
                     'requested_at': item.get('requested_at'),
+                    'completed_at': item.get('completed_at'),
                     'attempts': item.get('attempts', 0),
                     'last_error': item.get('last_error'),
+                    'status': item.get('status'),
                     'yt_video_id': yt_video_id
-                })
+                }
+            return None
 
-        # Sort by requested_at (newest first, but prioritize by queue priority)
-        formatted_items.sort(key=lambda x: x.get('requested_at') or '', reverse=True)
+        # Fetch data based on tab
+        data = {}
+
+        if current_tab == 'pending':
+            # Get pending items
+            pending_items = _db.list_pending_queue_items(limit=1000)
+            data['queue_items'] = [format_queue_item(item) for item in pending_items if format_queue_item(item)]
+            data['queue_items'].sort(key=lambda x: x.get('requested_at') or '', reverse=True)
+
+        elif current_tab == 'history':
+            # Get completed and failed items
+            history_items = _db.list_queue_history(limit=200)
+            data['history_items'] = [format_queue_item(item) for item in history_items if format_queue_item(item)]
+
+        elif current_tab == 'errors':
+            # Get failed items
+            error_items = _db.list_queue_failed(limit=200)
+            data['error_items'] = [format_queue_item(item) for item in error_items if format_queue_item(item)]
+
+        elif current_tab == 'statistics':
+            # Get queue statistics
+            data['statistics'] = _db.get_queue_statistics()
+            data['recent_activity'] = _db.get_recent_queue_activity(limit=50)
+            data['performance'] = _db.get_queue_performance_metrics(hours=24)
 
         return render_template(
             'logs_queue.html',
             ingress_path=ingress_path,
-            queue_items=formatted_items
+            current_tab=current_tab,
+            **data
         )
 
     except Exception as e:

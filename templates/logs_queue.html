@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Thumbs - Queue</title>
+    <title>YouTube Thumbs - Queue Monitor</title>
     <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
 </head>
 <body>
@@ -23,31 +23,32 @@
         </header>
 
         <div class="card">
-            <!-- Tab Navigation -->
-            <div class="tab-navigation">
-                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button">
-                    Rated Songs
+            <h2>📊 Queue Monitor</h2>
+
+            <!-- Queue Sub-Tabs -->
+            <div class="tab-navigation" style="margin: 20px 0;">
+                <a href="{{ ingress_path }}/logs/pending-ratings?tab=pending"
+                   class="tab-button {{ 'active' if current_tab == 'pending' else '' }}">
+                    Pending
                 </a>
-                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button">
-                    Matches
+                <a href="{{ ingress_path }}/logs/pending-ratings?tab=history"
+                   class="tab-button {{ 'active' if current_tab == 'history' else '' }}">
+                    History
                 </a>
-                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button">
-                    Recent
-                </a>
-                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button">
+                <a href="{{ ingress_path }}/logs/pending-ratings?tab=errors"
+                   class="tab-button {{ 'active' if current_tab == 'errors' else '' }}">
                     Errors
                 </a>
-                <a href="{{ ingress_path }}/logs/api-calls" class="tab-button">
-                    API Calls
-                </a>
-                <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button active">
-                    Queue
+                <a href="{{ ingress_path }}/logs/pending-ratings?tab=statistics"
+                   class="tab-button {{ 'active' if current_tab == 'statistics' else '' }}">
+                    Statistics
                 </a>
             </div>
 
-            <h2 style="margin: 20px 0 10px 0;">Queue</h2>
+            <!-- PENDING TAB -->
+            {% if current_tab == 'pending' %}
             <p class="info-text">
-                Operations waiting to be processed by the background worker. The worker processes one item at a time to respect API quotas and rate limits.
+                Operations waiting to be processed by the background worker. The worker processes one item per minute to respect API quotas and rate limits.
             </p>
 
             {% if queue_items %}
@@ -70,7 +71,7 @@
                     </thead>
                     <tbody>
                         {% for item in queue_items %}
-                        <tr class="clickable-row" data-item-type="{{ item.type }}" data-item-id="{{ item.id }}" style="cursor: pointer;">
+                        <tr class="clickable-row" data-item-id="{{ item.id }}" style="cursor: pointer;">
                             <td>
                                 {% if item.type == 'search' %}
                                 <span style="color: #3b82f6;">🔍 Search</span>
@@ -86,7 +87,7 @@
                                 <br><span style="font-size: 0.85em; color: #64748b;">{{ item.callback }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.requested_at or '—' }}</td>
+                            <td>{{ item.requested_at[:19] if item.requested_at else '—' }}</td>
                             <td style="text-align: center;">{{ item.attempts or 0 }}</td>
                             <td>
                                 {% if item.last_error %}
@@ -104,11 +105,11 @@
             <div class="info-box" style="margin-top: 20px;">
                 <p><strong>How the queue works:</strong></p>
                 <ul style="margin: 10px 0; padding-left: 20px;">
-                    <li>The background worker processes one operation at a time</li>
+                    <li>The background worker processes one operation per minute</li>
                     <li>Search operations find YouTube videos matching Home Assistant media</li>
                     <li>Rating operations sync thumbs up/down to YouTube</li>
                     <li>Failed operations are retried with exponential backoff</li>
-                    <li>The worker automatically pauses when quota is exhausted and resumes when available</li>
+                    <li>The worker automatically pauses when quota is exhausted and resumes at midnight Pacific</li>
                 </ul>
             </div>
             {% else %}
@@ -120,6 +121,233 @@
                     No operations waiting to be processed.
                 </p>
             </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- HISTORY TAB -->
+            {% if current_tab == 'history' %}
+            <p class="info-text">
+                Recently completed and failed operations. Shows the last 200 processed items.
+            </p>
+
+            {% if history_items %}
+            <p class="info-text" style="margin-top: 10px;">
+                <strong>{{ history_items|length }} recent operation{{ 's' if history_items|length != 1 else '' }}</strong>
+            </p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Operation</th>
+                            <th>Queued At</th>
+                            <th>Completed</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in history_items %}
+                        <tr class="clickable-row" data-item-id="{{ item.id }}" style="cursor: pointer;">
+                            <td>
+                                {% if item.type == 'search' %}
+                                <span style="color: #3b82f6;">🔍 Search</span>
+                                {% else %}
+                                <span style="color: #8b5cf6;">⭐ Rating</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.ha_title or 'Unknown' }}</td>
+                            <td>{{ item.ha_artist or '—' }}</td>
+                            <td>{{ item.operation }}</td>
+                            <td>{{ item.requested_at[:19] if item.requested_at else '—' }}</td>
+                            <td>{{ item.completed_at[:19] if item.completed_at else '—' }}</td>
+                            <td style="text-align: center;">—</td>
+                            <td>
+                                {% if item.status == 'completed' %}
+                                <span class="badge badge-success">✓ Completed</span>
+                                {% else %}
+                                <span class="badge badge-error">✗ Failed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    No history available
+                </p>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- ERRORS TAB -->
+            {% if current_tab == 'errors' %}
+            <p class="info-text">
+                Failed operations with detailed error messages. Helps identify recurring issues.
+            </p>
+
+            {% if error_items %}
+            <p class="info-text" style="margin-top: 10px;">
+                <strong>{{ error_items|length }} failed operation{{ 's' if error_items|length != 1 else '' }}</strong>
+            </p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Operation</th>
+                            <th>Failed At</th>
+                            <th>Attempts</th>
+                            <th>Error Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in error_items %}
+                        <tr class="clickable-row" data-item-id="{{ item.id }}" style="cursor: pointer;">
+                            <td>
+                                {% if item.type == 'search' %}
+                                <span style="color: #3b82f6;">🔍 Search</span>
+                                {% else %}
+                                <span style="color: #8b5cf6;">⭐ Rating</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.ha_title or 'Unknown' }}</td>
+                            <td>{{ item.ha_artist or '—' }}</td>
+                            <td>{{ item.operation }}</td>
+                            <td>{{ item.completed_at[:19] if item.completed_at else '—' }}</td>
+                            <td style="text-align: center;">{{ item.attempts or 0 }}</td>
+                            <td>
+                                <span style="color: #ef4444; font-size: 0.9em;">
+                                    {{ item.last_error[:100] if item.last_error else 'Unknown error' }}
+                                    {% if item.last_error and item.last_error|length > 100 %}...{% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    ✓ No errors
+                </p>
+                <p style="text-align: center; color: #94a3b8; font-size: 0.9em;">
+                    All operations completing successfully.
+                </p>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- STATISTICS TAB -->
+            {% if current_tab == 'statistics' %}
+            <p class="info-text">
+                Queue performance metrics and operational statistics.
+            </p>
+
+            {% if statistics %}
+            <!-- Overall Statistics -->
+            <div class="summary-section">
+                <h3 style="margin: 20px 0 10px 0;">Overall Statistics</h3>
+                <div class="summary-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Items</div>
+                        <div class="stat-value">{{ statistics.total_items or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value" style="color: #f59e0b;">{{ statistics.pending or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Processing</div>
+                        <div class="stat-value" style="color: #3b82f6;">{{ statistics.processing or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value" style="color: #16a34a;">{{ statistics.completed or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failed</div>
+                        <div class="stat-value" style="color: #dc2626;">{{ statistics.failed or 0 }}</div>
+                    </div>
+                    {% if statistics.success_rate is not none %}
+                    <div class="stat-card">
+                        <div class="stat-label">Success Rate</div>
+                        <div class="stat-value">{{ "%.1f"|format(statistics.success_rate) }}%</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Per-Type Statistics -->
+            {% if statistics.by_type %}
+            <div class="breakdown-section" style="margin-top: 20px;">
+                <div class="breakdown-title">📌 By Operation Type</div>
+                <table class="breakdown-table">
+                    {% for type_stat in statistics.by_type %}
+                    <tr>
+                        <td style="font-weight: 500;">
+                            {% if type_stat.type == 'search' %}🔍 Search{% else %}⭐ Rating{% endif %}
+                        </td>
+                        <td style="text-align: right;">{{ type_stat.count }} total</td>
+                        <td style="text-align: right; color: #16a34a;">{{ type_stat.completed or 0 }} completed</td>
+                        <td style="text-align: right; color: #dc2626;">{{ type_stat.failed or 0 }} failed</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Performance Metrics -->
+            {% if performance %}
+            <div class="summary-section" style="margin-top: 30px;">
+                <h3 style="margin: 20px 0 10px 0;">Performance (Last 24 Hours)</h3>
+                <div class="summary-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">{{ performance.items_processed or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Success Rate</div>
+                        <div class="stat-value">{{ "%.1f"|format(performance.success_rate) if performance.success_rate is not none else '—' }}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg Processing Time</div>
+                        <div class="stat-value">{{ "%.1f"|format(performance.avg_processing_time) if performance.avg_processing_time else '—' }}s</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Recent Activity -->
+            {% if recent_activity and recent_activity.recent_completions %}
+            <div class="info-box" style="margin-top: 20px;">
+                <h4 style="margin: 0 0 10px 0;">Recent Activity</h4>
+                <p style="margin: 5px 0;">
+                    <strong>Completed:</strong> {{ recent_activity.recent_completions|length }} in last hour
+                </p>
+                <p style="margin: 5px 0;">
+                    <strong>Failed:</strong> {{ recent_activity.recent_failures|length if recent_activity.recent_failures else 0 }} in last hour
+                </p>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="empty-state">
+                <p style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    No statistics available
+                </p>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
     </div>
@@ -204,6 +432,36 @@
             margin: 15px 0;
             border-radius: 4px;
         }
+
+        .tab-navigation {
+            display: flex;
+            gap: 5px;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            padding: 10px 20px;
+            background: #f8fafc;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #64748b;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .tab-button:hover {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .tab-button.active {
+            background: #3b82f6;
+            color: white;
+        }
     </style>
 
     <script>
@@ -212,13 +470,12 @@
         // Add click handlers to all rows
         document.querySelectorAll('.clickable-row').forEach(row => {
             row.addEventListener('click', function() {
-                const itemType = this.dataset.itemType;
                 const itemId = this.dataset.itemId;
-                showDetails(itemType, itemId);
+                showDetails(itemId);
             });
         });
 
-        async function showDetails(itemType, itemId) {
+        async function showDetails(itemId) {
             const modal = document.getElementById('detailModal');
             const modalBody = document.getElementById('modalBody');
 
