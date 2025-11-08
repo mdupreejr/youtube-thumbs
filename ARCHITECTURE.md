@@ -34,21 +34,13 @@ If no cache match found:
 
 1. **Clean title**: Removes special characters, normalizes spacing
 2. **Search YouTube**: Query YouTube Data API with cleaned title
-3. **Filter by duration**: Only consider results where YouTube duration matches HA duration ± 1 second
-4. **Select best match**: First result with exact duration match
-5. **Store in database**: Save video metadata, mark as matched (`yt_match_pending = 0`)
+3. **Filter by duration**: Only consider results where YouTube duration matches HA duration + 1 second
+4. **Select best match**: Select the highest quality title match with the correct duration.
+5. **Store in database**: Save yt information in the video_ratings table.
 
 **Search Hit**: Video matched and cached for future plays.
 
 ### 3. Quota Exceeded Handling
-
-If YouTube quota is exhausted during search:
-
-1. **Store as pending**: Creates database entry with `yt_match_pending = 1`
-2. **Use placeholder ID**: `ha_content_id = ha_hash:abc123` (content hash)
-3. **Set pending_reason**: `quota_exceeded`
-4. **Skip YouTube calls**: All future searches delayed until quota recovers
-5. **Automatic retry**: After quota recovery, QuotaProber retries all pending videos
 
 ## Database Schema
 
@@ -92,58 +84,6 @@ Primary table storing all video metadata, play history, ratings, and pending sta
 - `date_added` (TIMESTAMP) - When video was first added to database
 - `date_last_played` (TIMESTAMP, INDEXED) - Most recent play timestamp
 
-**Pending Video Fields**:
-- `yt_match_pending` (INTEGER) - Boolean flag (0=matched, 1=pending YouTube match)
-  - Set to 1 when quota exhausted during search
-  - Set to 0 after successful YouTube match
-- `pending_reason` (TEXT) - Why video is pending
-  - `quota_exceeded` - Quota was exhausted, retry after recovery
-  - `not_found` - No YouTube match exists (marked by retry mechanism)
-  - NULL - Not pending (successfully matched)
-- `source` (TEXT) - How video was added
-  - `ha_live` - Playing on Home Assistant media player
-  - `manual` - Manually added
-
-**Pending Rating Queue Fields**:
-When rating fails due to quota/network issues, queued for retry:
-- `yt_rating_pending` (TEXT) - Pending rating action: 'like', 'dislike', or NULL
-- `yt_rating_requested_at` (TIMESTAMP) - When rating was first requested
-- `yt_rating_attempts` (INTEGER) - Number of retry attempts
-- `yt_rating_last_attempt` (TIMESTAMP) - Last retry attempt timestamp
-- `yt_rating_last_error` (TEXT) - Last error message
-
-**Example Records**:
-
-```sql
--- Fully matched video (normal case)
-yt_video_id: "dQw4w9WgXcQ"
-ha_content_id: NULL
-ha_title: "Never Gonna Give You Up"
-yt_title: "Rick Astley - Never Gonna Give You Up (Official Video)"
-yt_match_pending: 0
-pending_reason: NULL
-rating: "like"
-play_count: 5
-
--- Pending video (quota exhausted)
-yt_video_id: NULL
-ha_content_id: "ha_hash:a1b2c3d4e5f6"
-ha_title: "Some New Song"
-yt_title: NULL
-yt_match_pending: 1
-pending_reason: "quota_exceeded"
-rating: "none"
-play_count: 1
-
--- Pending video marked as not found
-yt_video_id: NULL
-ha_content_id: "ha_hash:x9y8z7w6v5u4"
-ha_title: "Obscure Local Recording"
-yt_title: NULL
-yt_match_pending: 1
-pending_reason: "not_found"
-```
-
 ### api_usage (API Quota Tracking)
 
 Tracks YouTube API usage by hour for quota management.
@@ -156,7 +96,6 @@ Tracks YouTube API usage by hour for quota management.
 **Behavior**:
 - Records every YouTube API call with quota cost (search=100, videos.list=1)
 - Enables quota usage analytics and trends
-- Helps identify quota-heavy operations
 
 ### api_call_log (Detailed API Logging)
 
@@ -244,47 +183,6 @@ def get_content_hash(title, duration, artist=None):
 - "Song Name  " / "Song Name" (trailing space)
 - "Title - Artist" / "Title - artist" (case difference)
 
-## Video States
-
-A video in the database can be in one of these states:
-
-1. **✓ Matched** (`yt_match_pending = 0`, `yt_video_id` populated)
-   - Successfully found on YouTube
-   - All YouTube metadata populated
-   - Can be rated, played, tracked
-   - Shows in all statistics
-
-2. **⏳ Pending - Quota Exceeded** (`yt_match_pending = 1`, `pending_reason = 'quota_exceeded'`)
-   - Quota was exhausted when attempting to match
-   - Only Home Assistant data available (no YouTube metadata)
-   - Will be retried automatically after quota recovery
-   - Shows in startup check as "pending (quota_exceeded)"
-
-3. **✗ Pending - Not Found** (`yt_match_pending = 1`, `pending_reason = 'not_found'`)
-   - Searched YouTube but no match found
-   - Marked by retry mechanism after failed search
-   - Won't be retried again (no YouTube video exists)
-   - Cached in video_ratings to prevent repeated searches
-
-## Pending Video Retry System
-
-When YouTube API quota is exhausted or searches fail, unmatched videos are stored as "pending" in the database. The retry system provides two ways to process these pending videos:
-
-### Manual Retry
-
-#### Location
-Stats page (`/stats`) → "Pending Videos" section
-
-#### Button: 🔄 Retry 1 Video
-- Processes **1 pending video** per click
-- Shows real-time status message
-- Displays results for 5 seconds before clearing
-
-#### Rate Limiting
-- **30-second cooldown** between button presses
-- Prevents accidental quota exhaustion
-- Cooldown tracked via `/tmp/youtube_thumbs_last_retry.txt`
-
 #### Process Flow
 
 1. **User clicks button** → API call to `/api/pending/retry?batch_size=1`
@@ -305,49 +203,7 @@ Stats page (`/stats`) → "Pending Videos" section
    - Format: "Processed 1 pending video: X resolved, Y failed, Z not found"
    - Message stays visible for 5 seconds
    - Page reloads if video was resolved (updates counts)
-
-#### Example Usage
-
-**Scenario**: You have 10 pending videos from quota exhaustion
-
-```
-1. Click "🔄 Retry 1 Video"
-   → Result: "Processed 1 pending video: 1 resolved, 0 failed, 0 not found"
-   → Page reloads, pending count drops to 9
-
-2. Wait 30 seconds (cooldown)
-
-3. Click again
-   → Result: "Processed 1 pending video: 0 resolved, 0 failed, 1 not found"
-   → Page reloads, pending count drops to 8 (but not_found count increases)
-
-4. Continue clicking to process remaining videos
-```
-
-### Automatic Retry (QuotaProber)
-
-#### How It Works
-
-The QuotaProber is a background thread that:
-1. Monitors quota status
-2. Detects quota recovery
-3. Automatically retries pending videos
-
-#### Trigger Conditions
-
-QuotaProber **only runs** when:
-- YouTube quota has been blocked (quotaExceeded error occurred)
-- After midnight Pacific Time quota reset (when quotas are restored)
-- Recovery probe succeeds (test YouTube API call works)
-
-**Important**: QuotaProber does NOT continuously process pending videos. It only activates after quota recovery.
-
-#### Check Interval
-
-- **Runs every 5 minutes** (300 seconds)
-- Checks if quota recovery probe should be attempted
-- Only probes if quota is currently blocked
-
+   - 
 #### Process Flow
 
 1. **Quota blocked** → quotaExceeded error occurs
@@ -379,27 +235,6 @@ QuotaProber **only runs** when:
 6. **Completion**
    - Log: "Pending video retry complete: X matched, Y not found, Z errors"
    - Record metrics for monitoring
-
-### Configuration Options
-
-#### `pending_video_retry_enabled`
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Enable/disable automatic retry after quota recovery
-- Set to `false` to only use manual retry
-
-#### `pending_video_retry_batch_size`
-- **Type**: Integer
-- **Default**: `1`
-- **Range**: 1-500
-- **Description**: Max videos to retry per recovery cycle
-- **Recommended**: Leave at 1 to avoid re-exhausting quota
-
-#### `quota_cooldown_hours`
-- **Type**: Integer
-- **Default**: `12`
-- **Range**: 1-168 (1 hour to 1 week)
-- **Description**: Hours to wait before attempting quota recovery probe (actual quota resets at midnight PT)
 
 ### Logging
 
@@ -536,103 +371,3 @@ Filter and view retry activity:
 - **Event Type**: All / Probe / Retry / Success / Error / Recovery
 - **Level**: All / INFO / WARNING / ERROR
 
-### Troubleshooting
-
-#### Manual Retry Shows "No pending videos"
-
-**Cause**: All pending videos have `pending_reason != 'quota_exceeded'`
-
-**Solutions**:
-1. Check stats page for breakdown by reason
-2. If all are "not_found", those won't be retried (no match exists)
-3. If all are "search_failed", manually retry after fixing network/API issues
-
-#### Automatic Retry Not Running
-
-**Cause**: Quota never blocked or cooldown not expired
-
-**Check**:
-1. Logs → Quota Prober tab
-2. Look for "Quota restored!" message
-3. If missing, quota was never blocked
-
-**Solutions**:
-- Use manual retry instead
-- QuotaProber only runs after quota recovery, not continuously
-
-#### All Retries Failing
-
-**Causes**:
-1. Quota still exceeded (check Tests page)
-2. Network issues (check internet connection)
-3. API credentials expired (regenerate credentials.json)
-4. Videos genuinely don't exist on YouTube
-
-**Debug**:
-1. Check main logs (not Quota Prober logs)
-2. Look for "Manual retry:" or "Retrying match for:" entries
-3. Check error messages
-
-#### Retry Says "Quota Exceeded" Immediately
-
-**Cause**: You hit quota limit too fast
-
-**Solutions**:
-1. Wait 30 seconds between manual retries
-2. Don't click button rapidly
-3. Current batch_size=1 prevents this, but older versions with batch_size=5 could trigger it
-
-### API Reference
-
-#### Manual Retry Endpoint
-
-```http
-POST /api/pending/retry?batch_size=1
-```
-
-**Query Parameters**:
-- `batch_size` (optional): Number of videos to retry (default: 5, max: 50)
-
-**Response** (success):
-```json
-{
-  "success": true,
-  "processed": 1,
-  "resolved": 1,
-  "failed": 0,
-  "not_found": 0,
-  "quota_blocked": false,
-  "message": "Processed 1 pending videos: 1 resolved, 0 failed, 0 not found"
-}
-```
-
-**Response** (rate limited):
-```json
-{
-  "success": false,
-  "error": "Please wait 30 seconds between retry attempts"
-}
-```
-
-**HTTP Status Codes**:
-- `200`: Success
-- `429`: Too Many Requests (rate limited)
-- `400`: Invalid batch_size parameter
-- `500`: Server error
-
-#### Pending Summary Endpoint
-
-```http
-GET /api/pending/summary
-```
-
-**Response**:
-```json
-{
-  "total": 10,
-  "quota_exceeded": 7,
-  "not_found": 2,
-  "search_failed": 1,
-  "unknown": 0
-}
-```
