@@ -51,16 +51,7 @@ def stats_page() -> str:
         top_channels = _db.get_top_channels(10)
         recent = _db.get_recent_activity(15)
 
-        # v4.0.25: Get queue statistics for pending summary
-        queue_stats = _db.get_queue_statistics()
-
-        # Build pending_summary from queue statistics
-        pending_summary = {
-            'quota_exceeded': 0,  # Not tracked separately in queue, would be in failed items
-            'not_found': 0,  # Not tracked separately in queue, would be in failed items
-            'search_failed': queue_stats.get('search_queue', {}).get('failed', 0) or 0,
-            'total': queue_stats.get('pending', 0) or 0
-        }
+        # v4.0.55: Removed pending_summary - retry functionality removed from UI
 
         # Calculate rating percentages (ensure integers to avoid type errors)
         liked = int(summary.get('liked', 0) or 0)
@@ -122,7 +113,6 @@ def stats_page() -> str:
             'most_played': formatted_most_played,
             'top_channels': top_channels,
             'recent_activity': recent_activity,
-            'pending_summary': pending_summary,
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
