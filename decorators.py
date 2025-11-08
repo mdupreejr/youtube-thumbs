@@ -5,61 +5,103 @@ from functools import wraps
 from typing import Any, Callable
 from googleapiclient.errors import HttpError
 from logger import logger
-from error_handler import log_and_suppress
-from quota_error import QuotaExceededError
+from quota_error import (
+    QuotaExceededError,
+    VideoNotFoundError,
+    AuthenticationError,
+    NetworkError,
+    InvalidRequestError,
+    YouTubeAPIError
+)
+
+# Will be set by youtube_api module
+_db = None
 
 
-def handle_youtube_error(context: str, return_value: Any = None):
+def handle_youtube_error(context: str, return_value: Any = None, api_method: str = None, quota_cost: int = 0):
     """
-    Decorator to handle YouTube API errors consistently.
-    Eliminates duplicate try/except blocks across API methods.
+    Decorator to convert YouTube API HttpErrors to specific exception types.
+
+    IMPORTANT: This decorator does NOT suppress errors - it converts them to
+    specific types so callers can handle them appropriately. All errors are logged.
 
     Args:
         context: Description of the operation for logging
-        return_value: Value to return on error
+        return_value: DEPRECATED - no longer used (errors are not suppressed)
+        api_method: Optional API method name (e.g., "videos.rate") for database logging
+        quota_cost: Optional quota cost for this API call (for database logging)
+
+    Raises:
+        QuotaExceededError: When API quota is exhausted
+        VideoNotFoundError: When video doesn't exist (404)
+        AuthenticationError: When credentials are invalid (401, 403)
+        NetworkError: When server/network issues occur (5xx, timeouts)
+        InvalidRequestError: When request is malformed (400)
+        YouTubeAPIError: For other YouTube API errors
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             try:
                 return func(self, *args, **kwargs)
-            except QuotaExceededError:
-                # CRITICAL: Re-raise QuotaExceededError immediately without logging
-                # Worker thread will log ONE clear message when it catches this
-                # No need to log here - would create duplicate error messages
+
+            except YouTubeAPIError:
+                # Already converted to specific type - just re-raise
                 raise
+
             except HttpError as e:
-                # Check if it's a quota error
-                detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
-                is_quota_error = detail is not None
-                if is_quota_error:
-                    # Raise QuotaExceededError - worker will catch and sleep
-                    # Don't include detail (contains HTML) - worker will log clean message
-                    raise QuotaExceededError("YouTube quota exceeded")
+                status_code = e.resp.status if hasattr(e, 'resp') else None
 
-                # Build error message with context
-                error_msg = f"YouTube API error in {context}"
+                # Build descriptive error message
+                error_context = f"{context}"
                 if args:
-                    # Add first argument (usually ID or query) to error message
-                    error_msg += f" | {args[0]}"
+                    error_context += f" | {args[0]}"
 
-                return log_and_suppress(
-                    e, error_msg,
-                    level="error",
-                    return_value=return_value,
-                    log_traceback=not is_quota_error  # Skip traceback for quota errors
-                )
+                # Check for quota error first
+                detail = self._quota_error_detail(e) if hasattr(self, '_quota_error_detail') else None
+                if detail:
+                    logger.error(f"Quota exceeded: {error_context}")
+                    # Record quota error to database if api_method provided
+                    if api_method and _db:
+                        _db.record_api_call(api_method, success=False, quota_cost=0, error_message="Quota exceeded")
+                    raise QuotaExceededError("YouTube API quota exceeded")
+
+                # Record API call error to database
+                error_msg = f"{context} | Status: {status_code}"
+                if api_method and _db:
+                    _db.record_api_call(api_method, success=False, quota_cost=0, error_message=error_msg)
+
+                # Convert based on status code
+                if status_code == 404:
+                    video_id = args[0] if args else "unknown"
+                    logger.warning(f"Video not found: {error_context}")
+                    raise VideoNotFoundError(video_id, f"Video not found: {error_context}")
+
+                elif status_code in (401, 403):
+                    logger.error(f"Authentication failed: {error_context} | Status: {status_code}")
+                    raise AuthenticationError(f"Authentication failed: {error_context}")
+
+                elif status_code >= 500:
+                    logger.warning(f"YouTube server error: {error_context} | Status: {status_code}")
+                    raise NetworkError(f"YouTube server error {status_code}: {error_context}")
+
+                elif status_code == 400:
+                    logger.error(f"Invalid request: {error_context} | Error: {str(e)}")
+                    raise InvalidRequestError(f"Invalid request: {error_context}")
+
+                else:
+                    # Unknown HTTP error - log and raise as generic YouTube API error
+                    logger.error(f"YouTube API error: {error_context} | Status: {status_code} | Error: {str(e)}")
+                    raise YouTubeAPIError(f"YouTube API error {status_code}: {error_context}")
+
             except Exception as e:
-                # Should never reach here for QuotaExceededError (caught above)
+                # Unexpected non-HTTP error - log and re-raise (don't suppress!)
                 error_msg = f"Unexpected error in {context}"
                 if args:
                     error_msg += f" | {args[0]}"
+                logger.error(f"{error_msg}: {str(e)}")
+                raise
 
-                return log_and_suppress(
-                    e, error_msg,
-                    level="error",
-                    return_value=return_value
-                )
         return wrapper
     return decorator
 

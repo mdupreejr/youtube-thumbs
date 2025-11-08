@@ -12,6 +12,7 @@ from googleapiclient.errors import HttpError
 from logger import logger
 from error_handler import log_and_suppress, validate_environment_variable
 from decorators import handle_youtube_error
+import decorators
 from constants import YOUTUBE_DURATION_OFFSET
 from quota_error import QuotaExceededError
 
@@ -22,6 +23,8 @@ def set_database(db):
     """Set the database instance for API usage tracking."""
     global _db
     _db = db
+    # Also set database in decorators module so it can log API call errors
+    decorators._db = db
 
 class YouTubeAPI:
     """Interface to YouTube Data API v3."""
@@ -627,13 +630,22 @@ class YouTubeAPI:
                 return_value=None
             )
 
-    @handle_youtube_error(context='get_rating', return_value='none')
+    @handle_youtube_error(context='get_rating', api_method='videos.getRating', quota_cost=1)
     def get_video_rating(self, yt_video_id: str) -> str:
-        """Get current rating for a video. Returns 'like', 'dislike', or 'none'."""
+        """
+        Get current rating for a video.
+
+        Returns 'like', 'dislike', or 'none'.
+        Raises specific exceptions on failure (no error suppression).
+        """
         logger.info(f"Checking rating for video ID: {yt_video_id}")
 
         request = self.youtube.videos().getRating(id=yt_video_id)
         response = request.execute()
+
+        # Track successful API usage
+        if _db:
+            _db.record_api_call('videos.getRating', success=True, quota_cost=1)
 
         if response.get('items'):
             rating = response['items'][0].get('rating', self.NO_RATING)
@@ -642,37 +654,28 @@ class YouTubeAPI:
 
         return self.NO_RATING
 
-    @handle_youtube_error(context='set_rating', return_value=False)
+    @handle_youtube_error(context='set_rating', api_method='videos.rate', quota_cost=50)
     def set_video_rating(self, yt_video_id: str, rating: str) -> bool:
-        """Set rating for a video. Returns True on success, False on failure."""
+        """
+        Set rating for a video.
+
+        Returns True on success.
+        Raises specific exceptions on failure (no error suppression).
+        """
         logger.info(f"Setting rating '{rating}' for video ID: {yt_video_id}")
 
-        try:
-            request = self.youtube.videos().rate(
-                id=yt_video_id,
-                rating=rating
-            )
-            request.execute()
+        request = self.youtube.videos().rate(
+            id=yt_video_id,
+            rating=rating
+        )
+        request.execute()
 
-            # Track API usage
-            if _db:
-                _db.record_api_call('videos.rate', success=True, quota_cost=50)
+        # Track successful API usage
+        if _db:
+            _db.record_api_call('videos.rate', success=True, quota_cost=50)
 
-            logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
-            return True
-
-        except HttpError as e:
-            detail = self._quota_error_detail(e)
-            if detail:
-                # Raise exception - worker will catch and sleep for 1 hour
-                # Don't include detail (contains HTML) - worker will log clean message
-                raise QuotaExceededError("YouTube quota exceeded")
-
-            # Non-quota error
-            logger.error(f"Failed to rate video {yt_video_id}: {e}")
-            if _db:
-                _db.record_api_call('videos.rate', success=False, quota_cost=0, error_message=str(e))
-            return False
+        logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
+        return True
 
     def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
