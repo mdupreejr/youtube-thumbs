@@ -197,29 +197,22 @@ def process_next_item(db, yt_api):
             logger.info(f"Processing rating: {video_id} as {rating}")
 
             try:
-                # Check current rating first to avoid unnecessary API calls
-                current_rating = yt_api.get_video_rating(video_id)
-
-                if current_rating == rating:
-                    # Already rated with desired rating - mark as complete
-                    logger.info(f"✓ Video {video_id} already rated as {rating} - marking complete")
+                # v4.0.19: Direct rating without get_video_rating check
+                # YouTube API is idempotent - rating with same rating doesn't change anything
+                # This saves 1 quota unit (get_rating costs 1, set_rating costs 50)
+                # More importantly, avoids wasting API calls when quota is nearly exhausted
+                success = yt_api.set_video_rating(video_id, rating)
+                if success:
                     db.record_rating(video_id, rating)
                     db.mark_queue_item_completed(queue_id)
+                    logger.info(f"✓ Successfully rated {video_id} as {rating}")
                     logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
                 else:
-                    # Needs rating - attempt the API call
-                    success = yt_api.set_video_rating(video_id, rating)
-                    if success:
-                        db.record_rating(video_id, rating)
-                        db.mark_queue_item_completed(queue_id)
-                        logger.info(f"✓ Successfully rated {video_id} as {rating}")
-                        logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
-                    else:
-                        # API returned False (unexpected - should raise exception instead)
-                        error_msg = "YouTube API returned False (unexpected)"
-                        logger.error(f"✗ {error_msg} for {video_id}")
-                        db.mark_queue_item_failed(queue_id, error_msg)
-                        logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
+                    # API returned False (unexpected - should raise exception instead)
+                    error_msg = "YouTube API returned False (unexpected)"
+                    logger.error(f"✗ {error_msg} for {video_id}")
+                    db.mark_queue_item_failed(queue_id, error_msg)
+                    logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
 
             except QuotaExceededError:
                 # Re-raise quota errors to outer handler (will sleep until midnight)
