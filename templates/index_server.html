@@ -171,18 +171,103 @@
                 <div class="test-card">
                     <div class="test-card-title">🏠 Home Assistant</div>
                     <div class="test-status {{ 'status-success' if ha_test.success else 'status-error' }}">
-                        {{ '✓ Connected' if ha_test.success else '✗ Error' }}
+                        {{ ha_test.message }}
                     </div>
-                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ ha_test.message }}</p>
+                    {% if ha_test.details %}
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <div style="margin: 5px 0;"><strong>Entity:</strong> {{ ha_test.details.entity }}</div>
+                        <div style="margin: 5px 0;"><strong>State:</strong> {{ ha_test.details.state }}</div>
+                        <div style="margin: 5px 0;"><strong>Response Time:</strong> {{ ha_test.details.response_time_ms }}ms</div>
+                        {% if ha_test.details.media %}
+                        <div style="margin-top: 10px; padding: 8px; background: #e0f2fe; border-radius: 4px;">
+                            <div style="font-weight: 600;">Now Playing:</div>
+                            <div style="margin: 3px 0;">{{ ha_test.details.media.title }}</div>
+                            {% if ha_test.details.media.artist %}<div style="color: #666;">{{ ha_test.details.media.artist }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                        {% if ha_test.details.attributes %}
+                        <div style="margin-top: 10px;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Device Info:</div>
+                            <div style="margin: 3px 0; color: #666;">{{ ha_test.details.attributes.friendly_name }}</div>
+                            {% if ha_test.details.attributes.source %}<div style="margin: 3px 0; color: #666;">Source: {{ ha_test.details.attributes.source }}</div>{% endif %}
+                            {% if ha_test.details.attributes.volume_level %}<div style="margin: 3px 0; color: #666;">Volume: {{ (ha_test.details.attributes.volume_level * 100)|int }}%</div>{% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <!-- YouTube API Test -->
                 <div class="test-card">
                     <div class="test-card-title">▶️ YouTube API</div>
                     <div class="test-status {{ 'status-success' if yt_test.success else 'status-error' }}">
-                        {{ '✓ Connected' if yt_test.success else '✗ Error' }}
+                        {{ yt_test.message }}
                     </div>
-                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ yt_test.message }}</p>
+                    {% if yt_test.details %}
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <!-- Worker Status -->
+                        <div style="margin: 8px 0; padding: 8px; background: {{ '#dcfce7' if yt_test.details.worker_running else '#fef2f2' }}; border-radius: 4px;">
+                            <strong>Queue Worker:</strong> {{ 'Running' if yt_test.details.worker_running else 'NOT RUNNING' }}
+                            {% if yt_test.details.worker_pid %} (PID: {{ yt_test.details.worker_pid }}){% endif %}
+                        </div>
+
+                        <!-- Quota Information -->
+                        {% if yt_test.details.quota %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Quota Usage (24h):</div>
+                            <div style="margin: 5px 0;">{{ yt_test.details.quota.used:,}} / {{ yt_test.details.quota.total:,}} ({{ "%.1f"|format(yt_test.details.quota.percent) }}%)</div>
+                            <div style="width: 100%; background: #e5e7eb; border-radius: 4px; height: 8px; margin-top: 5px;">
+                                <div style="width: {{ yt_test.details.quota.percent }}%; background: {{ '#ef4444' if yt_test.details.quota.exceeded else '#3b82f6' }}; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                            {% if yt_test.details.quota.time_until_reset %}
+                            <div style="margin-top: 5px; color: #dc2626; font-weight: 600;">Reset in: {{ yt_test.details.quota.time_until_reset }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Queue Statistics -->
+                        {% if yt_test.details.queue %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Queue Status:</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                                <div>Pending: {{ yt_test.details.queue.pending }}</div>
+                                <div>Processing: {{ yt_test.details.queue.processing }}</div>
+                                <div>Completed: {{ yt_test.details.queue.completed }}</div>
+                                <div>Failed: {{ yt_test.details.queue.failed }}</div>
+                            </div>
+                            {% if yt_test.details.queue.pending > 0 %}
+                            <div style="margin-top: 5px; color: #666; font-size: 0.9em;">
+                                {{ yt_test.details.queue.pending_searches }} searches, {{ yt_test.details.queue.pending_ratings }} ratings
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Performance Metrics -->
+                        {% if yt_test.details.performance and yt_test.details.performance.items_processed_24h > 0 %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Performance (24h):</div>
+                            <div style="margin: 3px 0;">Processed: {{ yt_test.details.performance.items_processed_24h }} items</div>
+                            <div style="margin: 3px 0;">Success Rate: {{ "%.1f"|format(yt_test.details.performance.success_rate) }}%</div>
+                            {% if yt_test.details.performance.avg_processing_time > 0 %}
+                            <div style="margin: 3px 0;">Avg Time: {{ "%.1f"|format(yt_test.details.performance.avg_processing_time) }}s</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- API Call Statistics -->
+                        {% if yt_test.details.api_stats and yt_test.details.api_stats.total_calls_24h > 0 %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">API Calls (24h):</div>
+                            <div style="margin: 3px 0;">Total: {{ yt_test.details.api_stats.total_calls_24h }} ({{ "%.1f"|format(yt_test.details.api_stats.success_rate) }}% success)</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 5px;">
+                                <div style="color: #16a34a;">✓ {{ yt_test.details.api_stats.successful_calls }}</div>
+                                <div style="color: #dc2626;">✗ {{ yt_test.details.api_stats.failed_calls }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <!-- Database Test -->
@@ -191,7 +276,7 @@
                     <div class="test-status {{ 'status-success' if db_test.success else 'status-error' }}">
                         {{ '✓ Connected' if db_test.success else '✗ Error' }}
                     </div>
-                    <p style="margin-top: 10px; color: #666; white-space: pre-line;">{{ db_test.message }}</p>
+                    <p style="margin-top: 10px; color: #666; white-space: pre-line; font-size: 0.85em;">{{ db_test.message }}</p>
                 </div>
             </div>
         </div>

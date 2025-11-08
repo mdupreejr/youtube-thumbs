@@ -520,16 +520,16 @@ def index() -> str:
 
         # Run connection tests if on tests tab
         if current_tab == 'tests':
-            # Test Home Assistant
-            ha_success, ha_message = check_home_assistant_api(ha_api)
-            template_data['ha_test'] = {'success': ha_success, 'message': ha_message}
+            # Test Home Assistant (returns detailed dict)
+            ha_success, ha_data = check_home_assistant_api(ha_api)
+            template_data['ha_test'] = {'success': ha_success, **ha_data}
 
-            # Test YouTube API
+            # Test YouTube API (returns detailed dict)
             yt_api = get_youtube_api()
-            yt_success, yt_message = check_youtube_api(yt_api, db=db)
-            template_data['yt_test'] = {'success': yt_success, 'message': yt_message}
+            yt_success, yt_data = check_youtube_api(yt_api, db=db)
+            template_data['yt_test'] = {'success': yt_success, **yt_data}
 
-            # Test Database
+            # Test Database (returns simple string message)
             db_success, db_message = check_database(db)
             template_data['db_test'] = {'success': db_success, 'message': db_message}
 

@@ -6,74 +6,120 @@ from typing import Tuple, Optional
 from logger import logger
 
 
-def check_home_assistant_api(ha_api) -> Tuple[bool, str]:
-    """Test Home Assistant API connectivity and configuration."""
+def check_home_assistant_api(ha_api) -> Tuple[bool, dict]:
+    """Test Home Assistant API connectivity and configuration with detailed information."""
     try:
         if not ha_api.token:
-            return False, "No authentication token"
+            return False, {'message': "No authentication token", 'details': {}}
 
-        # Test getting current media
+        # Test getting current media and entity state
+        import requests
+        import time
+
+        start_time = time.time()
         media = ha_api.get_current_media()
+        response_time = int((time.time() - start_time) * 1000)  # ms
+
+        # Get full entity state
+        url = f"{ha_api.url}/api/states/{ha_api.entity}"
+        response = ha_api.session.get(url, timeout=10)
+
+        if response.status_code != 200:
+            if response.status_code == 404:
+                return False, {'message': f"Entity {ha_api.entity} not found", 'details': {}}
+            else:
+                return False, {'message': f"HTTP {response.status_code}", 'details': {}}
+
+        entity_data = response.json()
+        state = entity_data.get('state', 'unknown')
+        attributes = entity_data.get('attributes', {})
+
+        # Build detailed response
+        details = {
+            'url': ha_api.url,
+            'entity': ha_api.entity,
+            'state': state,
+            'response_time_ms': response_time,
+            'media': media if media else None,
+            'attributes': {
+                'friendly_name': attributes.get('friendly_name', 'Unknown'),
+                'supported_features': attributes.get('supported_features'),
+                'device_class': attributes.get('device_class'),
+                'volume_level': attributes.get('volume_level'),
+                'is_volume_muted': attributes.get('is_volume_muted'),
+                'source': attributes.get('source'),
+                'source_list': attributes.get('source_list', [])
+            }
+        }
 
         if media:
-            return True, f"Connected, playing: {media.get('title', 'Unknown')}"
+            message = f"Connected • Playing: {media.get('title', 'Unknown')}"
         else:
-            # Try to get the state even if not playing
-            import requests
-            url = f"{ha_api.url}/api/states/{ha_api.entity}"
-            response = ha_api.session.get(url, timeout=10)
+            message = f"Connected • Player {state}"
 
-            if response.status_code == 200:
-                data = response.json()
-                state = data.get('state', 'unknown')
-                return True, f"Connected, player {state}"
-            elif response.status_code == 404:
-                return False, f"Entity {ha_api.entity} not found"
-            else:
-                return False, f"HTTP {response.status_code}"
+        return True, {'message': message, 'details': details}
 
     except Exception as e:
-        return False, str(e)
+        return False, {'message': str(e), 'details': {}}
 
 
-def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
-    """Test YouTube API authentication and quota."""
+def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
+    """Test YouTube API authentication and quota with detailed statistics."""
     try:
         if not yt_api or not yt_api.youtube:
-            return False, "Not authenticated"
+            return False, {'message': "Not authenticated", 'details': {}}
 
         # Check queue worker status
         import os
         worker_running = False
+        worker_pid = None
         pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
         if os.path.exists(pid_file):
             try:
                 with open(pid_file, 'r') as f:
-                    pid = int(f.read().strip())
-                os.kill(pid, 0)  # Check if process exists
+                    worker_pid = int(f.read().strip())
+                os.kill(worker_pid, 0)  # Check if process exists
                 worker_running = True
             except (OSError, ValueError):
                 pass
 
-        # Check for quota exceeded status
+        # Default details structure
+        details = {
+            'authenticated': True,
+            'worker_running': worker_running,
+            'worker_pid': worker_pid if worker_running else None,
+            'quota': {},
+            'queue': {},
+            'performance': {},
+            'api_stats': {}
+        }
+
+        # Get detailed statistics if database available
         if db:
             try:
                 from datetime import datetime, timedelta, timezone
 
-                # Get quota usage and call stats
+                # Get quota usage and call stats (24h)
                 summary_data = db.get_api_call_summary(hours=24)
                 summary = summary_data.get('summary', {})
                 quota_used = summary.get('total_quota', 0) or 0
                 total_calls = summary.get('total_calls', 0) or 0
+                successful_calls = summary.get('successful_calls', 0) or 0
+                failed_calls = summary.get('failed_calls', 0) or 0
+                success_rate = (successful_calls / total_calls * 100) if total_calls > 0 else 0
 
-                # Get queue size
-                with db._lock:
-                    cursor = db._conn.execute(
-                        "SELECT COUNT(*) as count FROM queue WHERE status = 'pending'"
-                    )
-                    queue_size = cursor.fetchone()['count']
+                # Get queue statistics
+                queue_stats = db.get_queue_statistics()
 
-                # Find last quota error
+                # Get recent queue activity
+                recent_activity = db.get_recent_queue_activity(limit=10)
+
+                # Get queue performance metrics
+                performance = db.get_queue_performance_metrics(hours=24)
+
+                # Find last quota error and check if quota exceeded
+                quota_exceeded = False
+                time_until_reset_str = None
                 with db._lock:
                     cursor = db._conn.execute(
                         """
@@ -107,38 +153,63 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
                             last_reset_utc -= timedelta(days=1)
 
                         if error_dt > last_reset_utc:
-                            # v4.0.7: Clarify quota message - show actual state, not just 24h usage
+                            quota_exceeded = True
                             time_until_reset = (last_reset_utc + timedelta(days=1)) - now_utc
                             hours = int(time_until_reset.total_seconds() / 3600)
                             minutes = int((time_until_reset.total_seconds() % 3600) / 60)
-                            return False, f"QUOTA EXCEEDED - Worker paused until midnight PT (in {hours}h {minutes}m)\nLast 24h usage: {quota_used:,}/10,000"
+                            time_until_reset_str = f"{hours}h {minutes}m"
+
+                # Populate details
+                details['quota'] = {
+                    'used': quota_used,
+                    'total': 10000,
+                    'percent': (quota_used / 10000 * 100) if quota_used > 0 else 0,
+                    'exceeded': quota_exceeded,
+                    'time_until_reset': time_until_reset_str
+                }
+
+                details['queue'] = {
+                    'total': queue_stats.get('total_items', 0),
+                    'pending': queue_stats.get('pending', 0),
+                    'processing': queue_stats.get('processing', 0),
+                    'completed': queue_stats.get('completed', 0),
+                    'failed': queue_stats.get('failed', 0),
+                    'pending_searches': queue_stats.get('pending_searches', 0),
+                    'pending_ratings': queue_stats.get('pending_ratings', 0)
+                }
+
+                details['performance'] = {
+                    'items_processed_24h': performance.get('items_processed', 0),
+                    'success_rate': performance.get('success_rate', 0),
+                    'avg_processing_time': performance.get('avg_processing_time', 0)
+                }
+
+                details['api_stats'] = {
+                    'total_calls_24h': total_calls,
+                    'successful_calls': successful_calls,
+                    'failed_calls': failed_calls,
+                    'success_rate': success_rate,
+                    'by_method': summary_data.get('by_method', [])
+                }
 
                 # Build status message
-                worker_status = "running" if worker_running else "NOT RUNNING"
-                # v4.0.7: Simplified quota message format
-                msg_parts = [f"Authenticated | Quota: {quota_used:,}/10,000 in last 24h"]
-
-                if queue_size > 0 and not worker_running:
-                    msg_parts.append(f"⚠️  Worker: {worker_status}! {queue_size} items waiting")
-                elif queue_size > 0:
-                    msg_parts.append(f"Worker: {worker_status} | Processing {queue_size} items")
+                if quota_exceeded:
+                    message = f"⚠️ QUOTA EXCEEDED • Worker paused until midnight PT (in {time_until_reset_str})"
+                    return False, {'message': message, 'details': details}
                 else:
-                    msg_parts.append(f"Worker: {worker_status}")
+                    message = f"✓ Authenticated • Quota: {quota_used:,}/10,000 ({details['quota']['percent']:.1f}%)"
+                    return True, {'message': message, 'details': details}
 
-                # v4.0.7: Remove confusing "No API calls" warning if quota is legitimately 0
-                # This warning only makes sense if worker is stuck, not at startup
-                if total_calls == 0 and queue_size > 0 and worker_running:
-                    msg_parts.append("⚠️  Queue has items but no API calls in 24h")
-
-                return True, "\n".join(msg_parts)
-
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Error getting YouTube API statistics: {e}")
                 pass
 
-        return True, "Authenticated"
+        # Fallback if no database stats available
+        message = "✓ Authenticated" if worker_running else "✓ Authenticated • Worker not running"
+        return True, {'message': message, 'details': details}
 
     except Exception as e:
-        return False, str(e)
+        return False, {'message': str(e), 'details': {}}
 
 
 def check_database(db) -> Tuple[bool, str]:
@@ -191,12 +262,14 @@ def run_startup_checks(ha_api, yt_api, db) -> bool:
     results = []
 
     # Check Home Assistant API
-    ha_ok, ha_msg = check_home_assistant_api(ha_api)
+    ha_ok, ha_data = check_home_assistant_api(ha_api)
+    ha_msg = ha_data.get('message', 'Unknown') if isinstance(ha_data, dict) else ha_data
     results.append(("Home Assistant", ha_ok, ha_msg))
     all_ok = all_ok and ha_ok
 
     # Check YouTube API
-    yt_ok, yt_msg = check_youtube_api(yt_api, db)
+    yt_ok, yt_data = check_youtube_api(yt_api, db)
+    yt_msg = yt_data.get('message', 'Unknown') if isinstance(yt_data, dict) else yt_data
     results.append(("YouTube API", yt_ok, yt_msg))
     all_ok = all_ok and yt_ok
 
