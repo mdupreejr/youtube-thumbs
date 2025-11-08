@@ -583,22 +583,27 @@ class YouTubeAPI:
                     return False  # Continue checking
 
                 except HttpError as e:
-                    # Handle quota errors by re-raising
+                    # v4.0.29: Check for quota errors
                     detail = self._quota_error_detail(e)
-                    if detail is not None:
-                        raise QuotaExceededError("YouTube quota exceeded")
+                    is_quota_error = detail is not None
 
-                    # v4.0.3: Track failed API call (non-quota errors)
+                    # v4.0.29: ALWAYS log failed API calls (including quota errors) BEFORE raising
                     if _db:
+                        _db.record_api_call('videos.list', success=False, quota_cost=1 if not is_quota_error else 0,
+                                           error_message="Quota exceeded" if is_quota_error else str(e))
                         _db.log_api_call_detailed(
                             api_method='videos.list',
                             operation_type='get_video_details',
                             query_params=f"id={video_id}",
-                            quota_cost=1,
+                            quota_cost=1 if not is_quota_error else 0,
                             success=False,
-                            error_message=str(e),
+                            error_message="Quota exceeded" if is_quota_error else str(e),
                             context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
                         )
+
+                    # Raise quota errors to stop processing
+                    if is_quota_error:
+                        raise QuotaExceededError("YouTube quota exceeded")
 
                     # Log and continue on other errors
                     logger.warning(f"[{phase}] Error fetching video {video_id}: {e}")
@@ -663,21 +668,25 @@ class YouTubeAPI:
         except HttpError as e:
             detail = self._quota_error_detail(e)
             is_quota_error = detail is not None
-            if is_quota_error:
-                # Raise exception - worker will catch and sleep for 1 hour
-                raise QuotaExceededError("YouTube quota exceeded")
 
-            # Track failed API call
+            # v4.0.29: ALWAYS log failed API calls (including quota errors) BEFORE raising
+            # This ensures check_quota_recently_exceeded() can find recent quota errors
             if _db:
+                _db.record_api_call('search', success=False, quota_cost=100 if not is_quota_error else 0,
+                                   error_message="Quota exceeded" if is_quota_error else str(e))
                 _db.log_api_call_detailed(
                     api_method='search',
                     operation_type='search_video',
                     query_params=f"q='{search_query}', maxResults={self.MAX_SEARCH_RESULTS}",
                     quota_cost=100 if not is_quota_error else 0,  # No quota consumed if quota already exceeded
                     success=False,
-                    error_message=str(e),
+                    error_message="Quota exceeded" if is_quota_error else str(e),
                     context=f"title='{title[:50]}...'" if len(title) > 50 else f"title='{title}'"
                 )
+
+            if is_quota_error:
+                # Raise exception - worker will catch and sleep until midnight
+                raise QuotaExceededError("YouTube quota exceeded")
 
             return log_and_suppress(
                 e,
