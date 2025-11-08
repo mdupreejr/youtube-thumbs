@@ -107,21 +107,28 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, str]:
                             last_reset_utc -= timedelta(days=1)
 
                         if error_dt > last_reset_utc:
-                            return False, f"Quota exceeded ({quota_used:,}/10,000 used), worker paused until midnight PT"
+                            # v4.0.7: Clarify quota message - show actual state, not just 24h usage
+                            time_until_reset = (last_reset_utc + timedelta(days=1)) - now_utc
+                            hours = int(time_until_reset.total_seconds() / 3600)
+                            minutes = int((time_until_reset.total_seconds() % 3600) / 60)
+                            return False, f"QUOTA EXCEEDED - Worker paused until midnight PT (in {hours}h {minutes}m)\nLast 24h usage: {quota_used:,}/10,000"
 
                 # Build status message
                 worker_status = "running" if worker_running else "NOT RUNNING"
-                msg_parts = [f"Authenticated, quota: {quota_used:,}/10,000 (24h)"]
+                # v4.0.7: Simplified quota message format
+                msg_parts = [f"Authenticated | Quota: {quota_used:,}/10,000 in last 24h"]
 
                 if queue_size > 0 and not worker_running:
-                    msg_parts.append(f"⚠️ WARNING: Queue worker {worker_status}! {queue_size} items pending")
+                    msg_parts.append(f"⚠️  Worker: {worker_status}! {queue_size} items waiting")
                 elif queue_size > 0:
-                    msg_parts.append(f"Worker: {worker_status}, processing {queue_size} items")
+                    msg_parts.append(f"Worker: {worker_status} | Processing {queue_size} items")
                 else:
                     msg_parts.append(f"Worker: {worker_status}")
 
-                if total_calls == 0 and queue_size > 0:
-                    msg_parts.append("⚠️ No API calls in 24h but queue has items - check worker logs")
+                # v4.0.7: Remove confusing "No API calls" warning if quota is legitimately 0
+                # This warning only makes sense if worker is stuck, not at startup
+                if total_calls == 0 and queue_size > 0 and worker_running:
+                    msg_parts.append("⚠️  Queue has items but no API calls in 24h")
 
                 return True, "\n".join(msg_parts)
 
@@ -198,14 +205,8 @@ def run_startup_checks(ha_api, yt_api, db) -> bool:
     results.append(("Database", db_ok, db_msg))
     all_ok = all_ok and db_ok
 
-    # Cleanup old not-found cache entries (silently)
-    if db_ok:
-        try:
-            deleted = db.cleanup_old_not_found(days=2)
-            if deleted > 0:
-                logger.debug(f"Cleaned up {deleted} old not-found cache entries")
-        except Exception:
-            pass  # Don't log cleanup errors
+    # v4.0.7: Removed deprecated cleanup_old_not_found() call
+    # Not-found entries are now tracked in queue table, not video_ratings
 
     # Log concise summary
     logger.info("")

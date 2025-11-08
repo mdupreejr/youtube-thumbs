@@ -145,11 +145,19 @@ class DatabaseConnection:
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(
-            self.db_path,
-            check_same_thread=False,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
+
+        # v4.0.7: Suppress Python 3.12 deprecation warning about default timestamp converter
+        # We use timestamps as strings, so the default converter is fine for now
+        # Will migrate to manual timestamp handling in future release
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*timestamp converter.*")
+            self._conn = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False,
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+            )
+
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
 
