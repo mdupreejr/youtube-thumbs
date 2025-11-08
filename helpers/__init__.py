@@ -12,7 +12,6 @@ from .rating_helpers import (
     find_or_search_video,
     update_database_for_rating,
     check_already_rated,
-    handle_quota_blocked_rating,
     execute_rating
 )
 from .video_helpers import (
@@ -38,7 +37,6 @@ __all__ = [
     'find_or_search_video',
     'update_database_for_rating',
     'check_already_rated',
-    'handle_quota_blocked_rating',
     'execute_rating',
     # Video helpers
     'is_youtube_content',
