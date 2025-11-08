@@ -109,14 +109,18 @@ class HomeAssistantAPI:
             media_info = {
                 'title': media_title,
                 'artist': media_artist or 'Unknown',
+                'album': media_album_name,  # Channel name or album (useful for generic titles)
+                'content_id': media_content_id,  # May contain YouTube video ID
                 'app_name': app_name,
                 'duration': media_duration
             }
 
             logger.debug(
-                "Current YouTube media: \"%s\" (%ss)",
+                "Current YouTube media: \"%s\" by %s (%ss) | Album: %s",
                 media_title,
-                media_duration
+                media_artist,
+                media_duration,
+                media_album_name
             )
             return media_info
             

@@ -158,7 +158,16 @@ def search_and_match_video(
     # v4.0.46: Caching now happens inside search_youtube_for_video (youtube_api.py)
     #          to cache ALL fetched videos, not just duration-matched candidates
     # v4.0.68: Pass artist to improve search accuracy for generic titles
+    # v4.0.71: Use album (channel name) as fallback when artist is generic/missing
     artist = ha_media.get('artist')
+    album = ha_media.get('album')
+
+    # Use album (channel name) if artist is generic or missing
+    # This dramatically improves accuracy for generic titles like "Electric", "Flowers", etc.
+    if artist in ['Unknown', 'YouTube', None, ''] and album:
+        artist = album
+        logger.debug(f"Using album '{album}' as artist for search (original artist was generic/missing)")
+
     if return_api_response:
         result = search_youtube_for_video(yt_api, title, duration, artist, return_api_response=True)
         candidates, api_debug_data = result if result else (None, {})
