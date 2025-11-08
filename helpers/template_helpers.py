@@ -4,7 +4,7 @@ Template helper functions for the unified table viewer.
 Provides utilities to format data for the table_viewer.html template.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 
