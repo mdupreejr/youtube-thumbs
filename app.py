@@ -373,11 +373,6 @@ def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return find_cached_video(db, ha_media)
 
 
-def _pending_retry_enabled() -> bool:
-    value = os.getenv('PENDING_VIDEO_RETRY_ENABLED', 'true')
-    return value.lower() not in FALSE_VALUES if isinstance(value, str) else True
-
-
 # Start stats refresher background task (refreshes every hour)
 logger.debug("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)

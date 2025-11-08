@@ -14,9 +14,9 @@ configuration:
   force_quota_unlock:
     name: Force quota unlock
     description: Ignore previous quota exceeded state on startup. Only enable if you've manually reset your YouTube API quota (not recommended for normal use).
-  pending_video_retry_enabled:
-    name: Pending video retry enabled
-    description: Process pending videos from the queue after quota resets at midnight Pacific Time. Disable only if you want to prevent automatic queue processing.
+  not_found_cache_hours:
+    name: Not-found cache hours
+    description: How long (in hours) to cache failed video searches before retrying. Prevents wasting quota on videos that don't exist. Range 1-168 hours (1 hour to 1 week), default 168 (7 days).
   search_max_results:
     name: Search max results
     description: Maximum number of search results to fetch from YouTube API per query (1-50). Higher values consume more quota but may improve match quality.
