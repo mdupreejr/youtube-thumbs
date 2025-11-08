@@ -9,17 +9,9 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
-  pull_request:
-    types: [closed]
-
-# Ensure only one Claude worker runs at a time
-concurrency:
-  group: claude-worker-${{ github.event.issue.number || github.event.pull_request.number || 'default' }}
-  cancel-in-progress: false
 
 jobs:
   claude:
-    # Only run when @claude is mentioned
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -51,13 +43,11 @@ jobs:
 
           # Instructions are provided in CLAUDE.md in the repository root
           # This includes version bumping requirements and commit message formatting
+          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
+          # prompt: 'Update the pull request description to include a summary of changes.'
 
-      - name: Update metrics dashboard
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "📊 Updating metrics dashboard..."
-          .github/scripts/update-metrics.sh || echo "⚠️ Metrics update failed (non-critical)"
-          echo "✅ Metrics update complete"
+          # Optional: Add claude_args to customize behavior and configuration
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
+          # claude_args: '--allowed-tools Bash(gh pr:*)'
 

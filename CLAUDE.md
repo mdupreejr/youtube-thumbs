@@ -84,53 +84,26 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## Git Workflow
 
-### Working with @claude Mentions
+When addressing issues or making changes:
 
-Claude is triggered by mentioning `@claude` in issues, pull requests, or comments. When you @mention Claude:
+1. **Read and understand** the issue or request thoroughly
+2. **Make the necessary code changes**
+3. **Bump the version** in `config.json` appropriately
+4. **Test if possible** (check for syntax errors, validate JSON, etc.)
+5. **Commit all changes** with the proper commit message format
+6. **Push the changes** to the repository
 
-1. **Claude reads** the issue/PR and all context
-2. **Makes necessary code changes** directly in the repository
-3. **Commits changes** with proper formatting
-4. **Creates a Pull Request** (if working on an issue) or updates existing PR
-
-### PR-Based Workflow
-
-**IMPORTANT:** All changes MUST be submitted via Pull Requests. DO NOT push directly to master.
-
-When Claude processes an issue:
-
-1. **Reads and understands** the issue or request thoroughly
-2. **Makes the necessary code changes**
-3. **Bumps the version** in `config.json` appropriately
-4. **Tests if possible** (checks for syntax errors, validates JSON, etc.)
-5. **Creates a new branch** with the format: `claude/issue-{number}-{title-slug}`
-6. **Commits changes** to the new branch with proper commit message format
-7. **Pushes the branch** to origin
-8. **Creates a Pull Request** linking back to the original issue
-
-### How to Use
-
-Simply comment `@claude` on any issue when you're ready for it to be processed:
-- Add context in your comment about what needs to be done
-- Claude will respond and make the necessary changes
-- Review the PR Claude creates before merging
-
-### Git Commands for PR Workflow
-
+### Standard Git Commands
 ```bash
-# Create and checkout new branch (name will be provided by workflow)
-git checkout -b claude/issue-123-fix-database-error
-
 # Stage all changes
 git add .
 
 # Commit with proper format
 git commit -m "$(cat <<'EOF'
-v3.40.0: Fix database migration error
+v1.51.3: Brief description
 
-- Fixed NOT NULL constraint error during schema updates
-- Added proper default values for new columns
-- Improved error handling in migration script
+- Change detail 1
+- Change detail 2
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -138,35 +111,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 
-# Push branch to remote
-git push -u origin claude/issue-123-fix-database-error
-
-# Create pull request (linking to the issue)
-gh pr create \
-  --base master \
-  --head claude/issue-123-fix-database-error \
-  --title "v3.40.0: Fix database migration error" \
-  --body "Fixes #123
-
-## Summary
-- Fixed NOT NULL constraint error during schema updates
-- Added proper default values for new columns
-- Improved error handling in migration script
-
-## Testing
-- Validated JSON syntax
-- Checked Python code for errors
-- Tested migration logic
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+# Push to remote
+git push
 ```
-
-### Important Notes
-
-- **Never push directly to master** - Always create a PR
-- **Include issue reference** - Use "Fixes #123" in PR description
-- **Wait for merge** - The queue system won't process the next issue until the current PR is merged or closed
-- **Branch naming** - Follow the format: `claude/issue-{number}-{title-slug}`
 
 ## Code Style and Conventions
 
@@ -193,35 +140,9 @@ gh pr create \
 
 ## Notes for GitHub Issues
 
-### Working with Claude on Issues
-
-When you have an issue that needs work:
-
-1. **Comment with @claude** on the issue
-2. **Add context** - Explain what needs to be done (Claude reads the full issue too)
-3. **Claude responds** and begins working
-4. **Claude creates a PR** when done
-5. **Review and merge** the PR
-
-### Best Practices
-
-- **Be Specific:** Clearly describe what needs to change in your @claude comment
-- **One Thing at a Time:** Focus each issue on a single concern
-- **Review PRs:** Always review Claude's changes before merging
-- **Provide Feedback:** If the solution isn't quite right, comment on the PR with guidance
-
-### Optional Labels for Organization
-
-You can use labels to organize issues:
-- `claude-queue` - Issues waiting for you to @mention Claude
-- `documentation` - Documentation improvements
-- `bug` - Bug fixes
-- `enhancement` - New features or improvements
-
-### Helper Utilities Available
-
-The repository includes useful utilities in `.github/scripts/`:
-- `manage-claude-queue.sh` - Helper functions for issue management
-- `update-metrics.sh` - Generate metrics reports about issue processing
-
-These can be run manually if needed for reporting or management.
+When working on tagged GitHub issues:
+- Read the entire issue description and any comments
+- Ask clarifying questions if requirements are unclear
+- Reference the issue number in commits when relevant
+- Provide clear explanations of changes made
+- Update the issue with progress or completion status
