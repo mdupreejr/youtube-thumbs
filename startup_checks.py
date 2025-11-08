@@ -268,13 +268,32 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                 # Get queue performance metrics
                 performance = db.get_queue_performance_metrics(hours=24)
 
+                # Calculate time until next reset if not already calculated
+                if next_reset_str is None:
+                    now_utc = datetime.now(timezone.utc)
+                    pacific_offset = timedelta(hours=-8)
+                    now_pacific = now_utc + pacific_offset
+                    midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+                    midnight_today_utc = midnight_today_pacific - pacific_offset
+
+                    if now_utc < midnight_today_utc:
+                        last_reset_utc = midnight_today_utc - timedelta(days=1)
+                    else:
+                        last_reset_utc = midnight_today_utc
+
+                    next_reset_utc = last_reset_utc + timedelta(days=1)
+                    time_until_reset = next_reset_utc - now_utc
+                    hours_until = int(time_until_reset.total_seconds() / 3600)
+                    minutes_until = int((time_until_reset.total_seconds() % 3600) / 60)
+                    next_reset_str = f"{hours_until}h {minutes_until}m"
+
                 # Populate details
                 details['quota'] = {
                     'used': quota_used,
                     'total': 10000,
                     'percent': (quota_used / 10000 * 100) if quota_used > 0 else 0,
-                    'exceeded': quota_exceeded,
-                    'time_until_reset': time_until_reset_str
+                    'exceeded': quota_recently_exceeded,
+                    'time_until_reset': next_reset_str
                 }
 
                 details['queue'] = {
@@ -302,8 +321,8 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                 }
 
                 # Build status message
-                if quota_exceeded:
-                    message = f"⚠️ QUOTA EXCEEDED • Worker paused until midnight PT (in {time_until_reset_str})"
+                if quota_recently_exceeded:
+                    message = f"⚠️ QUOTA EXCEEDED • Worker paused until midnight PT (in {next_reset_str})"
                     return False, {'message': message, 'details': details}
                 else:
                     message = f"✓ Authenticated • Quota: {quota_used:,}/10,000 ({details['quota']['percent']:.1f}%)"
