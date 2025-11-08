@@ -57,6 +57,17 @@ if bashio::var.has_value "${SEARCH_MAX_CANDIDATES_CONFIG}" && [ "${SEARCH_MAX_CA
     export YTT_SEARCH_MAX_CANDIDATES="${SEARCH_MAX_CANDIDATES_CONFIG}"
 fi
 
+# Song tracking configuration
+SONG_TRACKING_ENABLED_CONFIG=$(bashio::config 'song_tracking_enabled')
+if bashio::var.has_value "${SONG_TRACKING_ENABLED_CONFIG}" && [ "${SONG_TRACKING_ENABLED_CONFIG}" != "null" ]; then
+    export SONG_TRACKING_ENABLED="${SONG_TRACKING_ENABLED_CONFIG}"
+fi
+
+SONG_TRACKING_POLL_INTERVAL_CONFIG=$(bashio::config 'song_tracking_poll_interval')
+if bashio::var.has_value "${SONG_TRACKING_POLL_INTERVAL_CONFIG}" && [ "${SONG_TRACKING_POLL_INTERVAL_CONFIG}" != "null" ]; then
+    export SONG_TRACKING_POLL_INTERVAL="${SONG_TRACKING_POLL_INTERVAL_CONFIG}"
+fi
+
 if bashio::config.true 'force_quota_unlock'; then
     export YTT_FORCE_QUOTA_UNLOCK=1
     bashio::log.warning "force_quota_unlock enabled; quota guard state will be cleared on startup"
