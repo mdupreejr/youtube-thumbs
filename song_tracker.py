@@ -104,23 +104,15 @@ class SongTracker:
             existing = self.db.find_video_by_content_hash(content_hash)
 
             if existing:
-                # Song exists - increment play count
+                # Song exists in database - increment play count
                 yt_video_id = existing.get('yt_video_id', '')
-
-                # Check if this is an unmatched placeholder
-                if yt_video_id.startswith('unmatched_'):
-                    # Song tracked but never matched - queue search now
-                    self._queue_search_for_song(media, content_hash)
-                    logger.info(f"Queueing YouTube search for previously unmatched: '{title}'")
-                else:
-                    # Already matched - just increment play count
-                    self._increment_play_count(yt_video_id, content_hash)
-                    logger.info(f"Tracked play: '{title}' (play_count +1)")
+                self._increment_play_count(yt_video_id, content_hash)
+                logger.info(f"Tracked play: '{title}' (play_count +1)")
             else:
-                # New song - add to database AND queue YouTube search immediately
-                self._add_unmatched_song(media, content_hash)
+                # New song - just queue YouTube search
+                # Queue worker will add to database after finding match
                 self._queue_search_for_song(media, content_hash)
-                logger.info(f"New song tracked: '{title}' - queued for YouTube search")
+                logger.info(f"New song detected: '{title}' - queued for YouTube search")
 
         except Exception as e:
             logger.error(f"Error checking/tracking song: {e}", exc_info=True)
@@ -178,64 +170,6 @@ class SongTracker:
                 self.db._conn.commit()
         except Exception as e:
             logger.error(f"Failed to increment play count for {yt_video_id}: {e}")
-
-    def _add_unmatched_song(self, media: Dict[str, Any], content_hash: str):
-        """
-        Add a new song to database without YouTube match.
-        Will be queued for search on first rating.
-
-        Args:
-            media: Media info from Home Assistant
-            content_hash: Content hash for the song
-        """
-        try:
-            from database.connection import DatabaseConnection
-
-            title = media.get('title')
-            artist = media.get('artist')
-            duration = media.get('duration')
-            app_name = media.get('app_name', 'YouTube')
-            content_id = media.get('media_content_id')
-
-            # Generate a placeholder yt_video_id for unmatched songs
-            # Format: unmatched_<hash[:16]>
-            placeholder_id = f"unmatched_{content_hash[:16]}"
-
-            with self.db._lock:
-                self.db._conn.execute(
-                    """
-                    INSERT OR IGNORE INTO video_ratings (
-                        yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
-                        yt_title, yt_channel, yt_channel_id,
-                        ha_duration, yt_duration, yt_url,
-                        rating, ha_content_hash,
-                        date_added, date_last_played, play_count, rating_score, source
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, 0, ?)
-                    """,
-                    (
-                        placeholder_id,
-                        content_id,
-                        title,
-                        artist,
-                        app_name,
-                        title,  # Use HA title as placeholder YT title
-                        'Unknown',  # Placeholder channel
-                        None,  # No channel ID
-                        duration,
-                        duration,  # Assume same duration
-                        f"https://www.youtube.com/watch?v={placeholder_id}",  # Placeholder URL
-                        'none',  # Not rated yet
-                        content_hash,
-                        'tracker'  # Source = automatic tracker
-                    )
-                )
-                self.db._conn.commit()
-
-            # Record in last_tracked so we don't increment again for an hour
-            self._last_tracked[content_hash] = datetime.now(timezone.utc)
-
-        except Exception as e:
-            logger.error(f"Failed to add unmatched song '{media.get('title')}': {e}")
 
     def _queue_search_for_song(self, media: Dict[str, Any], content_hash: str):
         """
