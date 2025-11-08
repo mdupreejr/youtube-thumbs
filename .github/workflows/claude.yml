@@ -234,13 +234,13 @@ jobs:
             1. Read the issue details and understand what needs to be done
             2. Make the necessary code changes
             3. Update the version in config.json following semantic versioning
-            4. Create a new branch named: ${{ steps.queue.outputs.branch_name }}
-            5. Commit your changes to this branch with a proper commit message
-            6. Push the branch to origin
-            7. Create a pull request and request review from repository owner using:
-               gh pr create --base master --head ${{ steps.queue.outputs.branch_name }} --title "v[VERSION]: [Brief description]" --body "Fixes #${{ steps.queue.outputs.issue_number }}\n\n[Detailed description of changes]" --reviewer @me
+            4. Use the Write or Edit tools to make all necessary file changes
+            5. When done, confirm that you have completed the changes
 
-            DO NOT push directly to master. You MUST create a pull request.
+            DO NOT use git commands. DO NOT push branches. DO NOT create PRs.
+            Just make the file changes using the Write/Edit tools.
+
+            The workflow will handle git operations and PR creation after you're done.
 
             Follow all instructions in CLAUDE.md regarding version bumping and commit message format.
 
@@ -258,39 +258,76 @@ jobs:
 
           echo "Issue marked as failed and removed from queue"
 
-      - name: Mark PR as created
+      - name: Create branch and PR
         if: steps.queue.outputs.skip_claude != 'true' && steps.claude.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Find the PR that was just created
           ISSUE_NUMBER="${{ steps.queue.outputs.issue_number }}"
           BRANCH_NAME="${{ steps.queue.outputs.branch_name }}"
+          ISSUE_TITLE="${{ steps.queue.outputs.issue_title }}"
 
-          echo "Looking for PR created from branch ${BRANCH_NAME}..."
+          echo "🔍 Checking for changes made by Claude..."
 
-          # Wait a moment for PR to be fully created
-          sleep 5
-
-          # Find PR by branch name
-          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
-
-          if [ -n "$PR_NUMBER" ]; then
-            echo "✅ Found PR #${PR_NUMBER}"
-            .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
-          else
-            echo "⚠️ Could not find PR, checking by issue reference..."
-            # Fallback: search for PRs mentioning the issue
-            PR_NUMBER=$(gh pr list --search "Fixes #${ISSUE_NUMBER}" --json number --jq '.[0].number // empty')
-
-            if [ -n "$PR_NUMBER" ]; then
-              echo "✅ Found PR #${PR_NUMBER}"
-              .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
-            else
-              echo "❌ Could not find created PR"
-              gh issue comment "$ISSUE_NUMBER" --body "⚠️ Claude completed work but PR could not be found. Please check manually."
-            fi
+          # Check if there are any changes
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "⚠️ No changes detected"
+            gh issue comment "$ISSUE_NUMBER" --body "⚠️ Claude completed but made no changes. The issue may already be resolved or Claude couldn't determine what changes to make."
+            .github/scripts/manage-claude-queue.sh mark-failed "$ISSUE_NUMBER" "No changes made"
+            exit 0
           fi
+
+          echo "✅ Changes detected, creating branch and PR..."
+
+          # Get the new version from config.json for PR title
+          NEW_VERSION=$(jq -r '.version' config.json)
+
+          # Create and checkout branch
+          git checkout -b "$BRANCH_NAME"
+
+          # Stage all changes
+          git add .
+
+          # Create commit message
+          COMMIT_MSG="v${NEW_VERSION}: ${ISSUE_TITLE}
+
+Changes made by Claude Code to address issue #${ISSUE_NUMBER}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+          # Commit changes
+          git commit -m "$COMMIT_MSG"
+
+          # Push branch
+          echo "Pushing branch to origin..."
+          git push -u origin "$BRANCH_NAME"
+
+          # Create PR
+          echo "Creating pull request..."
+          PR_URL=$(gh pr create \
+            --base master \
+            --head "$BRANCH_NAME" \
+            --title "v${NEW_VERSION}: ${ISSUE_TITLE}" \
+            --body "Fixes #${ISSUE_NUMBER}
+
+## Changes
+Claude Code made changes to address this issue.
+
+See commit for details.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)" \
+            --reviewer @me)
+
+          # Extract PR number from URL
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+
+          echo "✅ Created PR #${PR_NUMBER}: $PR_URL"
+
+          # Mark PR as created
+          .github/scripts/manage-claude-queue.sh mark-pr-created "$ISSUE_NUMBER" "$PR_NUMBER"
 
       - name: Update metrics dashboard
         if: always()
