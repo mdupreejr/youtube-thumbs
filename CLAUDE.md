@@ -146,3 +146,4 @@ When working on tagged GitHub issues:
 - Reference the issue number in commits when relevant
 - Provide clear explanations of changes made
 - Update the issue with progress or completion status
+- Always pull latest code before starting work!
