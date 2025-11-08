@@ -235,7 +235,6 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 
 - **[INSTALL.md](INSTALL.md)** - Detailed installation and OAuth setup guide
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture, database schema, and implementation details
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
 
 ## Contributing
 
