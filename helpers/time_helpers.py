@@ -154,6 +154,52 @@ def parse_timestamp(timestamp_str: Union[str, datetime]) -> datetime:
     return datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
 
 
+def format_absolute_timestamp(timestamp_input: Union[str, datetime]) -> str:
+    """
+    Format timestamp as readable absolute time without year (e.g., "11-08 07:28:40").
+
+    Args:
+        timestamp_input: ISO format timestamp string or datetime object
+
+    Returns:
+        Formatted timestamp string (MM-DD HH:MM:SS)
+
+    Examples:
+        >>> format_absolute_timestamp("2025-11-08T07:28:40")
+        '11-08 07:28:40'
+
+        >>> format_absolute_timestamp("2025-11-08 07:28:40")
+        '11-08 07:28:40'
+
+        >>> format_absolute_timestamp(datetime(2025, 11, 8, 7, 28, 40))
+        '11-08 07:28:40'
+    """
+    # Handle None or empty input
+    if timestamp_input is None:
+        return ""
+
+    # Handle string input
+    if isinstance(timestamp_input, str):
+        if not timestamp_input.strip():
+            return ""
+        timestamp_str = timestamp_input
+    # Handle datetime objects
+    elif isinstance(timestamp_input, datetime):
+        timestamp = timestamp_input
+    else:
+        return ""
+
+    try:
+        # Parse string to datetime if needed
+        if isinstance(timestamp_input, str):
+            timestamp = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+
+        # Format as MM-DD HH:MM:SS (no year)
+        return timestamp.strftime('%m-%d %H:%M:%S')
+    except (ValueError, AttributeError, TypeError):
+        return ""
+
+
 def format_duration(seconds: int) -> str:
     """
     Format duration in seconds as MM:SS.

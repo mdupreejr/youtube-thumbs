@@ -11,7 +11,7 @@ import os
 import re
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
-from helpers.time_helpers import format_relative_time, parse_timestamp
+from helpers.time_helpers import format_relative_time, parse_timestamp, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.video_helpers import get_video_title, get_video_artist
 
@@ -58,16 +58,11 @@ def api_calls_log():
             success_filter=success_filter
         )
 
-        # Format timestamps in logs (convert datetime objects to strings)
-        from datetime import datetime
+        # v4.0.38: Format timestamps for easier reading (issue #72)
+        # Format as "MM-DD HH:MM:SS" instead of "2025-11-08T07:28:40"
         for log in result['logs']:
             if log.get('timestamp'):
-                # Convert datetime object to ISO string if needed
-                if isinstance(log['timestamp'], datetime):
-                    log['timestamp'] = log['timestamp'].isoformat()
-                # Ensure it's a string (might already be from SQLite)
-                elif not isinstance(log['timestamp'], str):
-                    log['timestamp'] = str(log['timestamp'])
+                log['timestamp'] = format_absolute_timestamp(log['timestamp'])
 
         # Get summary statistics
         summary = _db.get_api_call_summary(hours=24)
