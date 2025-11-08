@@ -10,6 +10,7 @@ import time
 import sys
 import os
 import signal
+from datetime import datetime, timezone
 from logger import logger
 from database import get_database
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
@@ -404,7 +405,24 @@ def main():
 
     while running:
         try:
-            # Get YouTube API instance
+            # v4.0.39: Check quota status FIRST - don't load YouTube API if quota exceeded
+            if check_quota_recently_exceeded(db):
+                # Quota exceeded - sleep until midnight Pacific (quota reset time)
+                next_reset = get_next_quota_reset_time()
+                now = datetime.now(timezone.utc)
+                time_until_reset = (next_reset - now).total_seconds()
+
+                # Add a small buffer to ensure we're past the reset time
+                time_until_reset += 60  # 1 minute buffer
+
+                hours = int(time_until_reset / 3600)
+                minutes = int((time_until_reset % 3600) / 60)
+
+                logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
+                time.sleep(time_until_reset)
+                continue
+
+            # Get YouTube API instance (only if quota not exceeded)
             try:
                 yt_api = get_youtube_api()
             except Exception as e:

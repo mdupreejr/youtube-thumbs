@@ -165,7 +165,13 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                 'authenticated': True,  # We have auth object, just can't use it
                 'worker_running': worker_running,
                 'worker_pid': worker_pid if worker_running else None,
-                'quota': {'exceeded': True, 'time_until_reset': next_reset_str},
+                'quota': {
+                    'exceeded': True,
+                    'time_until_reset': next_reset_str,
+                    'used': 10000,  # Assume quota fully used when exceeded
+                    'total': 10000,
+                    'percent': 100.0
+                },
                 'queue': {},
                 'performance': {},
                 'api_stats': {}
