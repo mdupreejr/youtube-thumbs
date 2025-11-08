@@ -264,41 +264,30 @@ def get_recommendations_api() -> Response:
 
 @bp.route('/pending/status', methods=['GET'])
 def get_pending_status() -> Response:
-    """Get pending video statistics and breakdown by reason."""
-    try:
-        # Get total counts
-        cursor = db._conn.execute("""
-            SELECT
-                COUNT(*) as total_pending,
-                SUM(CASE WHEN pending_reason = 'quota_exceeded' THEN 1 ELSE 0 END) as quota_exceeded,
-                SUM(CASE WHEN pending_reason = 'not_found' THEN 1 ELSE 0 END) as not_found,
-                SUM(CASE WHEN pending_reason = 'unknown' OR pending_reason IS NULL THEN 1 ELSE 0 END) as unknown,
-                COUNT(DISTINCT ha_artist) as unique_artists
-            FROM video_ratings
-            WHERE yt_match_pending = 1
-        """)
-        stats = dict(cursor.fetchone())
+    """
+    v4.0.0: DEPRECATED - Pending videos no longer stored in video_ratings table.
 
-        # Get recent pending videos
-        cursor = db._conn.execute("""
-            SELECT ha_title, ha_artist, pending_reason, yt_match_attempts, yt_match_last_attempt
-            FROM video_ratings
-            WHERE yt_match_pending = 1
-            ORDER BY yt_match_last_attempt DESC
-            LIMIT 10
-        """)
-        recent_pending = [dict(row) for row in cursor.fetchall()]
+    Returns empty stats for backward compatibility. Use /api/queue/status instead
+    to get queue statistics for unmatched videos.
+    """
+    logger.debug("/pending/status called but is DEPRECATED in v4.0.0 - returning empty stats")
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'statistics': stats,
-                'recent_pending': recent_pending
-            }
-        })
-    except Exception as e:
-        logger.error(f"Error getting pending status: {e}")
-        return error_response( 'Failed to retrieve pending video status', 500)
+    # Return empty stats matching old structure for backward compatibility
+    return jsonify({
+        'success': True,
+        'deprecated': True,
+        'message': 'v4.0.0: Pending videos are now tracked in queue table. Use /api/queue/status instead.',
+        'data': {
+            'statistics': {
+                'total_pending': 0,
+                'quota_exceeded': 0,
+                'not_found': 0,
+                'unknown': 0,
+                'unique_artists': 0
+            },
+            'recent_pending': []
+        }
+    })
 
 
 @bp.route('/pending/retry', methods=['POST'])

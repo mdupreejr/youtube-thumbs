@@ -390,9 +390,7 @@
                         <tr>
                             <td>
                                 <span style="font-weight: 500;">{{ video.ha_title or video.yt_title or 'Unknown' }}</span>
-                                {% if video.yt_match_pending %}
-                                <span style="font-size: 0.75em; color: #f59e0b; margin-left: 0.5em;">⏳ {{ video.pending_reason or 'Unknown' }}</span>
-                                {% endif %}
+                                {# v4.0.0: Removed pending status display - pending videos no longer in video_ratings #}
                             </td>
                             <td>{{ video.ha_artist or '-' }}</td>
                             <td>{{ video.yt_channel or '-' }}</td>

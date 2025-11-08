@@ -41,13 +41,11 @@ _DATA_VIEWER_COLUMNS_MUTABLE = {
     'date_last_played': 'Last Played',
     'rating_score': 'Rating Score',
     'source': 'Source',
-    'yt_match_pending': 'Pending',
-    'yt_match_attempts': 'Match Attempts',
     'ha_duration': 'Duration (HA)',
     'yt_duration': 'Duration (YT)',
     'yt_published_at': 'Published',
-    'yt_category_id': 'Category',
-    'pending_reason': 'Pending Reason'
+    'yt_category_id': 'Category'
+    # v4.0.0: Removed yt_match_pending, yt_match_attempts, pending_reason (schema fields removed)
 }
 DATA_VIEWER_COLUMNS = types.MappingProxyType(_DATA_VIEWER_COLUMNS_MUTABLE)
 
@@ -279,8 +277,6 @@ def _format_data_rows(rows, selected_columns):
                         formatted_row[col] = value
                 else:
                     formatted_row[col] = '-'
-            elif col == 'yt_match_pending':
-                formatted_row[col] = '✓' if value == 1 else '✗'
             elif col == 'yt_url' and value:
                 # Make URL clickable
                 formatted_row[col] = value
