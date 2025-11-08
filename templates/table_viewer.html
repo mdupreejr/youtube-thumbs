@@ -256,10 +256,14 @@
 
                 // Handle row clicks if configured
                 {% if page_config.row_click_handler %}
+                const rowClickHandlerName = "{{ page_config.row_click_handler|e }}";
                 document.querySelectorAll('.clickable-row').forEach(row => {
                     row.addEventListener('click', function() {
                         const rowId = this.dataset.rowId;
-                        {{ page_config.row_click_handler }}(rowId);
+                        // Only call if the handler name is a valid identifier and exists as a function
+                        if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(rowClickHandlerName) && typeof window[rowClickHandlerName] === "function") {
+                            window[rowClickHandlerName](rowId);
+                        }
                     });
                 });
                 {% endif %}
