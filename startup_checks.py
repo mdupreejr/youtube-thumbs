@@ -93,9 +93,9 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
             }
             return False, {'message': "Not authenticated", 'details': details}
 
-        # v4.0.35: Check if quota exceeded before making API call
-        # Don't waste quota on startup checks when we know quota is exhausted
+        # v4.0.36: Check quota status FIRST - if exceeded, just report that and skip all API checks
         quota_recently_exceeded = False
+        next_reset_str = None
         if db:
             try:
                 from datetime import datetime, timedelta, timezone
@@ -140,74 +140,93 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                         else:
                             last_reset_utc = midnight_today_utc
 
+                        # Calculate next reset
+                        next_reset_utc = last_reset_utc + timedelta(days=1)
+                        time_until_reset = next_reset_utc - now_utc
+                        hours_until = int(time_until_reset.total_seconds() / 3600)
+                        minutes_until = int((time_until_reset.total_seconds() % 3600) / 60)
+                        next_reset_str = f"{hours_until}h {minutes_until}m"
+
                         # If quota error occurred AFTER last reset, quota is still exhausted
                         if error_dt > last_reset_utc:
                             quota_recently_exceeded = True
-                            logger.debug("Skipping startup auth check - quota exceeded since last reset")
+                            logger.debug(f"Quota exceeded - paused until midnight Pacific (in {next_reset_str})")
             except Exception as e:
                 logger.debug(f"Error checking quota status: {e}")
 
-        # v4.0.27: Test authentication with a real API call (if quota not exceeded)
-        # Make a minimal API call to verify credentials work (costs 1 quota unit)
-        if not quota_recently_exceeded:
-            try:
-                import time
-                start_time = time.time()
+        # If quota exceeded, report that and skip all API checks
+        if quota_recently_exceeded:
+            pause_msg = f"Quota exceeded - paused until midnight Pacific"
+            if next_reset_str:
+                pause_msg += f" (in {next_reset_str})"
 
-                # Get channel info for authenticated user (minimal quota cost = 1 unit)
-                request = yt_api.youtube.channels().list(
-                    part='snippet',
-                    mine=True,
-                    maxResults=1,
-                    fields='items(id,snippet(title))'
+            # Return early with quota pause message - no API check needed
+            details = {
+                'authenticated': True,  # We have auth object, just can't use it
+                'worker_running': worker_running,
+                'worker_pid': worker_pid if worker_running else None,
+                'quota': {'exceeded': True, 'time_until_reset': next_reset_str},
+                'queue': {},
+                'performance': {},
+                'api_stats': {}
+            }
+            return True, {'message': pause_msg, 'details': details}
+
+        # Quota not exceeded - proceed with authentication test
+        try:
+            import time
+            start_time = time.time()
+
+            # Get channel info for authenticated user (minimal quota cost = 1 unit)
+            request = yt_api.youtube.channels().list(
+                part='snippet',
+                mine=True,
+                maxResults=1,
+                fields='items(id,snippet(title))'
+            )
+            response = request.execute()
+
+            response_time = int((time.time() - start_time) * 1000)  # ms
+
+            # Log the API call
+            if db:
+                channel_name = response.get('items', [{}])[0].get('snippet', {}).get('title', 'Unknown')
+                db.record_api_call('channels.list', success=True, quota_cost=1)
+                db.log_api_call_detailed(
+                    api_method='channels.list',
+                    operation_type='auth_check',
+                    query_params='mine=True',
+                    quota_cost=1,
+                    success=True,
+                    results_count=len(response.get('items', [])),
+                    context=f'startup_check (authenticated as: {channel_name})'
                 )
-                response = request.execute()
 
-                response_time = int((time.time() - start_time) * 1000)  # ms
+            logger.debug(f"YouTube API authentication verified ({response_time}ms)")
 
-                # Log the API call
-                if db:
-                    channel_name = response.get('items', [{}])[0].get('snippet', {}).get('title', 'Unknown')
-                    db.record_api_call('channels.list', success=True, quota_cost=1)
-                    db.log_api_call_detailed(
-                        api_method='channels.list',
-                        operation_type='auth_check',
-                        query_params='mine=True',
-                        quota_cost=1,
-                        success=True,
-                        results_count=len(response.get('items', [])),
-                        context=f'startup_check (authenticated as: {channel_name})'
-                    )
-
-                logger.debug(f"YouTube API authentication verified ({response_time}ms)")
-
-            except Exception as e:
-                logger.error(f"YouTube API authentication test failed: {e}")
-                # Log the failed API call
-                if db:
-                    db.record_api_call('channels.list', success=False, quota_cost=1, error_message=str(e))
-                    db.log_api_call_detailed(
-                        api_method='channels.list',
-                        operation_type='auth_check',
-                        query_params='mine=True',
-                        quota_cost=0,  # YouTube doesn't charge for failed auth
-                        success=False,
-                        error_message=str(e)[:500],
-                        context='startup_check'
-                    )
-                return False, {'message': f"Authentication test failed: {str(e)}", 'details': {
-                    'authenticated': False,
-                    'worker_running': worker_running,
-                    'worker_pid': worker_pid if worker_running else None,
-                    'quota': {},
-                    'queue': {},
-                    'performance': {},
-                    'api_stats': {}
-                }}
-        else:
-            # Quota exceeded - skip API call but still report as authenticated
-            # (we have a valid youtube object, just can't make calls right now)
-            logger.debug("Skipping startup API auth check - quota exceeded")
+        except Exception as e:
+            logger.error(f"YouTube API authentication test failed: {e}")
+            # Log the failed API call
+            if db:
+                db.record_api_call('channels.list', success=False, quota_cost=1, error_message=str(e))
+                db.log_api_call_detailed(
+                    api_method='channels.list',
+                    operation_type='auth_check',
+                    query_params='mine=True',
+                    quota_cost=0,  # YouTube doesn't charge for failed auth
+                    success=False,
+                    error_message=str(e)[:500],
+                    context='startup_check'
+                )
+            return False, {'message': f"Authentication test failed: {str(e)}", 'details': {
+                'authenticated': False,
+                'worker_running': worker_running,
+                'worker_pid': worker_pid if worker_running else None,
+                'quota': {},
+                'queue': {},
+                'performance': {},
+                'api_stats': {}
+            }}
 
         # Default details structure
         details = {
@@ -242,48 +261,6 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
 
                 # Get queue performance metrics
                 performance = db.get_queue_performance_metrics(hours=24)
-
-                # Find last quota error and check if quota exceeded
-                quota_exceeded = False
-                time_until_reset_str = None
-                with db._lock:
-                    cursor = db._conn.execute(
-                        """
-                        SELECT timestamp FROM api_call_log
-                        WHERE success = 0
-                          AND (error_message LIKE '%quota%' OR error_message LIKE '%Quota%')
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                        """
-                    )
-                    row = cursor.fetchone()
-
-                    if row:
-                        error_time = row['timestamp']
-                        if isinstance(error_time, str):
-                            error_dt = datetime.fromisoformat(error_time.replace('Z', '+00:00'))
-                        else:
-                            error_dt = error_time
-
-                        if error_dt.tzinfo is None:
-                            error_dt = error_dt.replace(tzinfo=timezone.utc)
-
-                        # Check if error was since last quota reset
-                        now_utc = datetime.now(timezone.utc)
-                        pacific_offset = timedelta(hours=-8)
-                        now_pacific = now_utc + pacific_offset
-                        midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
-                        last_reset_utc = midnight_today_pacific - pacific_offset
-
-                        if now_utc < last_reset_utc:
-                            last_reset_utc -= timedelta(days=1)
-
-                        if error_dt > last_reset_utc:
-                            quota_exceeded = True
-                            time_until_reset = (last_reset_utc + timedelta(days=1)) - now_utc
-                            hours = int(time_until_reset.total_seconds() / 3600)
-                            minutes = int((time_until_reset.total_seconds() % 3600) / 60)
-                            time_until_reset_str = f"{hours}h {minutes}m"
 
                 # Populate details
                 details['quota'] = {
