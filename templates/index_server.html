@@ -9,7 +9,7 @@
         /* Page-specific styles for rating interface */
         .test-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 20px;
         }
 
@@ -34,6 +34,12 @@
             margin-top: 10px;
             text-align: center;
             font-size: 0.85em;
+        }
+
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fbbf24;
         }
 
         .song-item {
@@ -278,6 +284,143 @@
                     </div>
                     <p style="margin-top: 10px; color: #666; white-space: pre-line; font-size: 0.85em;">{{ db_test.message }}</p>
                 </div>
+
+                <!-- Additional Metrics Cards -->
+                {% if metrics %}
+                
+                <!-- Cache Performance Card -->
+                <div class="test-card">
+                    <div class="test-card-title">🚀 Cache Performance</div>
+                    <div class="test-status status-success">
+                        Hit Rate: {{ "%.1f"|format(metrics.cache_stats.last_hour.hit_rate) }}% (1h)
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <div style="margin: 5px 0;"><strong>Last Hour:</strong> {{ metrics.cache_stats.last_hour.hits }} hits, {{ metrics.cache_stats.last_hour.misses }} misses</div>
+                        <div style="margin: 5px 0;"><strong>Last 24h:</strong> {{ metrics.cache_stats.last_24h.hits }} hits, {{ metrics.cache_stats.last_24h.misses }} misses ({{ "%.1f"|format(metrics.cache_stats.last_24h.hit_rate) }}%)</div>
+                        <div style="margin: 5px 0;"><strong>Total:</strong> {{ metrics.cache_stats.total.hits }} hits, {{ metrics.cache_stats.total.misses }} misses</div>
+                        {% if metrics.cache_stats.total.requests > 0 %}
+                        <div style="margin-top: 10px;">
+                            <div style="width: 100%; background: #e5e7eb; border-radius: 4px; height: 8px;">
+                                <div style="width: {{ metrics.cache_stats.total.hit_rate }}%; background: #10b981; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- System Metrics Card -->
+                <div class="test-card">
+                    <div class="test-card-title">⚙️ System Metrics</div>
+                    <div class="test-status status-success">
+                        Uptime: {{ "%.1f"|format(metrics.system_stats.uptime.days) }} days
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <div style="margin: 5px 0;"><strong>Started:</strong> {{ metrics.system_stats.start_time[:19] }}</div>
+                        <div style="margin: 5px 0;"><strong>Hours:</strong> {{ "%.1f"|format(metrics.system_stats.uptime.hours) }}h</div>
+                        
+                        <!-- API Activity Summary -->
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">API Activity:</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                                <div>Last Min: {{ metrics.api_stats.calls_per_minute }}</div>
+                                <div>Last Hour: {{ metrics.api_stats.calls_per_hour }}</div>
+                                <div>Success Rate: {{ "%.1f"|format(metrics.api_stats.success_rate) }}%</div>
+                                <div>Total: {{ metrics.api_stats.total_calls }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Rating Operations Summary -->
+                        {% if metrics.rating_stats.total_operations > 0 %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Rating Ops:</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                                <div style="color: #16a34a;">✓ {{ metrics.rating_stats.success.total }}</div>
+                                <div style="color: #dc2626;">✗ {{ metrics.rating_stats.failed.total }}</div>
+                                <div style="color: #ca8a04;">⏳ {{ metrics.rating_stats.queued.total }}</div>
+                                <div>Rate: {{ "%.1f"|format(metrics.rating_stats.success.rate_per_minute) }}/min</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Search Statistics Card -->
+                <div class="test-card">
+                    <div class="test-card-title">🔍 Search Statistics</div>
+                    <div class="test-status {{ 'status-success' if metrics.search_stats.failed_searches.total == 0 else 'status-warning' }}">
+                        {{ metrics.search_stats.total_searches }} searches, {{ metrics.search_stats.failed_searches.total }} failed
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <div style="margin: 5px 0;"><strong>Success Rate:</strong> {{ "%.1f"|format((100 - (metrics.search_stats.failed_searches.total / metrics.search_stats.total_searches * 100)) if metrics.search_stats.total_searches > 0 else 100) }}%</div>
+                        <div style="margin: 5px 0;"><strong>Failed (1h):</strong> {{ metrics.search_stats.failed_searches.last_hour }}</div>
+                        
+                        {% if metrics.search_stats.failed_searches.by_reason %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Failure Reasons:</div>
+                            {% for reason, count in metrics.search_stats.failed_searches.by_reason.items() %}
+                            <div style="margin: 3px 0; color: #666;">{{ reason }}: {{ count }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if metrics.search_stats.failed_searches.top_failed_titles %}
+                        <div style="margin: 10px 0;">
+                            <div style="font-weight: 600; margin-bottom: 5px;">Top Failed Titles:</div>
+                            {% for item in metrics.search_stats.failed_searches.top_failed_titles[:3] %}
+                            <div style="margin: 3px 0; color: #666; font-size: 0.8em;">{{ item.title[:30] }}{{ '...' if item.title|length > 30 else '' }} ({{ item.count }}x)</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- API Call Breakdown Card -->
+                {% if metrics.api_stats.by_type %}
+                <div class="test-card">
+                    <div class="test-card-title">📊 API Call Breakdown</div>
+                    <div class="test-status status-success">
+                        {{ metrics.api_stats.by_type|length }} API types tracked
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        {% for api_type, stats in metrics.api_stats.by_type.items() %}
+                        <div style="margin: 8px 0; padding: 8px; background: #f0f9ff; border-radius: 4px;">
+                            <div style="font-weight: 600;">{{ api_type }}</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 3px;">
+                                <div>Total: {{ stats.total }}</div>
+                                <div>Last Hour: {{ stats.last_hour }}</div>
+                            </div>
+                            <div style="color: #666; margin-top: 3px;">Rate: {{ "%.1f"|format(stats.rate_per_minute) }}/min</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Retry Operations Card (if any retries occurred) -->
+                {% if metrics.retry_stats.total_operations > 0 %}
+                <div class="test-card">
+                    <div class="test-card-title">🔄 Retry Operations</div>
+                    <div class="test-status status-success">
+                        {{ "%.1f"|format(metrics.retry_stats.average_success_rate) }}% success rate
+                    </div>
+                    <div style="margin-top: 15px; font-size: 0.85em;">
+                        <div style="margin: 5px 0;"><strong>Total Operations:</strong> {{ metrics.retry_stats.total_operations }}</div>
+                        <div style="margin: 5px 0;"><strong>Videos Retried:</strong> {{ metrics.retry_stats.total_videos_retried }}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 8px;">
+                            <div style="color: #16a34a;">✓ {{ metrics.retry_stats.total_matched }}</div>
+                            <div style="color: #ca8a04;">⚠ {{ metrics.retry_stats.total_not_found }}</div>
+                            <div style="color: #dc2626;">✗ {{ metrics.retry_stats.total_errors }}</div>
+                        </div>
+                        {% if metrics.retry_stats.last_retry %}
+                        <div style="margin-top: 8px; color: #666;">
+                            <strong>Last:</strong> {{ metrics.retry_stats.last_retry.timestamp[:19] }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% endif %} <!-- End metrics check -->
             </div>
         </div>
         {% endif %}

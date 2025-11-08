@@ -529,6 +529,21 @@ def index() -> str:
             'total_unrated': 0
         }
 
+        # Add comprehensive metrics for tests tab
+        if current_tab == 'tests':
+            try:
+                template_data['metrics'] = {
+                    'cache_stats': metrics.get_cache_stats(),
+                    'api_stats': metrics.get_api_stats(),
+                    'rating_stats': metrics.get_rating_stats(),
+                    'search_stats': metrics.get_search_stats(),
+                    'retry_stats': metrics.get_retry_stats(),
+                    'system_stats': metrics.get_system_stats()
+                }
+            except Exception as e:
+                logger.warning(f"Failed to gather metrics for tests page: {e}")
+                template_data['metrics'] = None
+
         # Get unrated songs if on rating tab
         if current_tab == 'rating':
             page, _ = validate_page_param(request.args)
