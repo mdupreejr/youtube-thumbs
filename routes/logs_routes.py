@@ -14,6 +14,11 @@ from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, parse_timestamp, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.video_helpers import get_video_title, get_video_artist
+from helpers.template_helpers import (
+    PageConfig, TableData, TableColumn, TableRow, TableCell,
+    create_logs_page_config, create_queue_page_config, create_api_calls_page_config,
+    format_youtube_link, format_badge, format_time_ago, truncate_text
+)
 
 bp = Blueprint('logs', __name__)
 
@@ -58,31 +63,153 @@ def api_calls_log():
             success_filter=success_filter
         )
 
-        # v4.0.38: Format timestamps for easier reading (issue #72)
-        # Format as "MM-DD HH:MM:SS" instead of "2025-11-08T07:28:40"
-        for log in result['logs']:
-            if log.get('timestamp'):
-                log['timestamp'] = format_absolute_timestamp(log['timestamp'])
-
         # Get summary statistics
         summary = _db.get_api_call_summary(hours=24)
 
-        # Calculate pagination
+        # Create page configuration
+        page_config = create_api_calls_page_config(ingress_path)
+        
+        # Add filters
+        page_config.add_filter('method', 'API Method', [
+            {'value': '', 'label': 'All Methods', 'selected': not method_filter},
+            {'value': 'search', 'label': 'search', 'selected': method_filter == 'search'},
+            {'value': 'videos.list', 'label': 'videos.list', 'selected': method_filter == 'videos.list'}
+        ])
+        page_config.add_filter('success', 'Status', [
+            {'value': '', 'label': 'All', 'selected': success_filter_str is None},
+            {'value': 'true', 'label': 'Success', 'selected': success_filter_str == 'true'},
+            {'value': 'false', 'label': 'Failed', 'selected': success_filter_str == 'false'}
+        ])
+        page_config.filter_button_text = 'Apply Filters'
+
+        # Create table data
+        columns = [
+            TableColumn('time', 'Time'),
+            TableColumn('method', 'Method'),
+            TableColumn('operation', 'Operation'),
+            TableColumn('query', 'Query'),
+            TableColumn('quota', 'Quota'),
+            TableColumn('status', 'Status'),
+            TableColumn('results', 'Results'),
+            TableColumn('context', 'Context')
+        ]
+
+        rows = []
+        for log in result['logs']:
+            # Format method badge
+            method_html = log.get('api_method', '')
+            if method_html == 'search':
+                method_html = format_badge('🔍 search', 'info')
+            elif method_html == 'videos.list':
+                method_html = format_badge('📹 videos.list', 'info')
+            else:
+                method_html = format_badge(method_html)
+
+            # Format status badge
+            status_html = format_badge('✓ Success', 'success') if log.get('success') else format_badge('✗ Failed', 'error')
+            
+            # Format quota cost
+            quota_cost = log.get('quota_cost', 0)
+            quota_style = 'color: #dc2626;' if quota_cost >= 100 else 'color: #059669;'
+            quota_html = f'<span style="{quota_style}">{quota_cost}</span>'
+
+            # Format query and context
+            query_text = truncate_text(log.get('query_params', ''), 80)
+            context_text = ''
+            if log.get('error_message'):
+                context_text = truncate_text(log.get('error_message'), 100)
+            elif log.get('context'):
+                context_text = truncate_text(log.get('context'), 60)
+            else:
+                context_text = '-'
+
+            cells = [
+                TableCell(format_absolute_timestamp(log.get('timestamp')), format_time_ago(format_absolute_timestamp(log.get('timestamp')))),
+                TableCell(log.get('api_method', ''), method_html),
+                TableCell(log.get('operation_type') or '-'),
+                TableCell(query_text if query_text else '-'),
+                TableCell(quota_cost, quota_html),
+                TableCell('Success' if log.get('success') else 'Failed', status_html),
+                TableCell(log.get('results_count') if log.get('results_count') is not None else '-', 
+                         style='text-align: center;'),
+                TableCell(context_text)
+            ]
+            rows.append(TableRow(cells))
+
+        table_data = TableData(columns, rows)
+
+        # Create summary statistics
+        summary_stats = None
+        if summary:
+            main_stats = [
+                {'label': 'Total Calls (24h)', 'value': summary['summary'].get('total_calls', 0)},
+                {'label': 'Quota Used (24h)', 'value': summary['summary'].get('total_quota', 0), 'style': 'color: #dc2626;'},
+                {'label': 'Successful Calls', 'value': summary['summary'].get('successful_calls', 0), 'style': 'color: #16a34a;'},
+                {'label': 'Failed Calls', 'value': summary['summary'].get('failed_calls', 0), 'style': 'color: #dc2626;'}
+            ]
+            
+            breakdowns = []
+            if summary.get('by_method'):
+                breakdowns.append({
+                    'title': '📌 By API Method',
+                    'rows': [
+                        {
+                            'label': method['api_method'],
+                            'count': method['call_count'],
+                            'count_suffix': 'calls',
+                            'quota': f"{method['quota_used']} quota"
+                        }
+                        for method in summary['by_method']
+                    ]
+                })
+            
+            if summary.get('by_operation'):
+                breakdowns.append({
+                    'title': '🔧 By Operation Type',
+                    'rows': [
+                        {
+                            'label': op['operation_type'],
+                            'count': op['call_count'],
+                            'count_suffix': 'calls',
+                            'quota': f"{op['quota_used']} quota"
+                        }
+                        for op in summary['by_operation']
+                    ]
+                })
+            
+            summary_stats = {
+                'main_stats': main_stats,
+                'breakdowns': breakdowns
+            }
+
+        # Create pagination
         total_count = result['total_count']
         total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
         page_numbers = generate_page_numbers(page, total_pages)
+        
+        pagination = {
+            'current_page': page,
+            'total_pages': total_pages,
+            'page_numbers': page_numbers,
+            'prev_url': f"/logs/api-calls?page={page-1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
+            'next_url': f"/logs/api-calls?page={page+1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
+            'page_url_template': f"/logs/api-calls?page=PAGE_NUM" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else "")
+        } if total_pages > 1 else None
+
+        # Set empty state
+        page_config.set_empty_state('📊', 'No API calls found', 'No API calls have been logged yet, or none match your filters.')
+
+        # Status message
+        status_message = f"Showing {len(result['logs'])} of {total_count} API calls • Page {page}/{total_pages}"
 
         return render_template(
-            'logs_api_calls.html',
+            'table_viewer.html',
             ingress_path=ingress_path,
-            logs=result['logs'],
-            summary=summary,
-            current_page=page,
-            total_pages=total_pages,
-            total_count=total_count,
-            page_numbers=page_numbers,
-            method_filter=method_filter,
-            success_filter=success_filter_str
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if rows else None,
+            summary_stats=summary_stats,
+            pagination=pagination,
+            status_message=status_message
         )
 
     except Exception as e:
