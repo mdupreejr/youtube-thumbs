@@ -110,7 +110,14 @@ class QueueOperations:
 
     def mark_failed(self, queue_id: int, error: str) -> None:
         """
-        Mark a queue item as failed and reset to pending for retry.
+        Mark a queue item as failed.
+
+        v4.0.9: CRITICAL FIX - Changed status to 'failed' (was incorrectly 'pending').
+        The old behavior caused quota-exceeded items to retry immediately every 60s,
+        burning through the entire daily quota in minutes!
+
+        Failed items should actually be marked as failed, not retried automatically.
+        Manual intervention or explicit retry logic is needed for failed items.
 
         Args:
             queue_id: Queue item ID
@@ -120,13 +127,39 @@ class QueueOperations:
             self._conn.execute(
                 """
                 UPDATE queue
-                SET status = 'pending',
+                SET status = 'failed',
                     last_error = ?
                 WHERE id = ?
                 """,
                 (error, queue_id)
             )
             self._conn.commit()
+
+    def reset_stale_processing_items(self) -> int:
+        """
+        Reset queue items stuck in 'processing' status back to 'pending'.
+        This recovers from worker crashes/restarts.
+
+        v4.0.9: Added crash recovery - items stuck in 'processing' will be retried.
+        This is safe because all queue operations are idempotent:
+        - Ratings: get_video_rating checks current state before changing
+        - Searches: duplicate searches just update existing video_ratings entry
+
+        Returns:
+            Number of items reset
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                UPDATE queue
+                SET status = 'pending',
+                    last_error = 'Reset from processing (worker crash recovery)'
+                WHERE status = 'processing'
+                """
+            )
+            self._conn.commit()
+            count = cursor.rowcount
+            return count
 
     def list_pending(self, limit: int = 100) -> List[Dict[str, Any]]:
         """

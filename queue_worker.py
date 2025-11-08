@@ -396,6 +396,11 @@ def main():
     # Initialize database and YouTube API
     db = get_database()
 
+    # v4.0.9: Reset any items stuck in 'processing' status (crash recovery)
+    reset_count = db.reset_stale_processing_items()
+    if reset_count > 0:
+        logger.info(f"Crash recovery: Reset {reset_count} items from 'processing' to 'pending'")
+
     while running:
         try:
             # Get YouTube API instance

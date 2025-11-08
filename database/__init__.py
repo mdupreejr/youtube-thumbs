@@ -127,6 +127,10 @@ class Database:
         """Mark a queue item as failed."""
         return self._queue_ops.mark_failed(queue_id, error)
 
+    def reset_stale_processing_items(self):
+        """Reset queue items stuck in 'processing' status (crash recovery)."""
+        return self._queue_ops.reset_stale_processing_items()
+
     def list_pending_queue_items(self, limit=100):
         """List all pending items in the unified queue."""
         return self._queue_ops.list_pending(limit)
