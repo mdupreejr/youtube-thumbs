@@ -257,135 +257,41 @@ def get_content_hash(title, duration, artist=None):
 - "Song Name  " / "Song Name" (trailing space)
 - "Title - Artist" / "Title - artist" (case difference)
 
+### Quota Exhaustion Handling
+
 #### Process Flow
 
-1. **User clicks button** → API call to `/api/pending/retry?batch_size=1`
+1. **Quota exceeded error occurs**
+   - Queue worker detects quotaExceeded error from YouTube API
+   - Queue worker pauses until midnight Pacific Time (when quota resets)
+   - All YouTube API operations blocked
+   - New rating/search requests are queued but not processed
 
-2. **Rate limit check** → Enforces 30-second cooldown
+2. **Queue continues accepting requests**
+   - Users can still call thumbs_up/thumbs_down endpoints
+   - Requests are added to queue with status='pending'
+   - Endpoints return 503 status with "Quota exceeded" message
+   - No API calls are attempted while quota is exhausted
 
-3. **Get pending video** → Queries for 1 video with `pending_reason = 'quota_exceeded'`
+3. **After midnight Pacific Time**
+   - YouTube quota automatically resets to 10,000 units
+   - Queue worker attempts next queue item
+   - If successful, queue processing resumes normally
+   - All pending items processed sequentially with 1-minute delays
 
-4. **Check cache first** → Looks for match in database cache
-   - If found: Resolve immediately (no API call)
+4. **Queue processes all items**
+   - Worker processes queue items in priority order (ratings first, then searches)
+   - Each item processed with mandatory 1-minute delay
+   - Failed items marked with error message and retry count
+   - Successful items marked as completed
 
-5. **Search YouTube** → If not in cache, call YouTube Data API
-   - **Success**: Resolve with YouTube data, mark as matched
-   - **Not found**: Mark as `pending_reason = 'not_found'`
-   - **Failed**: Increment failure count
+### Queue Monitoring
 
-6. **Display results** → Show message with statistics
-   - Format: "Processed 1 pending video: X resolved, Y failed, Z not found"
-   - Message stays visible for 5 seconds
-   - Page reloads if video was resolved (updates counts)
-   - 
-#### Process Flow
+All queue activity is visible through the web interface and logged to `/config/youtube_thumbs/youtube_thumbs.log`:
 
-1. **Quota blocked** → quotaExceeded error occurs
-   - Queue paused until midnight Pacific Time
-   - All YouTube API calls blocked
-   - New videos stored as pending
-
-2. **After midnight Pacific** → When quota resets
-   - QuotaProber attempts recovery probe
-   - Sends test YouTube API search
-
-3. **Probe succeeds** → Quota has recovered
-   - QuotaGuard clears block
-   - Triggers `_retry_pending_videos()`
-
-4. **Retry batch processing**
-   - Queries: `SELECT * FROM video_ratings WHERE yt_match_pending = 1 AND pending_reason = 'quota_exceeded' LIMIT 1`
-   - Processes **1 video per recovery cycle**
-   - Logs: "Found 1 pending video(s) to retry after quota recovery"
-
-5. **For each video:**
-   - Log: "Retrying match for: {title} (duration: {dur}) [1/1]"
-   - Check cache first (no API call)
-   - If not cached, search YouTube
-   - **Success**: "✓ Successfully matched: {title} → {video_id}"
-   - **Not found**: "✗ No match found for: {title}"
-   - **Error**: "Failed to retry pending video: {error}"
-
-6. **Completion**
-   - Log: "Pending video retry complete: X matched, Y not found, Z errors"
-   - Record metrics for monitoring
-
-### Logging
-
-All QuotaProber activity is logged to `/config/youtube_thumbs/youtube_thumbs.log` and visible in the **Logs → Quota Prober** tab:
-
-#### Event Categories
-
-| Icon | Category | Description |
-|------|----------|-------------|
-| 🔍 | Probe | Quota recovery probe attempts |
-| 🔄 | Retry | Batch retry processing |
-| ✅ | Success | Successfully matched videos |
-| ❌ | Error | Failed searches or errors |
-| 🎉 | Recovery | Quota restored events |
-
-#### Summary Statistics
-
-The Quota Prober logs tab shows:
-- **Probe Attempts**: Number of quota recovery probes
-- **Recoveries**: Successful quota restorations
-- **Retry Batches**: Number of batch processing runs
-- **Videos Resolved**: Total videos successfully matched
-
-#### Example Log Sequence
-
-```
-🎉 INFO  Quota restored! Starting automatic retry of pending videos...
-🔄 INFO  Found 1 pending video(s) to retry after quota recovery (estimated time: 0.0 minutes)
-🔍 INFO  Retrying match for: Never Gonna Give You Up (duration: 213) [1/1]
-✅ INFO  ✓ Successfully matched: Never Gonna Give You Up → dQw4w9WgXcQ
-📊 INFO  Pending video retry complete: 1 matched, 0 not found, 0 errors
-```
-
-### Comparison: Manual vs Automatic
-
-| Feature | Manual Retry | Automatic Retry |
-|---------|--------------|-----------------|
-| **Trigger** | User clicks button | After quota recovery |
-| **Batch Size** | 1 video | 1 video (configurable) |
-| **Timing** | On-demand | Every 5 min (when quota blocked) |
-| **Cooldown** | 30 seconds | Until midnight PT (quota reset) |
-| **User Action** | Required | None (automatic) |
-| **Best For** | Quick fixes, testing | Hands-off recovery |
-| **Quota Safe** | Yes (1 at a time) | Yes (waits for recovery) |
-
-### Retry Strategy Best Practices
-
-#### When to Use Manual Retry
-
-1. **Testing** - Verify credentials and quota are working
-2. **Small batches** - Process a few pending videos quickly
-3. **Impatient** - Don't want to wait for automatic retry
-4. **Control** - Want to see results immediately
-
-#### When to Use Automatic Retry
-
-1. **Large batches** - Many pending videos (10+)
-2. **Hands-off** - Set it and forget it
-3. **Quota exhausted** - Wait for natural quota reset
-4. **Overnight** - Let it process while you sleep
-
-#### Recommended Workflow
-
-If you have pending videos:
-
-1. **Check quota status** on Tests page
-   - If API is working → Use manual retry
-   - If quota exceeded → Wait for automatic retry
-
-2. **For 1-5 pending videos** → Manual retry
-   - Click button once per minute
-   - Immediate feedback
-
-3. **For 6+ pending videos** → Automatic retry
-   - Wait for quota to reset (midnight Pacific Time)
-   - QuotaProber will process them automatically
-   - Check Quota Prober logs tab to monitor progress
+- **Queue Tab**: Real-time view of pending, processing, completed, and failed items
+- **Queue Stats**: Processing rates, success rates, error counts
+- **API Call Logs**: Detailed log of every YouTube API call with quota costs and errors
 
 ### Quota Management
 
@@ -393,28 +299,23 @@ If you have pending videos:
 
 **Default quota**: 10,000 units per day
 
-**Search cost**: 100 units per search
+**Common operation costs**:
+- Search: 100 units per search
+- Get video details: 1 unit per video
+- Rate video: 50 units per rating
 
 **Math**: 10,000 / 100 = **100 searches per day max**
 
-#### How Retry Affects Quota
+#### Queue-Based Rate Limiting
 
-- **Manual retry**: 1 search = 100 units
-- **Automatic retry**: 1 search = 100 units (same cost)
-- **Batch of 5**: 5 searches = 500 units
-- **Batch of 50**: 5,000 units (half daily quota!)
+The addon uses a queue system with mandatory 1-minute delays between all YouTube API calls:
 
-#### Why Batch Size = 1
+- **Search operations**: Queued with priority=2, processed after ratings
+- **Rating operations**: Queued with priority=1, processed first
+- **Processing rate**: Maximum 60 operations per hour (1 per minute)
+- **Quota protection**: Worker pauses on quotaExceeded until midnight Pacific Time
 
-Before v1.72.4, defaults were:
-- Manual: 5 videos per click
-- Automatic: 50 videos per recovery
-
-**Problem**: Could re-exhaust quota immediately
-
-**Solution**: Changed to 1 video at a time
-- Manual: 1 video = 100 units (safe)
-- Automatic: 1 video per recovery cycle (very safe)
+This conservative approach ensures quota is never exhausted through rapid API calls.
 
 #### Quota Recovery Timeline
 
@@ -422,26 +323,27 @@ YouTube quotas reset at **midnight Pacific Time** daily.
 
 Example timeline:
 - **2:00 PM PST**: Quota exhausted (10,000 units used)
-- **2:00 PM - Midnight**: Queue paused, waiting for quota reset
-- **Midnight PST**: YouTube quota resets to 10,000 units
-- **12:05 AM PST**: QuotaProber probe succeeds (quota restored)
-- **12:05 AM PST**: Retry 1 pending video
-- **Next probe at 12:10 AM**: If quota OK, retry another video
+- **2:00 PM - Midnight**: Queue worker paused, all API calls blocked
+- **Midnight PST**: YouTube quota automatically resets to 10,000 units
+- **12:01 AM PST**: Queue worker attempts next item
+- **12:01 AM PST**: If successful, queue processing resumes
+- **12:02 AM PST**: Next item processed (1-minute delay enforced)
 
-### Monitoring Retry Activity
+### Queue Monitoring
 
-#### Stats Page
+#### Web Interface
 
-View pending video statistics:
-- **Total Pending**: All unmatched videos
-- **Quota Exceeded**: Videos blocked by quota
-- **Not Found**: Videos with no YouTube match
-- **Search Failed**: Videos where search errored
+The web interface provides comprehensive queue monitoring:
 
-#### Logs → Quota Prober Tab
+- **Queue Tab**: View all pending, processing, completed, and failed queue items
+- **Queue Stats**: Processing rates, success rates, worker health
+- **API Call Logs**: Every YouTube API call logged with quota costs and errors
 
-Filter and view retry activity:
-- **Period**: All time / Today / Last 7 days / Last 30 days
-- **Event Type**: All / Probe / Retry / Success / Error / Recovery
-- **Level**: All / INFO / WARNING / ERROR
+#### Database Tables
+
+Queue data is stored across several tables:
+
+- **queue**: All pending YouTube API operations
+- **api_call_log**: Detailed log of every API call
+- **api_usage**: Hourly quota usage tracking
 
