@@ -7,7 +7,6 @@ from logger import logger
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
 from helpers.api_helpers import stats_endpoint, simple_stats_endpoint, api_endpoint
-from constants import MAX_BATCH_SIZE
 
 # Create blueprint
 bp = Blueprint('data_api', __name__, url_prefix='/api')
@@ -305,19 +304,16 @@ def get_pending_status() -> Response:
 @bp.route('/pending/retry', methods=['POST'])
 def retry_pending_videos() -> Response:
     """
-    Queue pending videos for retry via the queue worker.
+    Queue ALL pending videos for retry via the queue worker.
+    NO BATCHING - processes all pending videos, queueing them one at a time.
     Does NOT make direct API calls - all work is delegated to the queue worker.
     API endpoint called from JavaScript - CSRF will be exempted in app.py.
     """
     from helpers.cache_helpers import find_cached_video
 
     try:
-        # Get batch size from request (default: 5, max: 50)
-        batch_size = int(request.args.get('batch_size', 5))
-        batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
-
-        # Get pending videos with quota_exceeded reason
-        pending_videos = db.get_pending_videos(limit=batch_size, reason_filter='quota_exceeded')
+        # Get ALL pending videos with quota_exceeded reason (no batching)
+        pending_videos = db.get_pending_videos(limit=None, reason_filter='quota_exceeded')
 
         if not pending_videos:
             return jsonify({
@@ -382,8 +378,6 @@ def retry_pending_videos() -> Response:
             'message': message
         })
 
-    except ValueError:
-        return error_response( 'Invalid batch_size parameter', 400)
     except Exception as e:
         logger.error(f"Error in manual pending video retry: {e}")
         import traceback

@@ -381,19 +381,6 @@ def _pending_retry_enabled() -> bool:
     return value.lower() not in FALSE_VALUES if isinstance(value, str) else True
 
 
-def _pending_retry_batch_size() -> int:
-    raw_size = os.getenv('PENDING_VIDEO_RETRY_BATCH_SIZE', '50')
-    try:
-        size = int(raw_size)
-        return size if 1 <= size <= 500 else 50
-    except ValueError:
-        logger.warning(
-            "Invalid PENDING_VIDEO_RETRY_BATCH_SIZE '%s'; using default 50",
-            raw_size,
-        )
-        return 50
-
-
 # Start stats refresher background task (refreshes every hour)
 logger.info("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)

@@ -43,9 +43,6 @@ class MetricsTracker:
         self._search_queries = deque(maxlen=500)
         self._search_results_count = defaultdict(int)
 
-        # Batch operations tracking - kept at 100 (rarely used)
-        self._batch_operations = deque(maxlen=100)
-
         # Pending video retry tracking
         self._pending_retries = deque(maxlen=100)
 
@@ -131,16 +128,6 @@ class MetricsTracker:
                 'results': results_count
             })
             self._search_results_count[results_count] += 1
-
-    def record_batch_operation(self, batch_size: int, success_count: int):
-        """Record a batch operation."""
-        with self._lock:
-            self._batch_operations.append({
-                'timestamp': time.time(),
-                'batch_size': batch_size,
-                'success_count': success_count,
-                'success_rate': success_count / batch_size if batch_size > 0 else 0
-            })
 
     def record_pending_retry(self, total: int, matched: int, not_found: int, errors: int):
         """
@@ -284,17 +271,6 @@ class MetricsTracker:
             reasons = Counter(s.get('reason', 'unknown') for s in self._failed_searches)
             titles = Counter(s.get('title', '') for s in self._failed_searches if s.get('title'))
 
-            # Calculate batch operation averages using generator expressions
-            batch_count = len(self._batch_operations)
-            avg_batch_size = (
-                sum(op['batch_size'] for op in self._batch_operations) / batch_count
-                if batch_count > 0 else 0
-            )
-            avg_success_rate = (
-                sum(op['success_rate'] for op in self._batch_operations) / batch_count
-                if batch_count > 0 else 0
-            )
-
             return {
                 'total_searches': len(self._search_queries),
                 'failed_searches': {
@@ -306,12 +282,7 @@ class MetricsTracker:
                         for title, count in titles.most_common(10)
                     ]
                 },
-                'results_distribution': dict(self._search_results_count),
-                'batch_operations': {
-                    'total': batch_count,
-                    'average_batch_size': avg_batch_size,
-                    'average_success_rate': avg_success_rate
-                }
+                'results_distribution': dict(self._search_results_count)
             }
 
     def get_retry_stats(self) -> Dict[str, Any]:
