@@ -1,14 +1,14 @@
 # YouTube Thumbs - Architecture Documentation
 
-Technical details about the matching system, database schema, and internal workings.
+Technical details about the matching system, queue architecture, database schema, and internal workings.
 
 ## Table of Contents
 
 - [Video Matching System](#video-matching-system)
+- [Queue System](#queue-system)
 - [Database Schema](#database-schema)
 - [Content Hash Algorithm](#content-hash-algorithm)
-- [Video States](#video-states)
-- [Pending Video Retry](#pending-video-retry)
+- [Quota Management](#quota-management)
 
 ## Video Matching System
 
@@ -24,151 +24,88 @@ When a new song is detected, the addon first checks the local database cache:
 
 2. **Title + Duration Lookup**: Searches for exact `ha_title` and `ha_duration` match
    - Fallback if content hash doesn't match
-   - YouTube duration = HA duration + 1 second (YouTube rounds up)
+   - YouTube duration = HA duration ± 1 second tolerance
 
 **Cache Hit**: Returns existing video immediately, increments play count, no YouTube API call needed.
 
-### 2. YouTube Search (API Call Required)
+### 2. YouTube Search (Queued for Processing)
 
-If no cache match found:
+If no cache match found, the search is **queued** for background processing:
 
-1. **Clean title**: Removes special characters, normalizes spacing
-2. **Search YouTube**: Query YouTube Data API with cleaned title
-3. **Filter by duration**: Only consider results where YouTube duration matches HA duration + 1 second
-4. **Select best match**: Select the highest quality title match with the correct duration.
-5. **Store in database**: Save yt information in the video_ratings table.
+1. **Queue search operation** with priority=2
+2. **Background worker processes**: Cleans title, searches YouTube API, filters by duration
+3. **Best match selected**: Highest quality title match with correct duration
+4. **Stored in database**: Saved to video_ratings table for future cache hits
 
-**Search Hit**: Video matched and cached for future plays.
+**Search Success**: Video matched and cached. Future plays use cache (no API calls).
 
-### 3. Quota Exceeded Handling
+## Queue System
 
-## Centralized Queue System
-
-As of v3.44.0, all YouTube API operations use a unified queue system for better rate limiting, error handling, and monitoring.
+As of v4.0.0, all YouTube API operations use a unified queue system for rate limiting, error handling, and monitoring.
 
 ### Queue Architecture
 
-All YouTube API requests (searches and ratings) are processed through a single queue table with these features:
+All YouTube API requests (searches and ratings) are processed through a single queue:
 
 - **Unified queue table**: All operations stored in one `queue` table
-- **Single background worker**: One `queue_worker.py` process handles all API requests
-- **1-minute rate limiting**: Mandatory delay between all API requests
-- **Quota exhaustion handling**: Auto-pauses until midnight Pacific when quota exceeded
-- **Database persistence**: All operations stored until processed
+- **Single background worker**: `queue_worker.py` process handles all API requests sequentially
+- **1-minute rate limiting**: Mandatory 60-second delay between all API requests
+- **Quota protection**: Auto-pauses until midnight Pacific when quota exceeded
 - **Priority system**: Ratings (priority=1) processed before searches (priority=2)
+- **Crash recovery**: Stuck 'processing' items reset to 'pending' on startup
 
 ### Queue States
 
 Each queue item progresses through these states:
 
-- `pending`: Waiting to be processed
-- `processing`: Currently being handled by the worker
-- `completed`: Successfully processed
-- `failed`: Processing failed (with error message)
+- `pending` → Waiting to be processed
+- `processing` → Currently being handled by the worker
+- `completed` → Successfully processed
+- `failed` → Processing failed (includes error message and retry count)
 
-### Web UI Queue Management
+### Web UI Queue Monitor
 
-The queue system provides a comprehensive web interface accessible in Home Assistant:
+The Queue tab (`/logs/pending-ratings`) provides comprehensive monitoring with 4 sub-tabs:
 
-#### Queue Tab Features
+1. **Pending**: Shows all queue items waiting to be processed
+2. **History**: Last 200 completed and failed operations with timestamps
+3. **Errors**: Failed operations with detailed error messages
+4. **Statistics**: Queue performance metrics, success rates, processing stats
 
-1. **Pending Items**: Shows all queue items waiting to be processed
-2. **History**: Displays completed and failed operations with timestamps
-3. **Error Monitoring**: Tracks failed operations with detailed error messages
-4. **Real-time Status**: Visual indicators for queue item states
-5. **Detailed View**: Click any item to view full request payloads, API responses, timestamps
-
-#### Queue Statistics
-
-- Overall queue metrics (total, pending, processing, completed, failed)
-- Per-type statistics (search vs rating operations)
-- Processing rates and success rates over time periods
-- Worker health monitoring with last activity timestamps
-
-### Migration from Legacy Queues
-
-The system automatically migrates from the legacy queue structure:
-
-- `search_queue` table entries → `queue` table with `type='search'`
-- `video_ratings` rating queue fields → `queue` table with `type='rating'`
-- Legacy tables maintained for backward compatibility during transition
+**Features**: Click any queue item for detailed modal view showing full request payloads, API responses, timestamps, and error messages.
 
 ## Database Schema
 
 ### video_ratings (Main Table)
 
-Primary table storing all video metadata, play history, ratings, and pending states.
+**v4.0.0 Change**: Only stores **matched videos** with valid `yt_video_id`. Unmatched videos are tracked in the queue table until successfully matched.
 
-**YouTube Metadata Fields** (yt_* prefix):
+**YouTube Metadata** (yt_* prefix):
 - `yt_video_id` (TEXT, PRIMARY KEY) - YouTube video ID (e.g., "dQw4w9WgXcQ")
-  - NULL for pending videos awaiting YouTube match
-  - Populated after successful match
 - `yt_title` (TEXT) - Official YouTube video title
 - `yt_channel` (TEXT) - YouTube channel name
 - `yt_channel_id` (TEXT) - YouTube channel ID
-- `yt_description` (TEXT) - Video description
+- `yt_duration` (INTEGER) - Video duration in seconds
+- `yt_url` (TEXT) - Full YouTube URL
 - `yt_published_at` (TIMESTAMP) - YouTube upload date
 - `yt_category_id` (INTEGER) - YouTube category (10=Music, etc.)
-- `yt_live_broadcast` (TEXT) - Live stream status (none/upcoming/live/completed)
-- `yt_location` (TEXT) - Geographic location if available
-- `yt_recording_date` (TIMESTAMP) - Original recording date if available
-- `yt_duration` (INTEGER) - YouTube video duration in seconds
-- `yt_url` (TEXT) - Full YouTube URL
+- `yt_description`, `yt_live_broadcast`, `yt_location`, `yt_recording_date` - Additional metadata
 
-**Home Assistant Metadata Fields** (ha_* prefix):
-- `ha_content_id` (TEXT) - Placeholder ID for pending videos
-  - Format: `ha_hash:abc123` (SHA1 of title+duration+artist)
-  - Used when `yt_video_id` is NULL (quota blocked)
-  - Replaced with real `yt_video_id` after successful match
-- `ha_title` (TEXT, INDEXED) - Song title from HA media player
-- `ha_artist` (TEXT) - Artist/channel from HA media player
+**Home Assistant Metadata** (ha_* prefix):
+- `ha_content_id` (TEXT) - Content ID from Home Assistant media player
+- `ha_title` (TEXT, INDEXED) - Song title from HA
+- `ha_artist` (TEXT) - Artist/channel from HA
 - `ha_app_name` (TEXT) - Source app (e.g., "YouTube Music")
 - `ha_duration` (INTEGER, INDEXED) - Song duration in seconds from HA
-- `ha_content_hash` (TEXT, INDEXED) - SHA1 hash for duplicate detection
-  - Format: SHA1(lowercase(title) + duration + lowercase(artist))
-  - Enables fuzzy matching across formatting differences
+- `ha_content_hash` (TEXT, INDEXED) - SHA1 hash for duplicate detection (see algorithm below)
 
-**Playback & Rating Fields**:
+**Playback & Rating**:
 - `rating` (TEXT) - User rating: 'like', 'dislike', or 'none'
-- `rating_score` (INTEGER) - Net rating score (likes - dislikes)
+- `rating_score` (INTEGER) - Net rating score (cumulative)
 - `play_count` (INTEGER) - Number of times played
-- `date_added` (TIMESTAMP) - When video was first added to database
-- `date_last_played` (TIMESTAMP, INDEXED) - Most recent play timestamp
-
-### api_usage (API Quota Tracking)
-
-Tracks YouTube API usage by hour for quota management.
-
-**Fields**:
-- `date` (TEXT, PRIMARY KEY) - Date in YYYY-MM-DD format
-- `hour_00` through `hour_23` (INTEGER) - API quota units used per hour
-- `timestamp` (TIMESTAMP) - Last update timestamp
-
-**Behavior**:
-- Records every YouTube API call with quota cost (search=100, videos.list=1)
-- Enables quota usage analytics and trends
-
-### api_call_log (Detailed API Logging)
-
-Detailed log of every YouTube API call for debugging and analysis.
-
-**Fields**:
-- `id` (INTEGER, PRIMARY KEY) - Auto-increment ID
-- `timestamp` (TIMESTAMP, INDEXED) - When API call was made
-- `api_method` (TEXT, INDEXED) - API method called (search, videos.list, etc.)
-- `operation_type` (TEXT) - High-level operation (search_video, get_video_details, etc.)
-- `query_params` (TEXT) - Query parameters sent to API
-- `quota_cost` (INTEGER) - Quota units consumed
-- `success` (BOOLEAN, INDEXED) - Whether call succeeded
-- `error_message` (TEXT) - Error message if failed
-- `results_count` (INTEGER) - Number of results returned
-- `context` (TEXT) - Additional context (e.g., video title)
-
-**Behavior**:
-- Logs every YouTube API interaction
-- Enables analysis of API call patterns
-- Helps identify quota waste
-- Accessible via /logs/api-calls web interface
+- `source` (TEXT) - How video was added: 'ha_live', 'queue_search', etc.
+- `date_added` (TIMESTAMP) - When video was first added
+- `date_last_played` (TIMESTAMP, INDEXED) - Most recent play
 
 ### queue (Unified Queue System)
 
@@ -176,174 +113,138 @@ Centralized queue for all YouTube API operations (searches and ratings).
 
 **Fields**:
 - `id` (INTEGER, PRIMARY KEY) - Auto-increment queue item ID
-- `type` (TEXT, INDEXED) - Queue item type: 'search' or 'rating'
-- `priority` (INTEGER, INDEXED) - Processing priority (1=ratings, 2=searches)
-- `status` (TEXT, INDEXED) - Current status: 'pending', 'processing', 'completed', 'failed'
+- `type` (TEXT, INDEXED) - 'search' or 'rating'
+- `priority` (INTEGER, INDEXED) - 1=ratings (first), 2=searches
+- `status` (TEXT, INDEXED) - 'pending', 'processing', 'completed', 'failed'
 - `payload` (TEXT) - JSON-encoded operation data (video ID, search terms, etc.)
-- `requested_at` (TIMESTAMP, INDEXED) - When item was added to queue
+- `requested_at` (TIMESTAMP, INDEXED) - When item was queued
 - `attempts` (INTEGER) - Number of processing attempts
 - `last_attempt` (TIMESTAMP) - Most recent processing attempt
 - `last_error` (TEXT) - Error message if processing failed
-- `completed_at` (TIMESTAMP) - When item was successfully processed
+- `completed_at` (TIMESTAMP) - When successfully processed
 
-**Behavior**:
-- All YouTube API requests flow through this queue (no direct API calls)
-- Single worker process handles items sequentially with 1-minute delays
-- Automatic retry logic for failed operations
-- Quota exhaustion pauses queue until midnight Pacific time
-- Web UI provides real-time visibility into queue status and history
+**Behavior**: All YouTube API requests flow through this queue. Single worker processes items sequentially with 1-minute delays. Failed items retain error message and attempt count for debugging.
+
+### api_call_log (Detailed API Logging)
+
+Logs every YouTube API call for debugging and analysis.
+
+**Fields**:
+- `id` (INTEGER, PRIMARY KEY)
+- `timestamp` (TIMESTAMP, INDEXED) - When API call was made
+- `api_method` (TEXT, INDEXED) - 'search', 'videos.list', 'videos.rate', etc.
+- `operation_type` (TEXT) - High-level operation (e.g., 'search_video', 'get_rating')
+- `query_params` (TEXT) - Query parameters sent to API
+- `quota_cost` (INTEGER) - Quota units consumed
+- `success` (BOOLEAN, INDEXED) - Whether call succeeded
+- `error_message` (TEXT) - Error message if failed
+- `results_count` (INTEGER) - Number of results returned
+- `context` (TEXT) - Additional context (e.g., video title)
+
+**Access**: View via `/logs/api-calls` web interface
+
+### api_usage (Hourly Quota Tracking)
+
+Tracks YouTube API usage by hour for quota management.
+
+**Fields**:
+- `date` (TEXT, PRIMARY KEY) - YYYY-MM-DD format
+- `hour_00` through `hour_23` (INTEGER) - API quota units used per hour
+
+**Behavior**: Records every YouTube API call. Enables quota usage analytics and hourly usage charts.
 
 ### search_results_cache (Search Result Cache)
 
 Caches YouTube search results to avoid redundant API calls.
 
 **Fields**:
-- `id` (INTEGER, PRIMARY KEY) - Auto-increment ID
 - `yt_video_id` (TEXT, INDEXED) - YouTube video ID
 - `yt_title` (TEXT, INDEXED) - Video title
 - `yt_channel` (TEXT) - Channel name
 - `yt_duration` (INTEGER, INDEXED) - Video duration in seconds
-- `cached_at` (TIMESTAMP) - When video was cached
-- `expires_at` (TIMESTAMP, INDEXED) - When cache entry expires
-- Additional YouTube metadata fields
+- `cached_at` (TIMESTAMP) - When cached
+- `expires_at` (TIMESTAMP, INDEXED) - When expires (30-day TTL)
 
-**Behavior**:
-- Stores all videos from search results (not just matched ones)
-- 30-day TTL (configurable)
-- Enables duration-based lookups without new API calls
-- Automatically cleans expired entries
+**Behavior**: Stores all videos from search results. Enables duration-based lookups without new API calls. Auto-cleans expired entries.
 
 ### stats_cache (Statistics Cache)
 
-Caches pre-computed statistics for improved performance.
+Caches pre-computed statistics for performance.
 
 **Fields**:
-- `cache_key` (TEXT, PRIMARY KEY) - Cache entry identifier (e.g., 'stats_page')
+- `cache_key` (TEXT, PRIMARY KEY) - Cache entry identifier
 - `data` (TEXT) - JSON-encoded cached data
-- `created_at` (TIMESTAMP) - When cache entry was created
-- `expires_at` (TIMESTAMP) - When cache entry expires
+- `created_at` (TIMESTAMP) - When created
+- `expires_at` (TIMESTAMP) - When expires (5-minute default TTL)
 
-**Behavior**:
-- Stores expensive statistics calculations (e.g., main stats page data)
-- Default 5-minute TTL for stats page
-- Reduces database queries for frequently accessed stats
-- Automatically invalidated on startup
-- JSON-serialized Python objects for flexible data storage
+**Behavior**: Stores expensive calculations (e.g., stats page aggregates). Invalidated on startup and after data changes.
 
 ## Content Hash Algorithm
 
-The content hash enables fuzzy matching despite formatting differences:
+Enables fuzzy matching despite formatting differences:
 
 ```python
 def get_content_hash(title, duration, artist=None):
-    # Normalize inputs
     title_norm = (title or "").strip().lower()
     artist_norm = (artist or "").strip().lower()
     duration_str = str(duration or 0)
 
-    # Combine and hash
     combined = f"{title_norm}:{duration_str}:{artist_norm}"
     return hashlib.sha1(combined.encode('utf-8')).hexdigest()
 ```
 
 **Why it works**:
-- Lowercases everything (handles "Song Name" vs "song name")
-- Strips whitespace (handles "Song  Name" vs "Song Name")
-- Includes duration (prevents matching different versions)
-- Optional artist (handles missing artist metadata)
+- Lowercases everything → handles case differences
+- Strips whitespace → handles spacing differences
+- Includes duration → prevents matching different versions
+- Optional artist → handles missing metadata
 
 **Example matches** (same hash):
-- "Never Gonna Give You Up" / "never gonna give you up"
-- "Song Name  " / "Song Name" (trailing space)
-- "Title - Artist" / "Title - artist" (case difference)
+- "Never Gonna Give You Up" ≈ "never gonna give you up"
+- "Song Name  " ≈ "Song Name" (trailing space)
+- "Title - Artist" ≈ "Title - artist"
+
+## Quota Management
+
+### YouTube API Quota Limits
+
+**Daily quota**: 10,000 units (resets midnight Pacific Time)
+
+**Operation costs**:
+- Search: 100 units
+- Get video details: 1 unit
+- Rate video: 50 units
+
+**Max operations**: ~100 searches/day OR 200 ratings/day (or combinations)
+
+### Queue-Based Rate Limiting
+
+Conservative approach with mandatory 1-minute delays:
+
+- **Processing rate**: 1 operation per minute (max 60/hour)
+- **Priority**: Ratings processed before searches
+- **Quota protection**: Worker pauses on quotaExceeded until midnight Pacific
 
 ### Quota Exhaustion Handling
 
-#### Process Flow
+**When quota exceeded**:
+1. Queue worker detects quotaExceeded error from YouTube API
+2. Worker pauses until midnight Pacific Time (when quota resets)
+3. All new requests queued but not processed
+4. Web UI shows quota exhausted status
 
-1. **Quota exceeded error occurs**
-   - Queue worker detects quotaExceeded error from YouTube API
-   - Queue worker pauses until midnight Pacific Time (when quota resets)
-   - All YouTube API operations blocked
-   - New rating/search requests are queued but not processed
+**After midnight Pacific**:
+1. YouTube quota automatically resets to 10,000 units
+2. Queue worker resumes processing
+3. All pending items processed sequentially (1 per minute)
 
-2. **Queue continues accepting requests**
-   - Users can still call thumbs_up/thumbs_down endpoints
-   - Requests are added to queue with status='pending'
-   - Endpoints return 503 status with "Quota exceeded" message
-   - No API calls are attempted while quota is exhausted
+### Monitoring
 
-3. **After midnight Pacific Time**
-   - YouTube quota automatically resets to 10,000 units
-   - Queue worker attempts next queue item
-   - If successful, queue processing resumes normally
-   - All pending items processed sequentially with 1-minute delays
+**Web Interface**:
+- **Queue Tab** (`/logs/pending-ratings`): Real-time pending, history, errors, statistics
+- **API Calls Tab** (`/logs/api-calls`): Detailed log of every API call with quota costs
 
-4. **Queue processes all items**
-   - Worker processes queue items in priority order (ratings first, then searches)
-   - Each item processed with mandatory 1-minute delay
-   - Failed items marked with error message and retry count
-   - Successful items marked as completed
-
-### Queue Monitoring
-
-All queue activity is visible through the web interface and logged to `/config/youtube_thumbs/youtube_thumbs.log`:
-
-- **Queue Tab**: Real-time view of pending, processing, completed, and failed items
-- **Queue Stats**: Processing rates, success rates, error counts
-- **API Call Logs**: Detailed log of every YouTube API call with quota costs and errors
-
-### Quota Management
-
-#### YouTube API Quota Limits
-
-**Default quota**: 10,000 units per day
-
-**Common operation costs**:
-- Search: 100 units per search
-- Get video details: 1 unit per video
-- Rate video: 50 units per rating
-
-**Math**: 10,000 / 100 = **100 searches per day max**
-
-#### Queue-Based Rate Limiting
-
-The addon uses a queue system with mandatory 1-minute delays between all YouTube API calls:
-
-- **Search operations**: Queued with priority=2, processed after ratings
-- **Rating operations**: Queued with priority=1, processed first
-- **Processing rate**: Maximum 60 operations per hour (1 per minute)
-- **Quota protection**: Worker pauses on quotaExceeded until midnight Pacific Time
-
-This conservative approach ensures quota is never exhausted through rapid API calls.
-
-#### Quota Recovery Timeline
-
-YouTube quotas reset at **midnight Pacific Time** daily.
-
-Example timeline:
-- **2:00 PM PST**: Quota exhausted (10,000 units used)
-- **2:00 PM - Midnight**: Queue worker paused, all API calls blocked
-- **Midnight PST**: YouTube quota automatically resets to 10,000 units
-- **12:01 AM PST**: Queue worker attempts next item
-- **12:01 AM PST**: If successful, queue processing resumes
-- **12:02 AM PST**: Next item processed (1-minute delay enforced)
-
-### Queue Monitoring
-
-#### Web Interface
-
-The web interface provides comprehensive queue monitoring:
-
-- **Queue Tab**: View all pending, processing, completed, and failed queue items
-- **Queue Stats**: Processing rates, success rates, worker health
-- **API Call Logs**: Every YouTube API call logged with quota costs and errors
-
-#### Database Tables
-
-Queue data is stored across several tables:
-
-- **queue**: All pending YouTube API operations
-- **api_call_log**: Detailed log of every API call
-- **api_usage**: Hourly quota usage tracking
-
+**Log Files**:
+- `/config/youtube_thumbs/youtube_thumbs.log` - Main application log
+- `/config/youtube_thumbs/errors.log` - Error-only log
+- `/config/youtube_thumbs/ratings.log` - Rating history
