@@ -3,7 +3,8 @@ Pagination helper utilities.
 
 Provides reusable pagination logic to eliminate code duplication across routes.
 """
-from typing import List, Union
+from typing import List, Union, Dict, Optional
+from urllib.parse import urlencode
 
 
 def generate_page_numbers(current_page: int, total_pages: int) -> List[Union[int, str]]:
@@ -71,3 +72,36 @@ def generate_page_numbers(current_page: int, total_pages: int) -> List[Union[int
         result.append(page)
 
     return result
+
+
+def build_pagination_url(base_path: str, page: int, filters: Optional[Dict[str, str]] = None) -> str:
+    """
+    Build a pagination URL with query parameters.
+
+    Args:
+        base_path: Base URL path (e.g., '/logs/api-calls')
+        page: Page number
+        filters: Optional dictionary of filter parameters to include in the URL
+
+    Returns:
+        Complete URL with query parameters
+
+    Examples:
+        >>> build_pagination_url('/logs/api-calls', 2)
+        '/logs/api-calls?page=2'
+
+        >>> build_pagination_url('/logs/api-calls', 2, {'method': 'search'})
+        '/logs/api-calls?page=2&method=search'
+
+        >>> build_pagination_url('/logs/api-calls', 2, {'method': 'search', 'success': 'true'})
+        '/logs/api-calls?page=2&method=search&success=true'
+    """
+    params = {'page': str(page)}
+    
+    # Add non-empty filter parameters
+    if filters:
+        for key, value in filters.items():
+            if value is not None and value != '':
+                params[key] = str(value)
+    
+    return f"{base_path}?{urlencode(params)}"

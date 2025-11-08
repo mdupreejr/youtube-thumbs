@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 import os
 import re
 from logger import logger
-from helpers.pagination_helpers import generate_page_numbers
+from helpers.pagination_helpers import generate_page_numbers, build_pagination_url
 from helpers.time_helpers import format_relative_time, parse_timestamp, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.video_helpers import get_video_title, get_video_artist
@@ -187,13 +187,20 @@ def api_calls_log():
         total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
         page_numbers = generate_page_numbers(page, total_pages)
         
+        # Build filter dict for pagination URLs
+        filters = {}
+        if method_filter:
+            filters['method'] = method_filter
+        if success_filter_str:
+            filters['success'] = success_filter_str
+        
         pagination = {
             'current_page': page,
             'total_pages': total_pages,
             'page_numbers': page_numbers,
-            'prev_url': f"/logs/api-calls?page={page-1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
-            'next_url': f"/logs/api-calls?page={page+1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
-            'page_url_template': f"/logs/api-calls?page=PAGE_NUM" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else "")
+            'prev_url': build_pagination_url('/logs/api-calls', page - 1, filters),
+            'next_url': build_pagination_url('/logs/api-calls', page + 1, filters),
+            'page_url_template': build_pagination_url('/logs/api-calls', 'PAGE_NUM', filters)
         } if total_pages > 1 else None
 
         # Set empty state
