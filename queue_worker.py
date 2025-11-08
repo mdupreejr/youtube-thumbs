@@ -373,7 +373,7 @@ def main():
         # Write our PID to file
         with open(pid_file, 'w') as f:
             f.write(str(os.getpid()))
-        logger.info(f"Queue worker PID file created: {pid_file}")
+        logger.debug(f"Queue worker PID file created: {pid_file}")
 
     except Exception as e:
         logger.error(f"Failed to create PID file: {e}")
