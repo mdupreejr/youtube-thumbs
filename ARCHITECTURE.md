@@ -42,6 +42,57 @@ If no cache match found:
 
 ### 3. Quota Exceeded Handling
 
+## Centralized Queue System
+
+As of v3.44.0, all YouTube API operations use a unified queue system for better rate limiting, error handling, and monitoring.
+
+### Queue Architecture
+
+All YouTube API requests (searches and ratings) are processed through a single queue table with these features:
+
+- **Unified queue table**: All operations stored in one `queue` table
+- **Single background worker**: One `queue_worker.py` process handles all API requests
+- **1-minute rate limiting**: Mandatory delay between all API requests
+- **Quota exhaustion handling**: Auto-pauses until midnight Pacific when quota exceeded
+- **Database persistence**: All operations stored until processed
+- **Priority system**: Ratings (priority=1) processed before searches (priority=2)
+
+### Queue States
+
+Each queue item progresses through these states:
+
+- `pending`: Waiting to be processed
+- `processing`: Currently being handled by the worker
+- `completed`: Successfully processed
+- `failed`: Processing failed (with error message)
+
+### Web UI Queue Management
+
+The queue system provides a comprehensive web interface accessible in Home Assistant:
+
+#### Queue Tab Features
+
+1. **Pending Items**: Shows all queue items waiting to be processed
+2. **History**: Displays completed and failed operations with timestamps
+3. **Error Monitoring**: Tracks failed operations with detailed error messages
+4. **Real-time Status**: Visual indicators for queue item states
+5. **Detailed View**: Click any item to view full request payloads, API responses, timestamps
+
+#### Queue Statistics
+
+- Overall queue metrics (total, pending, processing, completed, failed)
+- Per-type statistics (search vs rating operations)
+- Processing rates and success rates over time periods
+- Worker health monitoring with last activity timestamps
+
+### Migration from Legacy Queues
+
+The system automatically migrates from the legacy queue structure:
+
+- `search_queue` table entries → `queue` table with `type='search'`
+- `video_ratings` rating queue fields → `queue` table with `type='rating'`
+- Legacy tables maintained for backward compatibility during transition
+
 ## Database Schema
 
 ### video_ratings (Main Table)
@@ -118,6 +169,29 @@ Detailed log of every YouTube API call for debugging and analysis.
 - Enables analysis of API call patterns
 - Helps identify quota waste
 - Accessible via /logs/api-calls web interface
+
+### queue (Unified Queue System)
+
+Centralized queue for all YouTube API operations (searches and ratings).
+
+**Fields**:
+- `id` (INTEGER, PRIMARY KEY) - Auto-increment queue item ID
+- `type` (TEXT, INDEXED) - Queue item type: 'search' or 'rating'
+- `priority` (INTEGER, INDEXED) - Processing priority (1=ratings, 2=searches)
+- `status` (TEXT, INDEXED) - Current status: 'pending', 'processing', 'completed', 'failed'
+- `payload` (TEXT) - JSON-encoded operation data (video ID, search terms, etc.)
+- `requested_at` (TIMESTAMP, INDEXED) - When item was added to queue
+- `attempts` (INTEGER) - Number of processing attempts
+- `last_attempt` (TIMESTAMP) - Most recent processing attempt
+- `last_error` (TEXT) - Error message if processing failed
+- `completed_at` (TIMESTAMP) - When item was successfully processed
+
+**Behavior**:
+- All YouTube API requests flow through this queue (no direct API calls)
+- Single worker process handles items sequentially with 1-minute delays
+- Automatic retry logic for failed operations
+- Quota exhaustion pauses queue until midnight Pacific time
+- Web UI provides real-time visibility into queue status and history
 
 ### search_results_cache (Search Result Cache)
 

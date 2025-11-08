@@ -131,6 +131,18 @@ class Database:
         """List all pending items in the unified queue."""
         return self._queue_ops.list_pending(limit)
 
+    def list_queue_history(self, limit=100):
+        """List completed and failed items from the unified queue."""
+        return self._queue_ops.list_history(limit)
+
+    def list_queue_failed(self, limit=100):
+        """List failed items from the unified queue."""
+        return self._queue_ops.list_failed(limit)
+
+    def get_queue_item_by_id(self, queue_id):
+        """Get a specific queue item by ID."""
+        return self._queue_ops.get_item_by_id(queue_id)
+
     # ========================================================================
     # LEGACY QUEUE OPERATIONS (for backward compatibility during transition)
     # ========================================================================

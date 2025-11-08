@@ -155,6 +155,84 @@ class QueueOperations:
                 items.append(item)
             return items
 
+    def list_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get completed and failed queue items (history).
+
+        Args:
+            limit: Maximum number of items to return
+
+        Returns:
+            List of queue items with status 'completed' or 'failed'
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                SELECT * FROM queue
+                WHERE status IN ('completed', 'failed')
+                ORDER BY completed_at DESC, last_attempt DESC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            items = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                item['payload'] = json.loads(item['payload'])
+                items.append(item)
+            return items
+
+    def list_failed(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get failed queue items.
+
+        Args:
+            limit: Maximum number of items to return
+
+        Returns:
+            List of failed queue items
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                SELECT * FROM queue
+                WHERE status = 'failed'
+                ORDER BY last_attempt DESC
+                LIMIT ?
+                """,
+                (limit,)
+            )
+            items = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                item['payload'] = json.loads(item['payload'])
+                items.append(item)
+            return items
+
+    def get_item_by_id(self, queue_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific queue item by ID.
+
+        Args:
+            queue_id: Queue item ID
+
+        Returns:
+            Queue item dict or None if not found
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                SELECT * FROM queue WHERE id = ?
+                """,
+                (queue_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                item = dict(row)
+                item['payload'] = json.loads(item['payload'])
+                return item
+            return None
+
     def enqueue_search(
         self,
         ha_media: Dict[str, Any],
@@ -225,12 +303,12 @@ class QueueOperations:
             return cursor.rowcount
 
     # ========================================================================
-    # LEGACY QUEUE STATISTICS (Will be updated to use unified queue)
+    # UNIFIED QUEUE STATISTICS
     # ========================================================================
 
     def get_queue_statistics(self) -> Dict[str, Any]:
         """
-        Get comprehensive queue statistics.
+        Get comprehensive queue statistics from the unified queue.
 
         Returns:
             Dictionary with queue counts, processing rates, and health metrics
@@ -238,16 +316,30 @@ class QueueOperations:
         with self._lock:
             stats = {}
 
+            # Overall queue statistics
+            cursor = self._conn.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) as processing,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    MAX(attempts) as max_attempts,
+                    AVG(attempts) as avg_attempts
+                FROM queue
+            """)
+            overall_queue = dict(cursor.fetchone())
+
             # Rating queue statistics
             cursor = self._conn.execute("""
                 SELECT
                     COUNT(*) as total_pending,
-                    SUM(CASE WHEN rating_queue_attempts = 0 THEN 1 ELSE 0 END) as never_attempted,
-                    SUM(CASE WHEN rating_queue_attempts > 0 THEN 1 ELSE 0 END) as retry_pending,
-                    MAX(rating_queue_attempts) as max_attempts,
-                    AVG(rating_queue_attempts) as avg_attempts
-                FROM video_ratings
-                WHERE rating_queue_pending IS NOT NULL
+                    SUM(CASE WHEN attempts = 0 THEN 1 ELSE 0 END) as never_attempted,
+                    SUM(CASE WHEN attempts > 0 THEN 1 ELSE 0 END) as retry_pending,
+                    MAX(attempts) as max_attempts,
+                    AVG(attempts) as avg_attempts
+                FROM queue
+                WHERE type = 'rating' AND status = 'pending'
             """)
             rating_queue = dict(cursor.fetchone())
 
@@ -261,7 +353,8 @@ class QueueOperations:
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
                     MAX(attempts) as max_attempts,
                     AVG(attempts) as avg_attempts
-                FROM search_queue
+                FROM queue
+                WHERE type = 'search'
             """)
             search_queue = dict(cursor.fetchone())
 
@@ -271,16 +364,20 @@ class QueueOperations:
             # Rating queue processed in last 24h
             cursor = self._conn.execute("""
                 SELECT COUNT(*) as count
-                FROM video_ratings
-                WHERE rating_queue_last_attempt >= ?
+                FROM queue
+                WHERE type = 'rating' 
+                  AND last_attempt >= ?
+                  AND last_attempt IS NOT NULL
             """, (cutoff_24h,))
             ratings_processed_24h = cursor.fetchone()['count']
 
             # Search queue processed in last 24h
             cursor = self._conn.execute("""
                 SELECT COUNT(*) as count
-                FROM search_queue
-                WHERE last_attempt >= ?
+                FROM queue
+                WHERE type = 'search'
+                  AND last_attempt >= ?
+                  AND last_attempt IS NOT NULL
             """, (cutoff_24h,))
             searches_processed_24h = cursor.fetchone()['count']
 
@@ -288,10 +385,11 @@ class QueueOperations:
             cursor = self._conn.execute("""
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN rating_queue_last_error IS NULL THEN 1 ELSE 0 END) as successful
-                FROM video_ratings
-                WHERE rating_queue_last_attempt >= ?
-                  AND rating_queue_last_attempt IS NOT NULL
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful
+                FROM queue
+                WHERE type = 'rating'
+                  AND last_attempt >= ?
+                  AND last_attempt IS NOT NULL
             """, (cutoff_24h,))
             row = cursor.fetchone()
             rating_success_rate = 0
@@ -302,8 +400,9 @@ class QueueOperations:
                 SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful
-                FROM search_queue
-                WHERE last_attempt >= ?
+                FROM queue
+                WHERE type = 'search'
+                  AND last_attempt >= ?
                   AND last_attempt IS NOT NULL
             """, (cutoff_24h,))
             row = cursor.fetchone()
@@ -313,20 +412,29 @@ class QueueOperations:
 
             # Get last activity timestamps
             cursor = self._conn.execute("""
-                SELECT MAX(rating_queue_last_attempt) as last_rating_attempt
-                FROM video_ratings
-                WHERE rating_queue_last_attempt IS NOT NULL
+                SELECT MAX(last_attempt) as last_rating_attempt
+                FROM queue
+                WHERE type = 'rating' AND last_attempt IS NOT NULL
             """)
             last_rating = cursor.fetchone()['last_rating_attempt']
 
             cursor = self._conn.execute("""
                 SELECT MAX(last_attempt) as last_search_attempt
-                FROM search_queue
-                WHERE last_attempt IS NOT NULL
+                FROM queue
+                WHERE type = 'search' AND last_attempt IS NOT NULL
             """)
             last_search = cursor.fetchone()['last_search_attempt']
 
             return {
+                'overall_queue': {
+                    'total': overall_queue['total'] or 0,
+                    'pending': overall_queue['pending'] or 0,
+                    'processing': overall_queue['processing'] or 0,
+                    'completed': overall_queue['completed'] or 0,
+                    'failed': overall_queue['failed'] or 0,
+                    'max_attempts': overall_queue['max_attempts'] or 0,
+                    'avg_attempts': round(overall_queue['avg_attempts'] or 0, 1)
+                },
                 'rating_queue': {
                     'pending': rating_queue['total_pending'] or 0,
                     'never_attempted': rating_queue['never_attempted'] or 0,
@@ -387,47 +495,68 @@ class QueueOperations:
             Dictionary with recent rating and search activity
         """
         with self._lock:
-            # Recent rating queue activity
+            # Recent rating queue activity from unified queue
             cursor = self._conn.execute("""
-                SELECT
-                    yt_video_id,
-                    ha_title,
-                    ha_artist,
-                    rating_queue_pending as requested_rating,
-                    rating_queue_requested_at as requested_at,
-                    rating_queue_attempts as attempts,
-                    rating_queue_last_attempt as last_attempt,
-                    rating_queue_last_error as error,
-                    CASE
-                        WHEN rating_queue_last_error IS NULL AND rating_queue_last_attempt IS NOT NULL THEN 'success'
-                        WHEN rating_queue_last_error IS NOT NULL THEN 'failed'
-                        ELSE 'pending'
-                    END as status
-                FROM video_ratings
-                WHERE rating_queue_requested_at IS NOT NULL
-                ORDER BY rating_queue_requested_at DESC
-                LIMIT ?
-            """, (limit,))
-            recent_ratings = [dict(row) for row in cursor.fetchall()]
-
-            # Recent search queue activity
-            cursor = self._conn.execute("""
-                SELECT
-                    id,
-                    ha_title,
-                    ha_artist,
-                    status,
-                    requested_at,
-                    attempts,
-                    last_attempt,
-                    error_message,
-                    callback_rating,
-                    completed_video_id
-                FROM search_queue
+                SELECT *
+                FROM queue
+                WHERE type = 'rating'
                 ORDER BY requested_at DESC
                 LIMIT ?
             """, (limit,))
-            recent_searches = [dict(row) for row in cursor.fetchall()]
+            recent_ratings = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                payload = json.loads(item['payload'])
+                
+                # Get video details if available
+                video = None
+                yt_video_id = payload.get('yt_video_id')
+                if yt_video_id:
+                    video_cursor = self._conn.execute(
+                        "SELECT * FROM video_ratings WHERE yt_video_id = ?",
+                        (yt_video_id,)
+                    )
+                    video_row = video_cursor.fetchone()
+                    video = dict(video_row) if video_row else None
+                
+                recent_ratings.append({
+                    'yt_video_id': yt_video_id,
+                    'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
+                    'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
+                    'requested_rating': payload.get('rating'),
+                    'requested_at': item['requested_at'],
+                    'attempts': item['attempts'],
+                    'last_attempt': item['last_attempt'],
+                    'error': item['last_error'],
+                    'status': item['status'],
+                    'queue_id': item['id']
+                })
+
+            # Recent search queue activity from unified queue
+            cursor = self._conn.execute("""
+                SELECT *
+                FROM queue
+                WHERE type = 'search'
+                ORDER BY requested_at DESC
+                LIMIT ?
+            """, (limit,))
+            recent_searches = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                payload = json.loads(item['payload'])
+                
+                recent_searches.append({
+                    'id': item['id'],
+                    'ha_title': payload.get('title', 'Unknown'),
+                    'ha_artist': payload.get('artist', 'Unknown'),
+                    'status': item['status'],
+                    'requested_at': item['requested_at'],
+                    'attempts': item['attempts'],
+                    'last_attempt': item['last_attempt'],
+                    'error_message': item['last_error'],
+                    'callback_rating': payload.get('callback_rating'),
+                    'completed_video_id': None  # Would need additional lookup
+                })
 
             return {
                 'recent_ratings': recent_ratings,
@@ -445,39 +574,67 @@ class QueueOperations:
             Dictionary with recent rating and search errors
         """
         with self._lock:
-            # Rating queue errors
+            # Rating queue errors from unified queue
             cursor = self._conn.execute("""
-                SELECT
-                    yt_video_id,
-                    ha_title,
-                    ha_artist,
-                    rating_queue_pending as requested_rating,
-                    rating_queue_attempts as attempts,
-                    rating_queue_last_attempt as last_attempt,
-                    rating_queue_last_error as error
-                FROM video_ratings
-                WHERE rating_queue_last_error IS NOT NULL
-                ORDER BY rating_queue_last_attempt DESC
-                LIMIT ?
-            """, (limit,))
-            rating_errors = [dict(row) for row in cursor.fetchall()]
-
-            # Search queue errors
-            cursor = self._conn.execute("""
-                SELECT
-                    id,
-                    ha_title,
-                    ha_artist,
-                    attempts,
-                    last_attempt,
-                    error_message
-                FROM search_queue
-                WHERE status = 'failed'
-                  AND error_message IS NOT NULL
+                SELECT *
+                FROM queue
+                WHERE type = 'rating'
+                  AND status = 'failed'
+                  AND last_error IS NOT NULL
                 ORDER BY last_attempt DESC
                 LIMIT ?
             """, (limit,))
-            search_errors = [dict(row) for row in cursor.fetchall()]
+            rating_errors = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                payload = json.loads(item['payload'])
+                
+                # Get video details if available
+                video = None
+                yt_video_id = payload.get('yt_video_id')
+                if yt_video_id:
+                    video_cursor = self._conn.execute(
+                        "SELECT * FROM video_ratings WHERE yt_video_id = ?",
+                        (yt_video_id,)
+                    )
+                    video_row = video_cursor.fetchone()
+                    video = dict(video_row) if video_row else None
+                
+                rating_errors.append({
+                    'yt_video_id': yt_video_id,
+                    'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
+                    'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
+                    'requested_rating': payload.get('rating'),
+                    'attempts': item['attempts'],
+                    'last_attempt': item['last_attempt'],
+                    'error': item['last_error'],
+                    'queue_id': item['id']
+                })
+
+            # Search queue errors from unified queue
+            cursor = self._conn.execute("""
+                SELECT *
+                FROM queue
+                WHERE type = 'search'
+                  AND status = 'failed'
+                  AND last_error IS NOT NULL
+                ORDER BY last_attempt DESC
+                LIMIT ?
+            """, (limit,))
+            search_errors = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                payload = json.loads(item['payload'])
+                
+                search_errors.append({
+                    'id': item['id'],
+                    'ha_title': payload.get('title', 'Unknown'),
+                    'ha_artist': payload.get('artist', 'Unknown'),
+                    'attempts': item['attempts'],
+                    'last_attempt': item['last_attempt'],
+                    'error_message': item['last_error'],
+                    'queue_id': item['id']
+                })
 
             return {
                 'rating_errors': rating_errors,
@@ -497,32 +654,56 @@ class QueueOperations:
         with self._lock:
             cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
 
-            # Rating queue performance
-            cursor = self._conn.execute("""
-                SELECT
-                    COUNT(*) as total_attempts,
-                    SUM(CASE WHEN rating_queue_last_error IS NULL THEN 1 ELSE 0 END) as successful,
-                    SUM(CASE WHEN rating_queue_last_error IS NOT NULL THEN 1 ELSE 0 END) as failed,
-                    AVG(rating_queue_attempts) as avg_attempts
-                FROM video_ratings
-                WHERE rating_queue_last_attempt >= ?
-            """, (cutoff,))
-            rating_metrics = dict(cursor.fetchone())
-
-            # Search queue performance
+            # Rating queue performance from unified queue
             cursor = self._conn.execute("""
                 SELECT
                     COUNT(*) as total_attempts,
                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
                     AVG(attempts) as avg_attempts
-                FROM search_queue
-                WHERE last_attempt >= ?
+                FROM queue
+                WHERE type = 'rating'
+                  AND last_attempt >= ?
+                  AND last_attempt IS NOT NULL
+            """, (cutoff,))
+            rating_metrics = dict(cursor.fetchone())
+
+            # Search queue performance from unified queue
+            cursor = self._conn.execute("""
+                SELECT
+                    COUNT(*) as total_attempts,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(attempts) as avg_attempts
+                FROM queue
+                WHERE type = 'search'
+                  AND last_attempt >= ?
+                  AND last_attempt IS NOT NULL
             """, (cutoff,))
             search_metrics = dict(cursor.fetchone())
 
+            # Overall queue metrics
+            cursor = self._conn.execute("""
+                SELECT
+                    COUNT(*) as total_attempts,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(attempts) as avg_attempts
+                FROM queue
+                WHERE last_attempt >= ?
+                  AND last_attempt IS NOT NULL
+            """, (cutoff,))
+            overall_metrics = dict(cursor.fetchone())
+
             return {
                 'period_hours': hours,
+                'overall': {
+                    'total_attempts': overall_metrics['total_attempts'] or 0,
+                    'successful': overall_metrics['successful'] or 0,
+                    'failed': overall_metrics['failed'] or 0,
+                    'avg_attempts': round(overall_metrics['avg_attempts'] or 0, 1),
+                    'success_rate': round((overall_metrics['successful'] / overall_metrics['total_attempts'] * 100) if overall_metrics['total_attempts'] > 0 else 0, 1)
+                },
                 'rating_queue': {
                     'total_attempts': rating_metrics['total_attempts'] or 0,
                     'successful': rating_metrics['successful'] or 0,
