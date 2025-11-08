@@ -832,9 +832,18 @@ class YouTubeAPI:
         request = self.youtube.videos().getRating(id=yt_video_id)
         response = request.execute()
 
-        # Track successful API usage
+        # Track successful API usage (both tables)
         if _db:
             _db.record_api_call('videos.getRating', success=True, quota_cost=1)
+            _db.log_api_call_detailed(
+                api_method='videos.getRating',
+                operation_type='get_rating',
+                query_params=f"video_id={yt_video_id}",
+                quota_cost=1,
+                success=True,
+                results_count=len(response.get('items', [])),
+                context=f"Check rating for {yt_video_id}"
+            )
 
         if response.get('items'):
             rating = response['items'][0].get('rating', self.NO_RATING)
@@ -859,9 +868,18 @@ class YouTubeAPI:
         )
         request.execute()
 
-        # Track successful API usage
+        # Track successful API usage (both tables)
         if _db:
             _db.record_api_call('videos.rate', success=True, quota_cost=50)
+            _db.log_api_call_detailed(
+                api_method='videos.rate',
+                operation_type='set_rating',
+                query_params=f"video_id={yt_video_id}, rating={rating}",
+                quota_cost=50,
+                success=True,
+                results_count=1,
+                context=f"Set rating '{rating}' for {yt_video_id}"
+            )
 
         logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
         return True
