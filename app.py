@@ -392,7 +392,6 @@ if song_tracking_enabled:
     logger.debug("Starting song tracker...")
     song_tracker.start()
     atexit.register(song_tracker.stop)
-    logger.info(f"Song tracker started (polling every {song_tracking_interval}s)")
 else:
     logger.info("Song tracker disabled (song_tracking_enabled=false)")
 
