@@ -22,14 +22,17 @@ class APIUsageOperations:
         error_message: str = None
     ) -> None:
         """
-        Record an API call for usage tracking.
-        Increments the hourly counter for the current date and hour.
+        Record an API call for aggregate hourly usage tracking.
+        Increments the hourly counter by quota_cost for the current date and hour.
 
         Args:
-            api_method: The YouTube API method called (deprecated, kept for compatibility)
-            success: Whether the call succeeded (deprecated, kept for compatibility)
-            quota_cost: Quota units consumed (deprecated, kept for compatibility)
-            error_message: Optional error message if call failed (deprecated, kept for compatibility)
+            api_method: The YouTube API method called (unused in aggregate tracking)
+            success: Whether the call succeeded (unused in aggregate tracking)
+            quota_cost: Quota units consumed (added to hourly total)
+            error_message: Optional error message if call failed (unused in aggregate tracking)
+
+        Note: This tracks aggregate quota usage per hour. For detailed call logs,
+              use log_api_call_detailed() instead.
         """
         with self._lock:
             now = datetime.utcnow()
@@ -42,15 +45,15 @@ class APIUsageOperations:
 
             hour_col = f"hour_{hour:02d}"
 
-            # Insert or update the row for today
+            # Insert or update the row for today, incrementing by quota_cost
             # nosec B608 - hour_col is validated to be hour_00 through hour_23 (line 40)
             self._conn.execute(
                 f"""
                 INSERT INTO api_usage (date, {hour_col})
-                VALUES (?, 1)
-                ON CONFLICT(date) DO UPDATE SET {hour_col} = {hour_col} + 1
+                VALUES (?, ?)
+                ON CONFLICT(date) DO UPDATE SET {hour_col} = {hour_col} + ?
                 """,
-                (date_str,)
+                (date_str, quota_cost, quota_cost)
             )
             self._conn.commit()
 
