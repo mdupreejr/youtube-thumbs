@@ -8,7 +8,7 @@ A Home Assistant add-on that lets you rate YouTube videos (👍/👎) for songs 
 - ⚡ **Bulk Rating Interface** - Quickly rate up to 50 unrated songs at once
 - 🔍 **Smart matching** - Automatic YouTube video matching with caching
 - 📊 **Database Viewer** - Built-in sqlite_web interface
-- 🛡️ **Quota protection** - Built-in rate limiting and cooldown
+- 🛡️ **Quota protection** - Queue-based processing with automatic quota recovery
 - 💾 **SQLite storage** - Local database with comprehensive metadata
 
 ## Quick Start
@@ -59,11 +59,6 @@ automation:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `media_player_entity` | (required) | Media player entity ID |
-| `port` | 21812 | Service port |
-| `rate_limit_per_minute` | 10 | Max API calls per minute |
-| `rate_limit_per_hour` | 100 | Max API calls per hour |
-| `rate_limit_per_day` | 500 | Max API calls per day |
-| `quota_cooldown_hours` | 12 | Hours before probing for quota recovery (resets at midnight PT) |
 | `log_level` | INFO | Logging level |
 
 For all options, see config.json.
@@ -106,7 +101,7 @@ Access the web interface by clicking **OPEN WEB UI** in the addon page:
 - `POST /api/rate/<video_id>/dislike` - Rate specific video as dislike
 
 ### System
-- `GET /health` - Health check with rate limiter and quota stats
+- `GET /health` - Health check with quota stats
 - `GET /metrics` - Comprehensive metrics for monitoring
 
 ### Bulk Rating

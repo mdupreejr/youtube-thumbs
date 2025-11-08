@@ -8,30 +8,15 @@ configuration:
   sqlite_web_port:
     name: sqlite_web port
     description: Port for the sqlite_web database viewer when exposed to your LAN; ignored while using HA ingress (default).
-  rate_limit_per_minute:
-    name: Rate limit per minute
-    description: Maximum YouTube Data API calls allowed every 60 seconds.
-  rate_limit_per_hour:
-    name: Rate limit per hour
-    description: Maximum YouTube Data API calls allowed every hour.
-  rate_limit_per_day:
-    name: Rate limit per day
-    description: Maximum YouTube Data API calls allowed every 24 hours.
-  quota_cooldown_hours:
-    name: Quota cooldown hours
-    description: Hours to wait after YouTube quota exceeded error before attempting API calls again (1-168 hours).
   log_level:
     name: Log level
     description: Controls verbosity in the add-on logs (DEBUG provides the most detail).
   force_quota_unlock:
     name: Force quota unlock
-    description: Clear the quota cooldown file on startup so YouTube API calls resume immediately.
+    description: Allow queue worker to resume API calls immediately on startup, ignoring any previous quota exceeded errors.
   pending_video_retry_enabled:
     name: Pending video retry enabled
     description: Automatically retry matching pending videos after quota recovery. When quota is exhausted, unmatched videos are stored as pending. After quota recovers, this automatically searches YouTube for them.
-  pending_video_retry_batch_size:
-    name: Pending video retry batch size
-    description: Maximum number of pending videos to retry per quota recovery event (1-500). Helps prevent re-exhausting quota immediately after recovery.
   search_max_results:
     name: Search max results
     description: Maximum number of search results to fetch from YouTube API per query (1-50). Higher values consume more quota but may improve match quality.

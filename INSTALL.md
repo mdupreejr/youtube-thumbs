@@ -60,11 +60,6 @@ Before starting the add-on, copy your OAuth credentials:
 
 ```yaml
 media_player_entity: media_player.apple_tv
-port: 21812
-rate_limit_per_minute: 10   # Max YouTube API calls in any 60-second window
-rate_limit_per_hour: 100    # Max YouTube API calls in any 3600-second window
-rate_limit_per_day: 500     # Max YouTube API calls in any 24-hour period
-quota_cooldown_hours: 12    # Hours before probing for quota recovery (actual reset at midnight PT)
 log_level: INFO
 ```
 
@@ -83,10 +78,9 @@ Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
 button will route through Home Assistant ingress automatically. If you override the
 host, skip the button and browse directly to `http://<home-assistant-host>:<sqlite_web_port>`.
 
-If Google reports `quotaExceeded`, the add-on writes
-`/config/youtube_thumbs/quota_guard.json` and pauses all YouTube API traffic until
-midnight Pacific Time when quotas reset (configurable probe timing with `quota_cooldown_hours`). During that pause the HTTP
-API returns `503` responses and new videos are stored as pending for retry after quota recovery.
+If Google reports `quotaExceeded`, the queue worker pauses all YouTube API traffic until
+midnight Pacific Time when quotas reset. During that pause new rating/search requests are
+queued and will be processed after quota recovery.
 
 Every time a video is matched we store both the Home Assistant artist/channel
 metadata and the YouTube channel so you can inspect mismatches later via
@@ -223,16 +217,15 @@ Rate the currently playing song as "like".
 Rate the currently playing song as "dislike".
 
 ### `GET /health`
-Health check endpoint with rate limiter statistics.
+Health check endpoint with system status.
 
 Response example:
 ```json
 {
   "status": "healthy",
-  "rate_limiter": {
-    "last_minute": 2,
-    "last_hour": 15,
-    "last_day": 47
+  "queue": {
+    "pending_items": 3,
+    "last_processed": "2025-01-15T10:30:00Z"
   }
 }
 ```
