@@ -367,7 +367,7 @@
                         <div style="margin: 10px 0;">
                             <div style="font-weight: 600; margin-bottom: 5px;">Top Failed Titles:</div>
                             {% for item in metrics.search_stats.failed_searches.top_failed_titles[:3] %}
-                            <div style="margin: 3px 0; color: #666; font-size: 0.8em;">{{ item.title[:30] }}... ({{ item.count }}x)</div>
+                            <div style="margin: 3px 0; color: #666; font-size: 0.8em;">{{ item.title[:30] }}{{ '...' if item.title|length > 30 else '' }} ({{ item.count }}x)</div>
                             {% endfor %}
                         </div>
                         {% endif %}
