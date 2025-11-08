@@ -50,10 +50,11 @@ def prepare_video_upsert(video: Dict[str, Any], ha_media: Dict[str, Any], source
         'yt_duration': video.get('duration'),
         'yt_url': f"https://www.youtube.com/watch?v={yt_video_id}",
         'source': source,
-        # YouTube matching status - video successfully matched
+        # YouTube match metadata (NOT a separate retry system - queue handles retries)
+        # yt_match_pending: 0 = video matched to YouTube, 1 = not matched yet
         'yt_match_pending': 0,
         'yt_match_requested_at': now,
-        'yt_match_attempts': 1,
+        'yt_match_attempts': 1,  # Metadata only - queue system handles actual retries
         'yt_match_last_attempt': now,
         'yt_match_last_error': None,
     }
@@ -189,11 +190,10 @@ def format_videos_for_display(videos: List[Dict], base_fields: List[str] = None,
         >>> formatted[0]['title']
         'Song'
 
-        # For pending videos with additional fields
-        >>> videos = [{'ha_title': 'Song', 'pending_reason': 'not_found', 'yt_match_attempts': 3}]
+        # For unmatched videos (tracked in queue for retry)
+        >>> videos = [{'ha_title': 'Song', 'yt_video_id': None, 'play_count': 2, 'date_added': '2025-01-01'}]
         >>> formatted = format_videos_for_display(videos,
-        ...     base_fields=['play_count', 'date_added'],
-        ...     additional_fields=['pending_reason', 'yt_match_attempts'])
+        ...     base_fields=['yt_video_id', 'play_count', 'date_added'])
     """
     # Default base fields for rated videos
     if base_fields is None:
