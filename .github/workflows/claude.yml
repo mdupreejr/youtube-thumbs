@@ -134,8 +134,8 @@ jobs:
             echo ""
             echo "  Evaluating issue #${CANDIDATE_ISSUE}..."
 
-            # Run conflict detection
-            CONFLICT_RESULT=$(.github/scripts/manage-claude-queue.sh detect-conflicts "$CANDIDATE_ISSUE" 2>&1 || echo "conflict")
+            # Run conflict detection (log messages go to stderr, result to stdout)
+            CONFLICT_RESULT=$(.github/scripts/manage-claude-queue.sh detect-conflicts "$CANDIDATE_ISSUE" 2>/dev/null || echo "conflict")
 
             if [[ "$CONFLICT_RESULT" == "no-conflicts" ]]; then
               echo "  ✅ No conflicts detected, safe to process"

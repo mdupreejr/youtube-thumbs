@@ -93,19 +93,16 @@ collect_stats() {
     # Calculate total processed (approximation based on closed issues with claude labels in last 30 days)
     local total_processed=$(gh issue list --state closed --search "label:claude-in-progress closed:>=$(date -d '30 days ago' +%Y-%m-%d 2>/dev/null || date -v-30d +%Y-%m-%d)" --json number --jq 'length')
 
-    # Export variables
+    # Export variables (escape newlines for eval)
     echo "QUEUED=$queued"
     echo "IN_PROGRESS=$in_progress"
     echo "PR_CREATED=$pr_created"
     echo "FAILED=$failed"
     echo "COMPLETED_LAST_7_DAYS=$completed_prs"
     echo "TOTAL_PROCESSED_30_DAYS=$total_processed"
-    echo "IN_PROGRESS_LIST<<EOF"
-    echo "$in_progress_list"
-    echo "EOF"
-    echo "FAILED_LIST<<EOF"
-    echo "$failed_list"
-    echo "EOF"
+    # Use base64 to safely pass multiline strings
+    echo "IN_PROGRESS_LIST_B64=$(echo "$in_progress_list" | base64 -w 0 2>/dev/null || echo "$in_progress_list" | base64)"
+    echo "FAILED_LIST_B64=$(echo "$failed_list" | base64 -w 0 2>/dev/null || echo "$failed_list" | base64)"
 }
 
 # Generate metrics report
@@ -217,6 +214,10 @@ main() {
 
     # Collect statistics
     eval "$(collect_stats)"
+
+    # Decode base64 multiline strings
+    IN_PROGRESS_LIST=$(echo "$IN_PROGRESS_LIST_B64" | base64 -d 2>/dev/null || echo "")
+    FAILED_LIST=$(echo "$FAILED_LIST_B64" | base64 -d 2>/dev/null || echo "")
 
     # Generate report
     REPORT=$(generate_report \

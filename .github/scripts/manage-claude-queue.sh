@@ -257,7 +257,7 @@ detect_conflicts() {
     local issue_number=$1
     check_gh_auth
 
-    log_info "Checking for conflicts with open PRs..."
+    log_info "Checking for conflicts with open PRs..." >&2
 
     # Get issue details
     local issue_body=$(gh issue view "$issue_number" --json body --jq '.body // ""')
@@ -270,7 +270,7 @@ detect_conflicts() {
     local open_prs=$(get_open_prs)
 
     if [ -z "$open_prs" ]; then
-        log_info "No open PRs, no conflicts"
+        log_info "No open PRs, no conflicts" >&2
         echo "no-conflicts"
         return 0
     fi
@@ -279,7 +279,7 @@ detect_conflicts() {
     for pr in $open_prs; do
         local files=$(get_file_changes "$pr")
         if echo "$files" | grep -q "config.json"; then
-            log_warning "PR #${pr} modifies config.json (version conflict risk)"
+            log_warning "PR #${pr} modifies config.json (version conflict risk)" >&2
             echo "conflict-version:${pr}"
             return 1
         fi
@@ -290,7 +290,7 @@ detect_conflicts() {
     local mentioned_files=$(echo "$issue_text" | grep -oE '(\w+/)+\w+\.\w+|\b\w+\.(py|js|sh|yml|yaml|json|md)\b' | sort -u)
 
     if [ -z "$mentioned_files" ]; then
-        log_info "No specific files mentioned in issue, assuming no conflicts"
+        log_info "No specific files mentioned in issue, assuming no conflicts" >&2
         echo "no-conflicts"
         return 0
     fi
@@ -301,14 +301,14 @@ detect_conflicts() {
 
         for mentioned in $mentioned_files; do
             if echo "$pr_files" | grep -q "$mentioned"; then
-                log_warning "Potential conflict: PR #${pr} modifies ${mentioned}"
+                log_warning "Potential conflict: PR #${pr} modifies ${mentioned}" >&2
                 echo "conflict-file:${pr}:${mentioned}"
                 return 1
             fi
         done
     done
 
-    log_success "No conflicts detected"
+    log_success "No conflicts detected" >&2
     echo "no-conflicts"
     return 0
 }
