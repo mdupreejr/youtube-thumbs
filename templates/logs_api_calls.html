@@ -23,6 +23,28 @@
         </header>
 
         <div class="card">
+            <!-- Tab Navigation (consistent with logs_viewer.html) -->
+            <div class="tab-navigation">
+                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button">
+                    Rated Songs
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button">
+                    Matches
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button">
+                    Recent
+                </a>
+                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button">
+                    Errors
+                </a>
+                <a href="{{ ingress_path }}/logs/api-calls" class="tab-button active">
+                    API Calls
+                </a>
+                <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button">
+                    Queue
+                </a>
+            </div>
+
             <h2>📊 YouTube API Call Logs</h2>
 
             <!-- Summary Statistics -->
