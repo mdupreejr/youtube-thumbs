@@ -205,9 +205,12 @@ class DatabaseConnection:
                     # v4.0.46: Migrate existing search_results_cache to include all video fields
                     self._migrate_search_cache_columns()
 
-                    # v4.0.47: ONE-TIME cleanup - remove deprecated queue columns from video_ratings
-                    # TODO: REMOVE THIS CALL IN v4.0.48 (after users have migrated)
-                    self._cleanup_deprecated_video_ratings_columns()
+                    # v4.0.48: Cleanup orphaned video_ratings_new table from failed v4.0.47 migration
+                    self._cleanup_orphaned_migration_table()
+
+                    # v4.0.48: Remove deprecated columns from video_ratings (improved migration)
+                    # TODO: REMOVE THIS CALL IN v4.0.49 (after migration completes)
+                    self._remove_deprecated_video_ratings_columns()
 
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
@@ -240,12 +243,27 @@ class DatabaseConnection:
         except Exception as e:
             logger.warning(f"Failed to migrate search_results_cache columns: {e}")
 
-    def _cleanup_deprecated_video_ratings_columns(self) -> None:
+    def _cleanup_orphaned_migration_table(self) -> None:
         """
-        v4.0.47: ONE-TIME migration to remove 11 deprecated queue-tracking columns.
-        These were replaced by the unified queue table in v4.0.0 but never dropped.
+        v4.0.48: Cleanup orphaned video_ratings_new table from failed v4.0.47 migration.
+        This is a one-time cleanup, safe to remove in v4.0.49.
+        """
+        try:
+            cursor = self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings_new'")
+            if cursor.fetchone():
+                logger.info("Cleaning up orphaned video_ratings_new table from failed migration...")
+                self._conn.execute("DROP TABLE video_ratings_new")
+                self._conn.commit()
+                logger.info("✓ Removed orphaned video_ratings_new table")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup orphaned table: {e}")
 
-        TODO: REMOVE THIS METHOD IN v4.0.48 (after users have migrated)
+    def _remove_deprecated_video_ratings_columns(self) -> None:
+        """
+        v4.0.48: Remove 11 deprecated queue-tracking columns from video_ratings.
+        Improved version with better error handling and transaction management.
+
+        TODO: REMOVE THIS METHOD IN v4.0.49 (after user has migrated)
 
         Deprecated columns to remove:
         - yt_match_pending, yt_match_requested_at, yt_match_attempts,
@@ -270,87 +288,102 @@ class DatabaseConnection:
                 logger.debug("Deprecated columns already removed from video_ratings")
                 return
 
-            logger.info("Cleaning up 11 deprecated columns from video_ratings table...")
+            logger.info("Removing 11 deprecated columns from video_ratings table...")
 
-            # SQLite doesn't support DROP COLUMN directly, so we need to:
-            # 1. Create new table without deprecated columns
-            # 2. Copy data
-            # 3. Drop old table
-            # 4. Rename new table
+            # Use explicit transaction for safety
+            self._conn.execute("BEGIN TRANSACTION")
 
-            # Create new table with clean schema (from VIDEO_RATINGS_SCHEMA)
-            self._conn.execute("""
-                CREATE TABLE video_ratings_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    yt_video_id TEXT NOT NULL UNIQUE,
-                    ha_content_id TEXT,
-                    ha_title TEXT NOT NULL,
-                    ha_artist TEXT,
-                    ha_app_name TEXT,
-                    yt_title TEXT NOT NULL,
-                    yt_channel TEXT,
-                    yt_channel_id TEXT,
-                    yt_description TEXT,
-                    yt_published_at TIMESTAMP,
-                    yt_category_id INTEGER,
-                    yt_live_broadcast TEXT,
-                    yt_location TEXT,
-                    yt_recording_date TIMESTAMP,
-                    ha_duration INTEGER,
-                    yt_duration INTEGER,
-                    yt_url TEXT NOT NULL,
-                    rating TEXT DEFAULT 'none',
-                    ha_content_hash TEXT,
-                    date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    date_last_played TIMESTAMP,
-                    play_count INTEGER DEFAULT 1,
-                    rating_score INTEGER DEFAULT 0,
-                    source TEXT DEFAULT 'ha_live'
-                )
-            """)
+            try:
+                # Create new table with clean schema
+                self._conn.execute("""
+                    CREATE TABLE video_ratings_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        yt_video_id TEXT NOT NULL UNIQUE,
+                        ha_content_id TEXT,
+                        ha_title TEXT NOT NULL,
+                        ha_artist TEXT,
+                        ha_app_name TEXT,
+                        yt_title TEXT NOT NULL,
+                        yt_channel TEXT,
+                        yt_channel_id TEXT,
+                        yt_description TEXT,
+                        yt_published_at TIMESTAMP,
+                        yt_category_id INTEGER,
+                        yt_live_broadcast TEXT,
+                        yt_location TEXT,
+                        yt_recording_date TIMESTAMP,
+                        ha_duration INTEGER,
+                        yt_duration INTEGER,
+                        yt_url TEXT NOT NULL,
+                        rating TEXT DEFAULT 'none',
+                        ha_content_hash TEXT,
+                        date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        date_last_played TIMESTAMP,
+                        play_count INTEGER DEFAULT 1,
+                        rating_score INTEGER DEFAULT 0,
+                        source TEXT DEFAULT 'ha_live'
+                    )
+                """)
 
-            # Copy all data from old table to new table (only non-deprecated columns)
-            self._conn.execute("""
-                INSERT INTO video_ratings_new (
-                    id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
-                    yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
-                    yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
-                    ha_duration, yt_duration, yt_url, rating, ha_content_hash,
-                    date_added, date_last_played, play_count, rating_score, source
-                )
-                SELECT
-                    id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
-                    yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
-                    yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
-                    ha_duration, yt_duration, yt_url, rating, ha_content_hash,
-                    date_added, date_last_played, play_count, rating_score, source
-                FROM video_ratings
-            """)
+                # Copy all data from old table to new table
+                self._conn.execute("""
+                    INSERT INTO video_ratings_new (
+                        id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
+                        yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
+                        yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
+                        ha_duration, yt_duration, yt_url, rating, ha_content_hash,
+                        date_added, date_last_played, play_count, rating_score, source
+                    )
+                    SELECT
+                        id, yt_video_id, ha_content_id, ha_title, ha_artist, ha_app_name,
+                        yt_title, yt_channel, yt_channel_id, yt_description, yt_published_at,
+                        yt_category_id, yt_live_broadcast, yt_location, yt_recording_date,
+                        ha_duration, yt_duration, yt_url, rating, ha_content_hash,
+                        date_added, date_last_played, play_count, rating_score, source
+                    FROM video_ratings
+                """)
 
-            # Drop old table
-            self._conn.execute("DROP TABLE video_ratings")
+                # Verify row counts match
+                cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings")
+                old_count = cursor.fetchone()[0]
+                cursor = self._conn.execute("SELECT COUNT(*) FROM video_ratings_new")
+                new_count = cursor.fetchone()[0]
 
-            # Rename new table to original name
-            self._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
+                if old_count != new_count:
+                    raise Exception(f"Row count mismatch: old={old_count}, new={new_count}")
 
-            # Recreate indexes (from VIDEO_RATINGS_SCHEMA)
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id)")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title)")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id)")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id)")
+                # Drop old table
+                self._conn.execute("DROP TABLE video_ratings")
 
-            # Recreate indexes that were created outside VIDEO_RATINGS_SCHEMA
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)")
+                # Rename new table
+                self._conn.execute("ALTER TABLE video_ratings_new RENAME TO video_ratings")
 
-            self._conn.commit()
+                # Recreate indexes
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_video_id ON video_ratings(yt_video_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_title ON video_ratings(ha_title)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_channel_id ON video_ratings(yt_channel_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_yt_category_id ON video_ratings(yt_category_id)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_hash ON video_ratings(ha_content_hash)")
+                self._conn.execute("CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)")
 
-            logger.info("✓ Successfully removed 11 deprecated columns from video_ratings")
+                # Commit transaction
+                self._conn.execute("COMMIT")
+                logger.info(f"✓ Successfully removed 11 deprecated columns from video_ratings ({old_count} rows preserved)")
+
+            except Exception as e:
+                # Rollback on any error
+                self._conn.execute("ROLLBACK")
+                raise Exception(f"Migration failed, rolled back: {e}")
 
         except Exception as e:
-            logger.error(f"Failed to cleanup deprecated video_ratings columns: {e}")
-            # Don't raise - allow app to continue even if migration fails
-            # Old schema with extra columns is still functional
+            logger.error(f"Failed to remove deprecated video_ratings columns: {e}")
+            logger.warning("Database unchanged - will retry on next restart")
+            # Clean up orphaned table if it exists
+            try:
+                self._conn.execute("DROP TABLE IF EXISTS video_ratings_new")
+                self._conn.commit()
+            except:
+                pass
 
     @staticmethod
     def timestamp(ts = None) -> str:
