@@ -522,25 +522,34 @@ class YouTubeAPI:
 
             video_ids = [item['id']['videoId'] for score, item in scored_items]
 
-            # v4.0.2: Check videos individually (no batch processing in queue architecture)
-            # Check BEST title matches first, stop early when match found
-            # Maximum 30 videos checked
-            MAX_VIDEOS_TO_CHECK = 30
+            # v4.0.3: Two-phase matching strategy for quota optimization
+            # Phase 1: Check first 10 videos (high confidence - best title matches)
+            #          If match found with duration, stop (high confidence match)
+            # Phase 2: If no match in first 10, continue up to 25 total
+            # This balances quota usage with match quality
+            PHASE_1_LIMIT = 10  # High-confidence check
+            PHASE_2_LIMIT = 25  # Extended search if needed
             candidates = []
             videos_checked = 0
 
-            for idx, video_id in enumerate(video_ids[:MAX_VIDEOS_TO_CHECK]):
-                logger.debug(f"Checking video {idx+1}/{min(len(video_ids), MAX_VIDEOS_TO_CHECK)}: {video_id}")
+            def check_video(idx: int, video_id: str, phase: str) -> bool:
+                """
+                Check a single video for duration match.
+                Returns True if match found (to stop early), False to continue.
+                """
+                nonlocal videos_checked, candidates
 
-                # Fetch details for this single video
+                logger.debug(f"[{phase}] Checking video {idx+1}: {video_id}")
+
                 try:
+                    # Fetch details for this single video
                     details = self.youtube.videos().list(
                         part='contentDetails,snippet,recordingDetails',
                         id=video_id,
                         fields=self.VIDEO_FIELDS,
                     ).execute()
 
-                    # Track API usage (both old and new methods for compatibility)
+                    # Track successful API call
                     if _db:
                         _db.record_api_call('videos.list', success=True, quota_cost=1)
                         _db.log_api_call_detailed(
@@ -550,7 +559,7 @@ class YouTubeAPI:
                             quota_cost=1,
                             success=True,
                             results_count=len(details.get('items', [])),
-                            context=f"video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"video {idx+1} of search for '{title}'"
+                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
                         )
 
                     videos_checked += 1
@@ -561,24 +570,77 @@ class YouTubeAPI:
                         if video_info:
                             candidates.append(video_info)
 
-                    # If we found a match, stop early (save quota)
+                    # If we found a match, stop early
                     if candidates:
-                        logger.debug(f"Found {len(candidates)} match(es), stopping early (saved checking {len(video_ids[:MAX_VIDEOS_TO_CHECK]) - videos_checked} videos)")
-                        break
+                        logger.debug(f"[{phase}] Found {len(candidates)} match(es), stopping search")
+                        return True  # Stop checking
 
                     # If we have enough candidates, stop
                     if len(candidates) >= self.MAX_CANDIDATES:
-                        logger.debug(f"Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
-                        break
+                        logger.debug(f"[{phase}] Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
+                        return True  # Stop checking
+
+                    return False  # Continue checking
 
                 except HttpError as e:
                     # Handle quota errors by re-raising
                     detail = self._quota_error_detail(e)
                     if detail is not None:
                         raise QuotaExceededError("YouTube quota exceeded")
+
+                    # v4.0.3: Track failed API call (non-quota errors)
+                    if _db:
+                        _db.log_api_call_detailed(
+                            api_method='videos.list',
+                            operation_type='get_video_details',
+                            query_params=f"id={video_id}",
+                            quota_cost=1,
+                            success=False,
+                            error_message=str(e),
+                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
+                        )
+
                     # Log and continue on other errors
-                    logger.warning(f"Error fetching video {video_id}: {e}")
-                    continue
+                    logger.warning(f"[{phase}] Error fetching video {video_id}: {e}")
+                    return False  # Continue checking
+
+                except Exception as e:
+                    # v4.0.3: Handle unexpected non-HTTP errors (network issues, JSON errors, etc.)
+                    logger.error(f"[{phase}] Unexpected error fetching video {video_id}: {e}", exc_info=True)
+
+                    if _db:
+                        _db.log_api_call_detailed(
+                            api_method='videos.list',
+                            operation_type='get_video_details',
+                            query_params=f"id={video_id}",
+                            quota_cost=1,
+                            success=False,
+                            error_message=f"Unexpected error: {str(e)}",
+                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
+                        )
+
+                    return False  # Continue checking
+
+            # Phase 1: Check first 10 videos (high confidence)
+            logger.debug(f"Starting Phase 1: Checking first {PHASE_1_LIMIT} videos (high confidence)")
+            for idx, video_id in enumerate(video_ids[:PHASE_1_LIMIT]):
+                if check_video(idx, video_id, "Phase 1"):
+                    break  # Match found, stop early
+
+            # Phase 2: If no match found, continue up to 25 total
+            if not candidates and len(video_ids) > PHASE_1_LIMIT:
+                remaining = min(PHASE_2_LIMIT - PHASE_1_LIMIT, len(video_ids) - PHASE_1_LIMIT)
+                logger.debug(f"No match in Phase 1, starting Phase 2: Checking {remaining} more videos (up to {PHASE_2_LIMIT} total)")
+
+                for idx in range(PHASE_1_LIMIT, min(PHASE_2_LIMIT, len(video_ids))):
+                    video_id = video_ids[idx]
+                    if check_video(idx, video_id, "Phase 2"):
+                        break  # Match found, stop early
+
+            if candidates:
+                logger.debug(f"Search complete: Found match after checking {videos_checked} videos (saved checking {min(PHASE_2_LIMIT, len(video_ids)) - videos_checked} videos)")
+            else:
+                logger.debug(f"Search complete: No match found after checking {videos_checked} videos")
 
             if not candidates and expected_duration:
                 logger.error(
