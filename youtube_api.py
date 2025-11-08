@@ -3,6 +3,7 @@ import os
 import re
 import stat
 import traceback
+import unicodedata
 from typing import Optional, List, Dict, Any, Tuple
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -331,7 +332,6 @@ class YouTubeAPI:
         Returns:
             Cleaned search query string
         """
-        import unicodedata
 
         # SECURITY: Validate input type
         if not isinstance(title, str):
@@ -522,89 +522,97 @@ class YouTubeAPI:
 
             video_ids = [item['id']['videoId'] for score, item in scored_items]
 
-            # v4.0.58: Two-phase matching with proper caching of ALL checked videos
-            # Phase 1: Check first 10 videos (high confidence - best title matches)
-            # Phase 2: If no match in first 10, continue up to 25 total
+            # v4.0.60: OPTIMIZED with batched API calls to reduce network latency
+            # Phase 1: Batch fetch first 10 videos (high confidence - best title matches)
+            # Phase 2: If no match, batch fetch up to 15 more (up to 25 total)
             # IMPORTANT: Cache ALL videos checked, not just the ones that match
             PHASE_1_LIMIT = 10  # High-confidence check
             PHASE_2_LIMIT = 25  # Extended search if needed
+            BATCH_SIZE = 50  # YouTube API supports up to 50 IDs per request
             candidates = []
-            all_fetched_videos = []  # v4.0.58: Track ALL videos fetched for caching
+            all_fetched_videos = []  # Track ALL videos fetched for caching
             videos_checked = 0
 
-            def check_video(idx: int, video_id: str, phase: str) -> bool:
+            def fetch_video_batch(video_id_batch: list, phase: str, batch_num: int) -> bool:
                 """
-                Check a single video for duration match.
-                Returns True if match found (to stop early), False to continue.
+                OPTIMIZED: Fetch multiple videos in a single API call (reduces network latency 10x).
+                Process videos in order, stop if match found.
+                Returns True if match found (to stop checking more batches).
                 """
                 nonlocal videos_checked, candidates, all_fetched_videos
 
-                logger.debug(f"[{phase}] Checking video {idx+1}: {video_id}")
+                if not video_id_batch:
+                    return False
+
+                batch_ids = ','.join(video_id_batch)
+                logger.debug(f"[{phase}] Batch {batch_num}: Fetching {len(video_id_batch)} videos in single API call")
 
                 try:
-                    # Fetch details for this single video
+                    # OPTIMIZED: Single batch API call instead of N sequential calls
                     details = self.youtube.videos().list(
                         part='contentDetails,snippet,recordingDetails',
-                        id=video_id,
+                        id=batch_ids,  # Batch request - up to 50 IDs
                         fields=self.VIDEO_FIELDS,
                     ).execute()
 
-                    # Track successful API call
+                    videos_fetched = len(details.get('items', []))
+                    videos_checked += videos_fetched
+
+                    # Track successful batch API call (quota = 1 per video)
                     if _db:
-                        _db.record_api_call('videos.list', success=True, quota_cost=1)
+                        _db.record_api_call('videos.list', success=True, quota_cost=videos_fetched)
                         _db.log_api_call_detailed(
                             api_method='videos.list',
-                            operation_type='get_video_details',
-                            query_params=f"id={video_id}",
-                            quota_cost=1,
+                            operation_type='batch_get_video_details',
+                            query_params=f"ids={len(video_id_batch)} videos",
+                            quota_cost=videos_fetched,
                             success=True,
-                            results_count=len(details.get('items', [])),
-                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
+                            results_count=videos_fetched,
+                            context=f"[{phase}] batch {batch_num} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] batch {batch_num} of search for '{title}'"
                         )
 
-                    videos_checked += 1
-
-                    # v4.0.58: Process ALL fetched videos for caching, regardless of duration match
+                    # Process ALL fetched videos in score order (best title matches first)
                     for video in details.get('items', []):
-                        # First, get video info WITHOUT duration filtering for caching
+                        # First, cache video WITHOUT duration filtering
                         video_info_all = self._process_search_result(video, expected_duration=None)
                         if video_info_all:
                             all_fetched_videos.append(video_info_all)
 
-                        # Then check for duration match for candidates
+                        # Then check for duration match
                         video_info = self._process_search_result(video, expected_duration)
                         if video_info:
                             candidates.append(video_info)
 
-                    # If we found a match, stop early
+                    # If we found a match, stop checking more batches
                     if candidates:
-                        logger.debug(f"[{phase}] Found {len(candidates)} match(es), stopping search")
-                        return True  # Stop checking
+                        logger.debug(f"[{phase}] Found {len(candidates)} match(es) in batch {batch_num}, stopping search")
+                        return True
 
                     # If we have enough candidates, stop
                     if len(candidates) >= self.MAX_CANDIDATES:
-                        logger.debug(f"[{phase}] Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}), stopping")
-                        return True  # Stop checking
+                        logger.debug(f"[{phase}] Reached MAX_CANDIDATES ({self.MAX_CANDIDATES}) in batch {batch_num}")
+                        return True
 
-                    return False  # Continue checking
+                    return False  # Continue to next batch
 
                 except HttpError as e:
-                    # v4.0.29: Check for quota errors
+                    # Check for quota errors
                     detail = self._quota_error_detail(e)
                     is_quota_error = detail is not None
 
-                    # v4.0.29: ALWAYS log failed API calls (including quota errors) BEFORE raising
+                    # Log failed API calls
                     if _db:
-                        _db.record_api_call('videos.list', success=False, quota_cost=1 if not is_quota_error else 0,
+                        _db.record_api_call('videos.list', success=False,
+                                           quota_cost=len(video_id_batch) if not is_quota_error else 0,
                                            error_message="Quota exceeded" if is_quota_error else str(e))
                         _db.log_api_call_detailed(
                             api_method='videos.list',
-                            operation_type='get_video_details',
-                            query_params=f"id={video_id}",
-                            quota_cost=1 if not is_quota_error else 0,
+                            operation_type='batch_get_video_details',
+                            query_params=f"ids={len(video_id_batch)} videos",
+                            quota_cost=len(video_id_batch) if not is_quota_error else 0,
                             success=False,
                             error_message="Quota exceeded" if is_quota_error else str(e),
-                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
+                            context=f"[{phase}] batch {batch_num} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] batch {batch_num} of search for '{title}'"
                         )
 
                     # Raise quota errors to stop processing
@@ -612,41 +620,36 @@ class YouTubeAPI:
                         raise QuotaExceededError("YouTube quota exceeded")
 
                     # Log and continue on other errors
-                    logger.warning(f"[{phase}] Error fetching video {video_id}: {e}")
-                    return False  # Continue checking
+                    logger.warning(f"[{phase}] Error fetching batch {batch_num}: {e}")
+                    return False
 
                 except Exception as e:
-                    # v4.0.3: Handle unexpected non-HTTP errors (network issues, JSON errors, etc.)
-                    logger.error(f"[{phase}] Unexpected error fetching video {video_id}: {e}", exc_info=True)
-
+                    logger.error(f"[{phase}] Unexpected error fetching batch {batch_num}: {e}", exc_info=True)
                     if _db:
                         _db.log_api_call_detailed(
                             api_method='videos.list',
-                            operation_type='get_video_details',
-                            query_params=f"id={video_id}",
-                            quota_cost=1,
+                            operation_type='batch_get_video_details',
+                            query_params=f"ids={len(video_id_batch)} videos",
+                            quota_cost=len(video_id_batch),
                             success=False,
                             error_message=f"Unexpected error: {str(e)}",
-                            context=f"[{phase}] video {idx+1} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] video {idx+1} of search for '{title}'"
+                            context=f"[{phase}] batch {batch_num} of search for '{title[:30]}...'" if len(title) > 30 else f"[{phase}] batch {batch_num} of search for '{title}'"
                         )
+                    return False
 
-                    return False  # Continue checking
+            # Phase 1: Batch fetch first 10 videos (single API call = 10x faster than sequential)
+            logger.debug(f"Starting Phase 1: Batch fetching first {PHASE_1_LIMIT} videos (high confidence)")
+            phase1_ids = video_ids[:PHASE_1_LIMIT]
+            if phase1_ids:
+                fetch_video_batch(phase1_ids, "Phase 1", 1)
 
-            # Phase 1: Check first 10 videos (high confidence)
-            logger.debug(f"Starting Phase 1: Checking first {PHASE_1_LIMIT} videos (high confidence)")
-            for idx, video_id in enumerate(video_ids[:PHASE_1_LIMIT]):
-                if check_video(idx, video_id, "Phase 1"):
-                    break  # Match found, stop early
-
-            # Phase 2: If no match found, continue up to 25 total
+            # Phase 2: If no match found, batch fetch next 15 videos (up to 25 total)
             if not candidates and len(video_ids) > PHASE_1_LIMIT:
                 remaining = min(PHASE_2_LIMIT - PHASE_1_LIMIT, len(video_ids) - PHASE_1_LIMIT)
-                logger.debug(f"No match in Phase 1, starting Phase 2: Checking {remaining} more videos (up to {PHASE_2_LIMIT} total)")
-
-                for idx in range(PHASE_1_LIMIT, min(PHASE_2_LIMIT, len(video_ids))):
-                    video_id = video_ids[idx]
-                    if check_video(idx, video_id, "Phase 2"):
-                        break  # Match found, stop early
+                logger.debug(f"No match in Phase 1, starting Phase 2: Batch fetching {remaining} more videos")
+                phase2_ids = video_ids[PHASE_1_LIMIT:PHASE_1_LIMIT + remaining]
+                if phase2_ids:
+                    fetch_video_batch(phase2_ids, "Phase 2", 2)
 
             if candidates:
                 logger.info(f"Found match after checking {videos_checked} videos (saved checking {min(PHASE_2_LIMIT, len(video_ids)) - videos_checked} videos)")

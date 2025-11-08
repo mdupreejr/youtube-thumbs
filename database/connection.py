@@ -22,6 +22,9 @@ DEFAULT_DB_PATH = Path(os.getenv('YTT_DB_PATH', '/config/youtube_thumbs/ratings.
 class DatabaseConnection:
     """Manages SQLite connection and schema."""
 
+    # Compiled regex for timestamp validation (compile once, use many times)
+    _TIMESTAMP_PATTERN = re.compile(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}')
+
     VIDEO_RATINGS_SCHEMA = """
         CREATE TABLE IF NOT EXISTS video_ratings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +153,9 @@ class DatabaseConnection:
         );
         CREATE INDEX IF NOT EXISTS idx_queue_status_priority ON queue(status, priority, requested_at);
         CREATE INDEX IF NOT EXISTS idx_queue_type ON queue(type);
+        CREATE INDEX IF NOT EXISTS idx_queue_type_status ON queue(type, status);
+        CREATE INDEX IF NOT EXISTS idx_queue_type_status_last_attempt ON queue(type, status, last_attempt DESC);
+        CREATE INDEX IF NOT EXISTS idx_queue_requested_at ON queue(requested_at DESC);
     """
 
 
@@ -258,13 +264,11 @@ class DatabaseConnection:
 
         # Handle string input
         if ts:
-            cleaned = ts.replace('T', ' ').replace('Z', '').strip()
-            if cleaned:
-                # Validate format matches YYYY-MM-DD HH:MM:SS
-                if not re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', cleaned[:19]):
-                    logger.warning("Invalid timestamp format: %s", cleaned[:19])
-                    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                return cleaned[:19]
+            cleaned = ts.replace('T', ' ').replace('Z', '').strip()[:19]
+            if cleaned and DatabaseConnection._TIMESTAMP_PATTERN.match(cleaned):
+                return cleaned
+            if cleaned:  # Only log if we had a string but it was invalid
+                logger.warning("Invalid timestamp format: %s", cleaned)
         return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
     @property

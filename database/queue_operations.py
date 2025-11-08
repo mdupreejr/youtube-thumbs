@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 import sqlite3
 import threading
 import json
+from logger import logger
 
 
 class QueueOperations:
@@ -15,6 +16,25 @@ class QueueOperations:
     def __init__(self, conn: sqlite3.Connection, lock: threading.Lock) -> None:
         self._conn = conn
         self._lock = lock
+
+    def _hydrate_queue_item(self, row: sqlite3.Row) -> Dict[str, Any]:
+        """
+        Convert queue row to dict with parsed payload (DRY helper).
+        Centralizes JSON parsing and error handling.
+
+        Args:
+            row: SQLite row from queue table
+
+        Returns:
+            Dictionary with parsed payload
+        """
+        item = dict(row)
+        try:
+            item['payload'] = json.loads(item['payload'])
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(f"Invalid JSON in queue item {item.get('id')}: {e}")
+            item['payload'] = {}
+        return item
 
     # ========================================================================
     # UNIFIED QUEUE OPERATIONS (NEW)
@@ -89,8 +109,8 @@ class QueueOperations:
             )
             self._conn.commit()
 
-            # Parse JSON payload
-            item['payload'] = json.loads(item['payload'])
+            # Parse JSON payload using helper
+            item = self._hydrate_queue_item(row)
             return item
 
     def mark_completed(self, queue_id: int) -> None:
@@ -183,9 +203,7 @@ class QueueOperations:
             )
             items = []
             for row in cursor.fetchall():
-                item = dict(row)
-                item['payload'] = json.loads(item['payload'])
-                items.append(item)
+                items.append(self._hydrate_queue_item(row))
             return items
 
     def list_history(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -210,9 +228,7 @@ class QueueOperations:
             )
             items = []
             for row in cursor.fetchall():
-                item = dict(row)
-                item['payload'] = json.loads(item['payload'])
-                items.append(item)
+                items.append(self._hydrate_queue_item(row))
             return items
 
     def list_failed(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -237,9 +253,7 @@ class QueueOperations:
             )
             items = []
             for row in cursor.fetchall():
-                item = dict(row)
-                item['payload'] = json.loads(item['payload'])
-                items.append(item)
+                items.append(self._hydrate_queue_item(row))
             return items
 
     def get_item_by_id(self, queue_id: int) -> Optional[Dict[str, Any]]:
@@ -261,9 +275,7 @@ class QueueOperations:
             )
             row = cursor.fetchone()
             if row:
-                item = dict(row)
-                item['payload'] = json.loads(item['payload'])
-                return item
+                return self._hydrate_queue_item(row)
             return None
 
     def enqueue_search(
@@ -520,6 +532,7 @@ class QueueOperations:
     def get_recent_queue_activity(self, limit: int = 50) -> Dict[str, List[Dict]]:
         """
         Get recent queue processing activity.
+        OPTIMIZED: Uses LEFT JOIN to avoid N+1 query problem.
 
         Args:
             limit: Maximum number of items to return per queue
@@ -528,34 +541,28 @@ class QueueOperations:
             Dictionary with recent rating and search activity
         """
         with self._lock:
-            # Recent rating queue activity from unified queue
+            # Recent rating queue activity - OPTIMIZED with LEFT JOIN (1 query instead of N+1)
             cursor = self._conn.execute("""
-                SELECT *
-                FROM queue
-                WHERE type = 'rating'
-                ORDER BY requested_at DESC
+                SELECT
+                    q.*,
+                    v.ha_title AS video_ha_title,
+                    v.ha_artist AS video_ha_artist
+                FROM queue q
+                LEFT JOIN video_ratings v ON json_extract(q.payload, '$.yt_video_id') = v.yt_video_id
+                WHERE q.type = 'rating'
+                ORDER BY q.requested_at DESC
                 LIMIT ?
             """, (limit,))
+
             recent_ratings = []
             for row in cursor.fetchall():
                 item = dict(row)
                 payload = json.loads(item['payload'])
-                
-                # Get video details if available
-                video = None
-                yt_video_id = payload.get('yt_video_id')
-                if yt_video_id:
-                    video_cursor = self._conn.execute(
-                        "SELECT * FROM video_ratings WHERE yt_video_id = ?",
-                        (yt_video_id,)
-                    )
-                    video_row = video_cursor.fetchone()
-                    video = dict(video_row) if video_row else None
-                
+
                 recent_ratings.append({
-                    'yt_video_id': yt_video_id,
-                    'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
-                    'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
+                    'yt_video_id': payload.get('yt_video_id'),
+                    'ha_title': item.get('video_ha_title') or 'Unknown',
+                    'ha_artist': item.get('video_ha_artist') or 'Unknown',
                     'requested_rating': payload.get('rating'),
                     'requested_at': item['requested_at'],
                     'attempts': item['attempts'],
@@ -565,7 +572,7 @@ class QueueOperations:
                     'queue_id': item['id']
                 })
 
-            # Recent search queue activity from unified queue
+            # Recent search queue activity - use helper for JSON parsing
             cursor = self._conn.execute("""
                 SELECT *
                 FROM queue
@@ -573,11 +580,12 @@ class QueueOperations:
                 ORDER BY requested_at DESC
                 LIMIT ?
             """, (limit,))
+
             recent_searches = []
             for row in cursor.fetchall():
-                item = dict(row)
-                payload = json.loads(item['payload'])
-                
+                item = self._hydrate_queue_item(row)
+                payload = item['payload']
+
                 recent_searches.append({
                     'id': item['id'],
                     'ha_title': payload.get('ha_title', 'Unknown'),
@@ -607,36 +615,29 @@ class QueueOperations:
             Dictionary with recent rating and search errors
         """
         with self._lock:
-            # Rating queue errors from unified queue
+            # Rating queue errors - OPTIMIZED with LEFT JOIN to avoid N+1 query
             cursor = self._conn.execute("""
-                SELECT *
-                FROM queue
-                WHERE type = 'rating'
-                  AND status = 'failed'
-                  AND last_error IS NOT NULL
-                ORDER BY last_attempt DESC
+                SELECT
+                    q.*,
+                    v.ha_title AS video_ha_title,
+                    v.ha_artist AS video_ha_artist
+                FROM queue q
+                LEFT JOIN video_ratings v ON json_extract(q.payload, '$.yt_video_id') = v.yt_video_id
+                WHERE q.type = 'rating'
+                  AND q.status = 'failed'
+                  AND q.last_error IS NOT NULL
+                ORDER BY q.last_attempt DESC
                 LIMIT ?
             """, (limit,))
             rating_errors = []
             for row in cursor.fetchall():
                 item = dict(row)
                 payload = json.loads(item['payload'])
-                
-                # Get video details if available
-                video = None
-                yt_video_id = payload.get('yt_video_id')
-                if yt_video_id:
-                    video_cursor = self._conn.execute(
-                        "SELECT * FROM video_ratings WHERE yt_video_id = ?",
-                        (yt_video_id,)
-                    )
-                    video_row = video_cursor.fetchone()
-                    video = dict(video_row) if video_row else None
-                
+
                 rating_errors.append({
-                    'yt_video_id': yt_video_id,
-                    'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
-                    'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
+                    'yt_video_id': payload.get('yt_video_id'),
+                    'ha_title': item.get('video_ha_title') or 'Unknown',
+                    'ha_artist': item.get('video_ha_artist') or 'Unknown',
                     'requested_rating': payload.get('rating'),
                     'attempts': item['attempts'],
                     'last_attempt': item['last_attempt'],
@@ -644,7 +645,7 @@ class QueueOperations:
                     'queue_id': item['id']
                 })
 
-            # Search queue errors from unified queue
+            # Search queue errors - use helper for JSON parsing
             cursor = self._conn.execute("""
                 SELECT *
                 FROM queue
@@ -656,9 +657,9 @@ class QueueOperations:
             """, (limit,))
             search_errors = []
             for row in cursor.fetchall():
-                item = dict(row)
-                payload = json.loads(item['payload'])
-                
+                item = self._hydrate_queue_item(row)
+                payload = item['payload']
+
                 search_errors.append({
                     'id': item['id'],
                     'ha_title': payload.get('ha_title', 'Unknown'),
