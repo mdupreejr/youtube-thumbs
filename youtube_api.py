@@ -82,7 +82,7 @@ class YouTubeAPI:
                 with open(token_file, 'r') as f:
                     token_data = json.load(f)
                 creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
-                logger.info("Loaded YouTube API credentials from JSON")
+                logger.debug("Loaded YouTube API credentials from JSON")
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Failed to load credentials from {token_file}: {e}")
                 logger.warning("Removing corrupted token file")
@@ -95,14 +95,14 @@ class YouTubeAPI:
                     with open(token_file, 'r') as f:
                         token_data = json.load(f)
                     creds = Credentials.from_authorized_user_info(token_data, self.SCOPES)
-                    logger.info("Loaded YouTube API credentials from JSON (permission check failed)")
+                    logger.debug("Loaded YouTube API credentials from JSON (permission check failed)")
                 except Exception as inner_e:
                     logger.error(f"Failed to load credentials: {inner_e}")
                     creds = None
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                logger.info("Refreshing YouTube API credentials")
+                logger.debug("Refreshing YouTube API credentials")
                 creds.refresh(Request())
             else:
                 logger.info("No valid credentials found, starting OAuth2 flow")
@@ -748,6 +748,6 @@ def get_youtube_api() -> YouTubeAPI:
     """Get or create YouTube API instance."""
     global yt_api
     if yt_api is None:
-        logger.info("Creating new YouTube API instance")
+        logger.debug("Creating new YouTube API instance")
         yt_api = YouTubeAPI()
     return yt_api

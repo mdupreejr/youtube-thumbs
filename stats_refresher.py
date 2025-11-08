@@ -35,7 +35,7 @@ class StatsRefresher:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._refresh_loop, daemon=True)
         self._thread.start()
-        logger.info(f"Stats refresher started (interval: {self.interval_seconds}s)")
+        logger.debug(f"Stats refresher started (interval: {self.interval_seconds}s)")
 
     def stop(self):
         """Stop the background stats refresh thread."""
@@ -67,7 +67,7 @@ class StatsRefresher:
     def _refresh_all_stats(self):
         """Refresh all statistics and store in cache."""
         try:
-            logger.info("Refreshing statistics cache...")
+            logger.debug("Refreshing statistics cache...")
             start_time = time.time()
 
             # Get all stats (these will be cached by the database layer)
@@ -93,7 +93,7 @@ class StatsRefresher:
                     logger.error(f"Failed to refresh stat '{cache_key}': {e}")
 
             elapsed = time.time() - start_time
-            logger.info(f"Statistics cache refreshed: {refreshed_count} stats in {elapsed:.2f}s")
+            logger.debug(f"Statistics cache refreshed: {refreshed_count} stats in {elapsed:.2f}s)")
 
         except Exception as e:
             logger.error(f"Error in stats refresh loop: {e}")

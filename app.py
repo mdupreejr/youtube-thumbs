@@ -379,16 +379,16 @@ def _pending_retry_enabled() -> bool:
 
 
 # Start stats refresher background task (refreshes every hour)
-logger.info("Initializing stats refresher...")
+logger.debug("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
-logger.info("Starting stats refresher...")
+logger.debug("Starting stats refresher...")
 stats_refresher.start()
 atexit.register(stats_refresher.stop)
-logger.info("Stats refresher started successfully")
+logger.debug("Stats refresher started successfully")
 
 # NOTE: Queue worker runs as a separate process (queue_worker.py), not a thread
 # This eliminates threading complexity and ensures only ONE worker processes the queue
-logger.info("Queue worker runs as separate background process (started by run.sh)")
+logger.debug("Queue worker runs as separate background process (started by run.sh)")
 
 # ============================================================================
 # BLUEPRINT REGISTRATION
@@ -603,7 +603,7 @@ except Exception as e:
 
 # Clear stats cache on startup to prevent stale data issues
 try:
-    logger.info("Clearing stats cache...")
+    logger.debug("Clearing stats cache...")
     db.invalidate_stats_cache()
 except Exception as e:
     logger.error(f"Failed to clear stats cache: {str(e)}")
