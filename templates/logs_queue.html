@@ -109,7 +109,7 @@
                                 <br><span style="font-size: 0.85em; color: #64748b;">{{ item.callback }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.requested_at[:19] if item.requested_at else '—' }}</td>
+                            <td>{{ item.requested_at if item.requested_at else '—' }}</td>
                             <td style="text-align: center;">{{ item.attempts or 0 }}</td>
                             <td>
                                 {% if item.last_error %}
@@ -184,8 +184,8 @@
                             <td>{{ item.ha_title or 'Unknown' }}</td>
                             <td>{{ item.ha_artist or '—' }}</td>
                             <td>{{ item.operation }}</td>
-                            <td>{{ item.requested_at[:19] if item.requested_at else '—' }}</td>
-                            <td>{{ item.completed_at[:19] if item.completed_at else '—' }}</td>
+                            <td>{{ item.requested_at if item.requested_at else '—' }}</td>
+                            <td>{{ item.completed_at if item.completed_at else '—' }}</td>
                             <td style="text-align: center;">—</td>
                             <td>
                                 {% if item.status == 'completed' %}
@@ -245,7 +245,7 @@
                             <td>{{ item.ha_title or 'Unknown' }}</td>
                             <td>{{ item.ha_artist or '—' }}</td>
                             <td>{{ item.operation }}</td>
-                            <td>{{ item.completed_at[:19] if item.completed_at else '—' }}</td>
+                            <td>{{ item.completed_at if item.completed_at else '—' }}</td>
                             <td style="text-align: center;">{{ item.attempts or 0 }}</td>
                             <td>
                                 <span style="color: #ef4444; font-size: 0.9em;">
