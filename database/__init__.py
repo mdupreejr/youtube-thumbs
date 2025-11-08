@@ -147,38 +147,6 @@ class Database:
         """Get a specific queue item by ID."""
         return self._queue_ops.get_item_by_id(queue_id)
 
-    # ========================================================================
-    # LEGACY QUEUE OPERATIONS (for backward compatibility during transition)
-    # ========================================================================
-
-    def list_pending_ratings(self, limit=10):
-        """LEGACY: List pending ratings from old queue structure."""
-        return self._pending_ops.list_pending_ratings(limit)
-
-    def mark_pending_rating(self, yt_video_id, success, error=None):
-        """LEGACY: Mark rating as pending (old queue structure)."""
-        return self._pending_ops.mark_pending_rating(yt_video_id, success, error)
-
-    def list_pending_searches(self, limit=10):
-        """LEGACY: List pending searches from old queue structure."""
-        return self._pending_ops.list_pending_searches(limit)
-
-    def claim_pending_search(self):
-        """LEGACY: Claim search from old queue structure."""
-        return self._pending_ops.claim_pending_search()
-
-    def mark_search_complete(self, search_id, found_video_id):
-        """LEGACY: Mark search complete in old queue structure."""
-        return self._pending_ops.mark_search_complete(search_id, found_video_id)
-
-    def mark_search_complete_with_callback(self, search_id, found_video_id, callback_rating=None):
-        """LEGACY: Mark search complete with callback in old queue structure."""
-        return self._pending_ops.mark_search_complete_with_callback(search_id, found_video_id, callback_rating)
-
-    def mark_search_failed(self, search_id, error):
-        """LEGACY: Mark search failed in old queue structure."""
-        return self._pending_ops.mark_search_failed(search_id, error)
-
     # Not found cache operations (v4.0.0: disabled - TODO implement queue-based caching)
     def is_recently_not_found(self, title: str, artist: Optional[str] = None, duration: Optional[int] = None) -> bool:
         """

@@ -5,11 +5,9 @@ from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import os
 import re
-import time
 import traceback
 import secrets
 import json
-import types
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
@@ -19,7 +17,7 @@ from youtube_api import get_youtube_api, set_database as set_youtube_api_databas
 from database import get_database
 from stats_refresher import StatsRefresher
 from startup_checks import run_startup_checks, check_home_assistant_api, check_youtube_api, check_database
-from constants import FALSE_VALUES, MEDIA_INACTIVITY_TIMEOUT
+from constants import FALSE_VALUES
 from helpers.video_helpers import is_youtube_content, get_video_title, get_video_artist
 from metrics_tracker import metrics
 from helpers.search_helpers import search_and_match_video
@@ -31,10 +29,9 @@ from routes.data_viewer_routes import bp as data_viewer_bp, init_data_viewer_rou
 from routes.stats_routes import bp as stats_bp, init_stats_routes
 from routes.rating_routes import bp as rating_bp, init_rating_routes
 from routes.system_routes import bp as system_bp, init_system_routes
-from helpers.pagination_helpers import generate_page_numbers
-from helpers.response_helpers import error_response, success_response
+from helpers.response_helpers import error_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
-from helpers.time_helpers import parse_timestamp, format_duration, format_relative_time
+from helpers.time_helpers import format_duration, format_relative_time
 
 # ============================================================================
 # SECURITY HELPER FUNCTIONS

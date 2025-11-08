@@ -741,36 +741,6 @@ class YouTubeAPI:
         logger.info(f"Successfully rated video {yt_video_id} as '{rating}'")
         return True
 
-    def batch_get_videos(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        """
-        v4.0.2: DEPRECATED - No batch processing in queue-based architecture.
-
-        This method is deprecated and will be removed in v5.0.0.
-        Use individual get_video_details() calls instead.
-
-        Returns empty dict with warning.
-        """
-        logger.warning(
-            "batch_get_videos() is DEPRECATED (v4.0.2) - no batch logic in queue architecture. "
-            "Use individual get_video_details() calls instead. Returning empty dict."
-        )
-        return {}
-
-    def batch_set_ratings(self, ratings: List[Tuple[str, str]]) -> Dict[str, bool]:
-        """
-        v4.0.2: DEPRECATED - No batch processing in queue-based architecture.
-
-        This method is deprecated and will be removed in v5.0.0.
-        Queue worker processes one rating at a time.
-
-        Returns empty dict with warning.
-        """
-        logger.warning(
-            "batch_set_ratings() is DEPRECATED (v4.0.2) - no batch logic in queue architecture. "
-            "Queue worker handles ratings individually. Returning empty dict."
-        )
-        return {}
-
 # Create global instance (will be initialized when module is imported)
 yt_api = None
 

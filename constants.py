@@ -8,4 +8,3 @@ FALSE_VALUES = {'false', '0', 'no', 'off', ''}
 
 # YouTube API and matching constants
 YOUTUBE_DURATION_OFFSET = 1  # YouTube reports 1 second more than Home Assistant
-MEDIA_INACTIVITY_TIMEOUT = 3600  # 1 hour in seconds - timeout for inactive media
