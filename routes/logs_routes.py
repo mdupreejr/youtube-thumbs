@@ -15,7 +15,7 @@ from helpers.time_helpers import format_relative_time, parse_timestamp, format_a
 from helpers.validation_helpers import validate_page_param
 from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.template_helpers import (
-    TableData, TableColumn, TableRow, TableCell,
+    TableData, TableColumn, TableRow, TableCell, PageConfig,
     create_api_calls_page_config,
     format_badge, format_time_ago, truncate_text
 )
@@ -995,6 +995,7 @@ def _handle_queue_tab():
 def logs_viewer():
     """
     Main logs viewer page with tabs for rated songs, matches, errors, and queue.
+    Now uses the unified table_viewer.html template.
     """
     try:
         # Get query parameters
@@ -1013,32 +1014,28 @@ def logs_viewer():
         # Get ingress path
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
-        # Initialize template data
-        template_data = {
-            'current_tab': current_tab,
-            'ingress_path': ingress_path,
-            'page': page,
-            'period_filter': period_filter
-        }
-
-        # Handle each tab with dedicated functions
+        # Create page configuration
         if current_tab == 'rated':
-            template_data.update(_handle_rated_tab(page, period_filter))
+            page_config, table_data, pagination, status_message = _create_rated_songs_page(page, period_filter, ingress_path)
         elif current_tab == 'matches':
-            template_data.update(_handle_matches_tab(page, period_filter))
+            page_config, table_data, pagination, status_message = _create_matches_page(page, period_filter, ingress_path)
         elif current_tab == 'errors':
-            template_data.update(_handle_errors_tab(page, period_filter))
+            page_config, table_data, pagination, status_message = _create_errors_page(page, period_filter, ingress_path)
         elif current_tab == 'recent':
-            template_data.update(_handle_recent_tab())
+            page_config, table_data, pagination, status_message = _create_recent_page(ingress_path)
         elif current_tab == 'queue':
-            template_data.update(_handle_queue_tab())
+            page_config, table_data, pagination, status_message = _create_queue_page(ingress_path)
+        else:
+            page_config, table_data, pagination, status_message = _create_rated_songs_page(page, period_filter, ingress_path)
 
-        # Generate page numbers for pagination
-        total_pages = template_data.get('total_pages', 0)
-        page_numbers = generate_page_numbers(page, total_pages)
-        template_data['page_numbers'] = page_numbers
-
-        return render_template('logs_viewer.html', **template_data)
+        return render_template(
+            'table_viewer.html',
+            ingress_path=ingress_path,
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
+            pagination=pagination,
+            status_message=status_message
+        )
 
     except Exception as e:
         logger.error(f"Error rendering logs page: {e}")
@@ -1046,3 +1043,473 @@ def logs_viewer():
         logger.error(traceback.format_exc())
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading logs</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+# ============================================================================
+# TABLE VIEWER PAGE CREATORS
+# ============================================================================
+
+def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str):
+    """Create page config and table data for rated songs."""
+    # Get filters
+    rating_filter = request.args.get('rating', 'all')
+    if rating_filter not in ['like', 'dislike', 'all']:
+        rating_filter = 'all'
+    
+    # Create page config
+    page_config = PageConfig('Rated Songs', nav_active='logs', storage_key='logs-rated')
+    page_config.logs_tab = 'rated'
+    page_config.current_url = '/logs'
+    
+    # Add period filter
+    page_config.add_filter('period', 'Time Period', [
+        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
+        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
+        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
+        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
+        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
+    ])
+    
+    # Add rating filter
+    page_config.add_filter('rating', 'Rating Type', [
+        {'value': 'all', 'label': 'All', 'selected': rating_filter == 'all'},
+        {'value': 'like', 'label': 'Likes', 'selected': rating_filter == 'like'},
+        {'value': 'dislike', 'label': 'Dislikes', 'selected': rating_filter == 'dislike'}
+    ])
+    
+    # Add hidden fields
+    page_config.add_hidden_field('tab', 'rated')
+    
+    # Get data
+    result = _db.get_rated_songs(page, 50, period_filter, rating_filter)
+    
+    # Create table columns
+    columns = [
+        TableColumn('time', 'Time'),
+        TableColumn('song', 'Song'),
+        TableColumn('artist', 'Artist'),
+        TableColumn('rating', 'Rating'),
+        TableColumn('plays', 'Plays'),
+        TableColumn('video_id', 'Video ID')
+    ]
+    
+    # Create table rows
+    rows = []
+    for song in result['songs']:
+        title = get_video_title(song)
+        artist = get_video_artist(song)
+        
+        # Format relative time
+        timestamp = song.get('date_last_played') or song.get('date_added')
+        time_ago = format_relative_time(timestamp) if timestamp else 'unknown'
+        
+        # Format rating
+        rating = song.get('rating')
+        if rating == 'like':
+            rating_html = format_badge('👍 Like', 'success')
+        elif rating == 'dislike':
+            rating_html = format_badge('👎 Dislike', 'error')
+        else:
+            rating_html = format_badge('➖ None', 'info')
+        
+        # Format video link
+        video_id = song.get('yt_video_id')
+        video_link = f'<a href="https://youtube.com/watch?v={video_id}" target="_blank">{video_id}</a>'
+        
+        cells = [
+            TableCell(time_ago),
+            TableCell(title),
+            TableCell(artist or '-'),
+            TableCell(rating, rating_html),
+            TableCell(song.get('play_count', 0), format_badge(str(song.get('play_count', 0)), 'info')),
+            TableCell(video_id, video_link)
+        ]
+        rows.append(TableRow(cells))
+    
+    table_data = TableData(columns, rows)
+    
+    # Create pagination
+    total_count = result['total_count']
+    total_pages = result['total_pages']
+    page_numbers = generate_page_numbers(page, total_pages)
+    
+    pagination = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'page_numbers': page_numbers,
+        'prev_url': f"/logs?tab=rated&page={page-1}&period={period_filter}&rating={rating_filter}",
+        'next_url': f"/logs?tab=rated&page={page+1}&period={period_filter}&rating={rating_filter}",
+        'page_url_template': f"/logs?tab=rated&page=PAGE_NUM&period={period_filter}&rating={rating_filter}"
+    } if total_pages > 1 else None
+    
+    # Set empty state
+    page_config.set_empty_state('📭', 'No rated songs found', 'Try adjusting your filters')
+    
+    # Status message
+    status_message = f"Showing {len(result['songs'])} of {total_count} rated songs • Page {page}/{total_pages}"
+    
+    return page_config, table_data, pagination, status_message
+
+
+def _create_matches_page(page: int, period_filter: str, ingress_path: str):
+    """Create page config and table data for matches."""
+    # Create page config
+    page_config = PageConfig('Matches', nav_active='logs', storage_key='logs-matches')
+    page_config.logs_tab = 'matches'
+    page_config.current_url = '/logs'
+    
+    # Add period filter
+    page_config.add_filter('period', 'Time Period', [
+        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
+        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
+        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
+        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
+        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
+    ])
+    
+    # Add hidden fields
+    page_config.add_hidden_field('tab', 'matches')
+    
+    # Get data
+    result = _db.get_match_history(page, 50, period_filter)
+    
+    # Create table columns
+    columns = [
+        TableColumn('time', 'Time'),
+        TableColumn('ha_song', 'HA Song'),
+        TableColumn('youtube_match', 'YouTube Match'),
+        TableColumn('duration', 'Duration', width='80px'),
+        TableColumn('plays', 'Plays', width='70px')
+    ]
+    
+    # Create table rows
+    rows = []
+    for match in result['matches']:
+        # Format time
+        activity_timestamp = match.get('date_last_played') or match.get('yt_match_last_attempt') or match.get('date_added')
+        time_ago = format_relative_time(activity_timestamp) if activity_timestamp else 'Unknown'
+        
+        # Format HA song info
+        ha_title = match.get('ha_title', 'Unknown').strip() or 'Unknown'
+        ha_artist = match.get('ha_artist', 'Unknown').strip() or 'Unknown'
+        ha_song_html = f'<strong>{ha_title}</strong><br><span style="font-size: 0.85em; color: #64748b;">{ha_artist}</span>'
+        
+        # Format YouTube match info
+        yt_title = match.get('yt_title', 'Unknown').strip() or 'Unknown'
+        yt_channel = match.get('yt_channel', 'Unknown').strip() or 'Unknown'
+        video_id = match.get('yt_video_id')
+        yt_published_at = match.get('yt_published_at')
+        yt_published_formatted = None
+        if yt_published_at:
+            try:
+                from datetime import datetime
+                if isinstance(yt_published_at, str):
+                    pub_dt = datetime.fromisoformat(yt_published_at.replace('Z', '+00:00'))
+                else:
+                    pub_dt = yt_published_at
+                yt_published_formatted = pub_dt.strftime('%b %d, %Y')
+            except (ValueError, TypeError, AttributeError):
+                yt_published_formatted = None
+        
+        yt_link = f'<a href="https://www.youtube.com/watch?v={video_id}" target="_blank" style="color: #2563eb; text-decoration: none; font-weight: 500;">{yt_title}</a>'
+        yt_details = f'<span style="font-size: 0.85em; color: #64748b;">{yt_channel}'
+        if yt_published_formatted:
+            yt_details += f' • {yt_published_formatted}'
+        yt_details += '</span>'
+        yt_match_html = f'{yt_link}<br>{yt_details}'
+        
+        # Format duration
+        ha_duration = match.get('ha_duration', 0)
+        yt_duration = match.get('yt_duration', 0)
+        duration_diff = yt_duration - ha_duration
+        match_quality = 'good' if abs(duration_diff) <= 2 else 'fair'
+        duration_color = '#10b981' if match_quality == 'good' else '#f59e0b'
+        
+        duration_html = f'<span style="color: #64748b;">{ha_duration}s</span> → <span style="color: #64748b;">{yt_duration}s</span><br>'
+        duration_html += f'<span style="font-size: 0.85em; color: {duration_color};">'
+        duration_html += f"{'+'if duration_diff > 0 else ''}{duration_diff}s"
+        if match_quality == 'good':
+            duration_html += ' ✓'
+        duration_html += '</span>'
+        
+        cells = [
+            TableCell(time_ago),
+            TableCell(f'{ha_title} - {ha_artist}', ha_song_html),
+            TableCell(yt_title, yt_match_html),
+            TableCell(f'{ha_duration}s → {yt_duration}s', duration_html, style='text-align: center;'),
+            TableCell(match.get('play_count', 0), style='text-align: center;')
+        ]
+        rows.append(TableRow(cells))
+    
+    table_data = TableData(columns, rows)
+    
+    # Create pagination
+    total_count = result['total_count']
+    total_pages = result['total_pages']
+    page_numbers = generate_page_numbers(page, total_pages)
+    
+    pagination = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'page_numbers': page_numbers,
+        'prev_url': f"/logs?tab=matches&page={page-1}&period={period_filter}",
+        'next_url': f"/logs?tab=matches&page={page+1}&period={period_filter}",
+        'page_url_template': f"/logs?tab=matches&page=PAGE_NUM&period={period_filter}"
+    } if total_pages > 1 else None
+    
+    # Set empty state
+    page_config.set_empty_state('🔍', 'No matches found', 'Try adjusting your filters')
+    
+    # Status message
+    status_message = f"Showing {len(result['matches'])} of {total_count} matches • Page {page}/{total_pages}"
+    
+    return page_config, table_data, pagination, status_message
+
+
+def _create_errors_page(page: int, period_filter: str, ingress_path: str):
+    """Create page config and table data for errors."""
+    # Get filters
+    level_filter = request.args.get('level', 'all')
+    if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
+        level_filter = 'all'
+    
+    # Create page config
+    page_config = PageConfig('Errors', nav_active='logs', storage_key='logs-errors')
+    page_config.logs_tab = 'errors'
+    page_config.current_url = '/logs'
+    
+    # Add filters
+    page_config.add_filter('period', 'Time Period', [
+        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
+        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
+        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
+        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
+        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
+    ])
+    
+    page_config.add_filter('level', 'Level', [
+        {'value': 'all', 'label': 'All', 'selected': level_filter == 'all'},
+        {'value': 'ERROR', 'label': 'ERROR', 'selected': level_filter == 'ERROR'},
+        {'value': 'WARNING', 'label': 'WARNING', 'selected': level_filter == 'WARNING'},
+        {'value': 'INFO', 'label': 'INFO', 'selected': level_filter == 'INFO'}
+    ])
+    
+    # Add hidden fields
+    page_config.add_hidden_field('tab', 'errors')
+    
+    # Get data
+    result = parse_error_log(period_filter, level_filter, page, 50)
+    
+    # Create table columns
+    columns = [
+        TableColumn('time', 'Time'),
+        TableColumn('level', 'Level'),
+        TableColumn('message', 'Message')
+    ]
+    
+    # Create table rows
+    rows = []
+    for error in result.get('errors', []):
+        # Format time
+        time_ago = format_relative_time(error['timestamp'])
+        
+        # Format level badge
+        level = error['level']
+        if level == 'ERROR':
+            level_html = format_badge(level, 'error')
+        elif level == 'WARNING':
+            level_html = format_badge(level, 'warning')
+        elif level == 'INFO':
+            level_html = format_badge(level, 'info')
+        else:
+            level_html = format_badge(level, 'info')
+        
+        # Format message with truncation
+        message = error['message']
+        truncated = len(message) > 150
+        if truncated:
+            display_message = message[:150] + '...'
+            message_html = f'<div>{display_message}</div><button onclick="showFullMessage(this)" style="color: #2563eb; background: none; border: none; cursor: pointer; font-size: 0.8em;">Show more</button><div style="display: none;">{message}</div>'
+        else:
+            message_html = message
+        
+        cells = [
+            TableCell(error['timestamp'], f'<span title="{time_ago}">{error["timestamp"]}</span>'),
+            TableCell(level, level_html),
+            TableCell(message, message_html)
+        ]
+        rows.append(TableRow(cells))
+    
+    table_data = TableData(columns, rows)
+    
+    # Create pagination
+    total_count = result.get('total_count', 0)
+    total_pages = result.get('total_pages', 0)
+    page_numbers = generate_page_numbers(page, total_pages)
+    
+    pagination = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'page_numbers': page_numbers,
+        'prev_url': f"/logs?tab=errors&page={page-1}&period={period_filter}&level={level_filter}",
+        'next_url': f"/logs?tab=errors&page={page+1}&period={period_filter}&level={level_filter}",
+        'page_url_template': f"/logs?tab=errors&page=PAGE_NUM&period={period_filter}&level={level_filter}"
+    } if total_pages > 1 else None
+    
+    # Set empty state
+    page_config.set_empty_state('✓', 'No errors found', 'System is running smoothly!')
+    
+    # Status message
+    status_message = f"Showing {len(result.get('errors', []))} of {total_count} errors • Page {page}/{total_pages}"
+    
+    # Add custom JS for message expansion
+    page_config.custom_js = '''
+        function showFullMessage(btn) {
+            const container = btn.parentNode;
+            const shortMsg = container.firstChild;
+            const fullMsg = container.lastChild;
+            
+            if (fullMsg.style.display === 'none') {
+                shortMsg.style.display = 'none';
+                fullMsg.style.display = 'block';
+                btn.textContent = 'Show less';
+            } else {
+                shortMsg.style.display = 'block';
+                fullMsg.style.display = 'none';
+                btn.textContent = 'Show more';
+            }
+        }
+    '''
+    
+    return page_config, table_data, pagination, status_message
+
+
+def _create_recent_page(ingress_path: str):
+    """Create page config and table data for recent videos."""
+    # Create page config
+    page_config = PageConfig('Recent Videos', nav_active='logs', storage_key='logs-recent')
+    page_config.logs_tab = 'recent'
+    
+    # Get data
+    videos = _db.get_recently_added(limit=25)
+    
+    # Create table columns
+    columns = [
+        TableColumn('date_added', 'Date Added', width='15%'),
+        TableColumn('title', 'Title', width='25%'),
+        TableColumn('artist', 'Artist', width='15%'),
+        TableColumn('channel', 'Channel', width='20%'),
+        TableColumn('rating', 'Rating', width='10%'),
+        TableColumn('plays', 'Plays', width='10%'),
+        TableColumn('link', 'Link', width='5%')
+    ]
+    
+    # Create table rows
+    rows = []
+    for video in videos:
+        # Format relative time for date_added
+        date_added = video.get('date_added')
+        time_ago = format_relative_time(date_added) if date_added else 'unknown'
+        
+        # Format rating
+        rating = video.get('rating')
+        if rating == 'like':
+            rating_html = '<span style="color: #10b981;">👍 Like</span>'
+        elif rating == 'dislike':
+            rating_html = '<span style="color: #ef4444;">👎 Dislike</span>'
+        else:
+            rating_html = '<span style="color: #94a3b8;">- None</span>'
+        
+        # Format link
+        yt_url = video.get('yt_url')
+        link_html = '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: none; font-size: 1.2em;" title="Watch on YouTube">🔗</a>'.format(yt_url) if yt_url else '-'
+        
+        cells = [
+            TableCell(time_ago, f'<span title="{date_added or "Unknown"}">{time_ago}</span>'),
+            TableCell(video.get('ha_title') or video.get('yt_title') or 'Unknown', 
+                     f'<span style="font-weight: 500;">{video.get("ha_title") or video.get("yt_title") or "Unknown"}</span>'),
+            TableCell(video.get('ha_artist') or '-'),
+            TableCell(video.get('yt_channel') or '-'),
+            TableCell(rating or 'None', rating_html),
+            TableCell(video.get('play_count', 0), style='text-align: center;'),
+            TableCell('Link' if yt_url else '-', link_html, style='text-align: center;')
+        ]
+        rows.append(TableRow(cells))
+    
+    table_data = TableData(columns, rows)
+    
+    # Set empty state
+    page_config.set_empty_state('📭', 'No Videos Yet', 'No videos have been added to the database yet.')
+    
+    # Status message
+    status_message = f"Showing {len(videos)} recently added videos"
+    
+    return page_config, table_data, None, status_message
+
+
+def _create_queue_page(ingress_path: str):
+    """Create page config and table data for queue statistics."""
+    # Create page config
+    page_config = PageConfig('Queue Statistics', nav_active='logs', storage_key='logs-queue')
+    page_config.logs_tab = 'queue'
+    
+    # Get queue statistics
+    stats = _db.get_queue_statistics()
+    activity = _db.get_recent_queue_activity(limit=30)
+    
+    # For now, create a simplified view of recent ratings
+    columns = [
+        TableColumn('requested', 'Requested'),
+        TableColumn('song', 'Song'),
+        TableColumn('rating', 'Rating'),
+        TableColumn('status', 'Status'),
+        TableColumn('attempts', 'Attempts'),
+        TableColumn('last_attempt', 'Last Attempt'),
+        TableColumn('error', 'Error')
+    ]
+    
+    rows = []
+    for rating in activity['recent_ratings']:
+        if rating.get('requested_at'):
+            requested_relative = format_relative_time(parse_timestamp(rating['requested_at']))
+        else:
+            requested_relative = 'Unknown'
+        
+        if rating.get('last_attempt'):
+            last_attempt_relative = format_relative_time(parse_timestamp(rating['last_attempt']))
+        else:
+            last_attempt_relative = 'Never'
+        
+        # Format status badge
+        status = rating.get('status', 'pending')
+        if status == 'success':
+            status_html = format_badge('✓ Success', 'success')
+        elif status == 'failed':
+            status_html = format_badge('✗ Failed', 'error')
+        else:
+            status_html = format_badge('⏳ Pending', 'warning')
+        
+        # Format rating
+        rating_type = rating.get('requested_rating')
+        rating_emoji = '👍' if rating_type == 'like' else '👎' if rating_type == 'dislike' else '?'
+        
+        cells = [
+            TableCell(requested_relative),
+            TableCell(rating.get('ha_title', 'Unknown')),
+            TableCell(rating_emoji),
+            TableCell(status, status_html),
+            TableCell(rating.get('attempts', 0)),
+            TableCell(last_attempt_relative),
+            TableCell(rating.get('error') or '-')
+        ]
+        rows.append(TableRow(cells))
+    
+    table_data = TableData(columns, rows)
+    
+    # Set empty state
+    page_config.set_empty_state('⚙️', 'No Queue Activity', 'No rating queue activity found.')
+    
+    # Status message
+    status_message = f"Queue: {stats['rating_queue']['pending']} pending, {stats['rating_queue']['processed_24h']} processed (24h)"
+    
+    return page_config, table_data, None, status_message
