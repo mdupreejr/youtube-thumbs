@@ -30,8 +30,6 @@
                             <a href="{{ ingress_path }}/logs?tab=errors" class="{{ 'active' if page_config.logs_tab == 'errors' else '' }}">Errors</a>
                             <a href="{{ ingress_path }}/logs/api-calls" class="{{ 'active' if page_config.logs_tab == 'api-calls' else '' }}">API Calls</a>
                             <a href="{{ ingress_path }}/logs/pending-ratings" class="{{ 'active' if page_config.logs_tab == 'queue' else '' }}">Queue</a>
-                            <a href="{{ ingress_path }}/data" class="{{ 'active' if page_config.logs_tab == 'database' else '' }}">Database</a>
-                            <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if page_config.logs_tab == 'bulk-rating' else '' }}">Bulk Rating</a>
                         </div>
                     </div>
                     
