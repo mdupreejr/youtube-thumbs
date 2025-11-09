@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - {{ page_config.title }}</title>
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+    <script src="{{ static_url('js/table-utils.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats" class="{{ 'active' if page_config.nav_active == 'stats' else '' }}">Stats</a>
+                    <a href="{{ ingress_path }}/data" class="{{ 'active' if page_config.nav_active == 'data' else '' }}">Database</a>
+                    <a href="{{ ingress_path }}/logs" class="{{ 'active' if page_config.nav_active == 'logs' else '' }}">Logs</a>
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+        </header>
+
+        {% if page_config.back_link %}
+        <a href="{{ ingress_path }}{{ page_config.back_link }}" class="back-link">← Back to {{ page_config.back_text }}</a>
+        {% endif %}
+
+        <div class="card">
+            <!-- Main Tab Navigation -->
+            {% if page_config.main_tabs %}
+            <div class="tab-navigation">
+                {% for tab in page_config.main_tabs %}
+                <a href="{{ ingress_path }}{{ tab.url }}" class="tab-button {{ 'active' if tab.active else '' }}">
+                    {{ tab.label }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Page Title -->
+            {% if page_config.show_title %}
+            <h2>
+                {{ page_config.title }}
+                {% if page_config.title_suffix %}
+                <span style="margin-left: auto; font-weight: 400; font-size: 0.9em; color: #64748b;">
+                    {{ page_config.title_suffix }}
+                </span>
+                {% endif %}
+            </h2>
+            {% endif %}
+
+            <!-- Sub-tab Navigation -->
+            {% if page_config.sub_tabs %}
+            <div class="tab-navigation" style="margin: 20px 0;">
+                {% for tab in page_config.sub_tabs %}
+                <a href="{{ ingress_path }}{{ tab.url }}" class="tab-button {{ 'active' if tab.active else '' }}">
+                    {{ tab.label }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Summary Statistics -->
+            {% if summary_stats %}
+            <div class="summary-section">
+                <div class="summary-grid">
+                    {% for stat in summary_stats.main_stats %}
+                    <div class="stat-card">
+                        <div class="stat-label">{{ stat.label }}</div>
+                        <div class="stat-value" {% if stat.style %}style="{{ stat.style }}"{% endif %}>{{ stat.value }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% for breakdown in summary_stats.breakdowns %}
+                <div class="breakdown-section">
+                    <div class="breakdown-title">{{ breakdown.title }}</div>
+                    <table class="breakdown-table">
+                        {% for row in breakdown.rows %}
+                        <tr>
+                            <td style="font-weight: 500;">{{ row.label }}</td>
+                            <td style="text-align: right;">{{ row.count }} {{ row.count_suffix }}</td>
+                            <td style="text-align: right; font-weight: 600; color: #dc2626;">{{ row.quota if row.quota else '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Filters -->
+            {% if page_config.filters %}
+            <form method="GET" action="{{ ingress_path }}{{ page_config.current_url }}">
+                {% if page_config.hidden_fields %}
+                    {% for field in page_config.hidden_fields %}
+                    <input type="hidden" name="{{ field.name }}" value="{{ field.value }}">
+                    {% endfor %}
+                {% endif %}
+                
+                <div class="filters">
+                    {% for filter in page_config.filters %}
+                    <div class="filter-group">
+                        <label for="{{ filter.name }}">{{ filter.label }}:</label>
+                        <select name="{{ filter.name }}" id="{{ filter.name }}">
+                            {% for option in filter.options %}
+                            <option value="{{ option.value }}" {{ 'selected' if option.selected else '' }}>{{ option.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endfor %}
+                    <button type="submit" class="apply-btn">{{ page_config.filter_button_text or 'Apply' }}</button>
+                </div>
+            </form>
+            {% endif %}
+
+            <!-- Status/Info Messages -->
+            {% if status_message %}
+            <div class="info-text">{{ status_message }}</div>
+            {% endif %}
+
+            {% if error_message %}
+            <div style="padding: 10px; background: #fee2e2; color: #991b1b; border-radius: 4px; margin-bottom: 10px;">
+                {{ error_message }}
+            </div>
+            {% endif %}
+
+            <!-- Data Table -->
+            {% if table_data and table_data.rows %}
+            <div class="table-container">
+                <table id="dataTable" class="enhanced-table">
+                    <thead>
+                        <tr>
+                            {% for column in table_data.columns %}
+                            <th 
+                                data-column="{{ column.key }}"
+                                data-sortable="{{ 'true' if column.sortable else 'false' }}"
+                                data-resizable="{{ 'true' if column.resizable else 'false' }}"
+                                {% if column.width %}style="width: {{ column.width }};"{% endif %}
+                            >
+                                {{ column.label }}
+                                {% if column.sortable %}
+                                <span class="sort-indicator"></span>
+                                {% endif %}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in table_data.rows %}
+                        <tr{% if row.clickable %} class="clickable-row" data-row-id="{{ row.id }}" style="cursor: pointer;"{% endif %}>
+                            {% for cell in row.cells %}
+                            <td
+                                {% if cell.style %}style="{{ cell.style }}"{% endif %}
+                                {% if cell.title %}title="{{ cell.title }}"{% endif %}
+                            >
+                                {% if cell.html %}
+                                    {{ cell.html|safe }}
+                                {% else %}
+                                    {{ cell.value }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <!-- Column Configuration Dropdown -->
+                <div class="column-config" style="margin-top: 10px;">
+                    <label>
+                        <strong>Columns:</strong>
+                        <select id="columnSelector" multiple>
+                            {% for column in table_data.columns %}
+                            <option value="{{ column.key }}" selected>{{ column.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="empty-state">
+                {% if page_config.empty_state %}
+                    <div class="empty-state-icon">{{ page_config.empty_state.icon }}</div>
+                    <h3>{{ page_config.empty_state.title }}</h3>
+                    <p>{{ page_config.empty_state.message }}</p>
+                {% else %}
+                    <div class="empty-state-icon">📭</div>
+                    <h3>No data found</h3>
+                    <p>No records match your criteria.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Pagination -->
+            {% if pagination and pagination.total_pages > 1 %}
+            <div class="pagination">
+                {% if pagination.current_page > 1 %}
+                    <a href="{{ ingress_path }}{{ pagination.prev_url }}">← Prev</a>
+                {% else %}
+                    <button disabled>← Prev</button>
+                {% endif %}
+
+                {% for page_num in pagination.page_numbers %}
+                    {% if page_num == '...' %}
+                        <span class="ellipsis">...</span>
+                    {% elif page_num == pagination.current_page %}
+                        <span class="current-page">{{ page_num }}</span>
+                    {% else %}
+                        <a href="{{ ingress_path }}{{ pagination.page_url_template.replace('PAGE_NUM', page_num|string) }}">{{ page_num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.current_page < pagination.total_pages %}
+                    <a href="{{ ingress_path }}{{ pagination.next_url }}">Next →</a>
+                {% else %}
+                    <button disabled>Next →</button>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Additional Content -->
+            {% if additional_content %}
+            {{ additional_content|safe }}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal for detailed views -->
+    <div id="detailModal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-content" style="max-width: 700px;">
+            <button type="button" class="close" onclick="closeModal()" aria-label="Close">&times;</button>
+            <h2 id="modalTitle">Details</h2>
+            <div id="modalBody" style="margin-top: 20px;">
+                <p style="text-align: center; color: #64748b;">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableElement = document.getElementById('dataTable');
+            if (tableElement) {
+                // Initialize enhanced table functionality
+                const tableConfig = {
+                    storageKey: '{{ page_config.storage_key or "table-settings" }}',
+                    enableSorting: {{ 'true' if page_config.enable_sorting != False else 'false' }},
+                    enableResizing: {{ 'true' if page_config.enable_resizing != False else 'false' }},
+                    enableColumnToggle: {{ 'true' if page_config.enable_column_toggle != False else 'false' }}
+                };
+
+                const consistentTable = new ConsistentTable(tableElement, tableConfig);
+
+                // Handle row clicks if configured
+                {% if page_config.row_click_handler %}
+                const rowClickHandlerName = "{{ page_config.row_click_handler|e }}";
+                document.querySelectorAll('.clickable-row').forEach(row => {
+                    row.addEventListener('click', function() {
+                        const rowId = this.dataset.rowId;
+                        // Only call if the handler name is a valid identifier and exists as a function
+                        if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(rowClickHandlerName) && typeof window[rowClickHandlerName] === "function") {
+                            window[rowClickHandlerName](rowId);
+                        }
+                    });
+                });
+                {% endif %}
+            }
+        });
+
+        // Modal functionality
+        {% if page_config.modal_api_url %}
+        async function showRowDetails(rowId) {
+            const modal = document.getElementById('detailModal');
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+
+            // Show modal with loading state
+            modal.style.display = 'block';
+            modalBody.innerHTML = '<p style="text-align: center; color: #64748b;">Loading details...</p>';
+            modalTitle.textContent = '{{ page_config.modal_title or "Details" }}';
+
+            try {
+                const response = await fetch('{{ ingress_path }}{{ page_config.modal_api_url }}'.replace('{id}', encodeURIComponent(rowId)));
+                const result = await response.json();
+
+                if (!result.success) {
+                    // Safely display error message to prevent XSS
+                    modalBody.textContent = "";
+                    const errorP = document.createElement("p");
+                    errorP.style.color = "#ef4444";
+                    errorP.textContent = "Error: " + result.error;
+                    errorP.style.textAlign = "center";
+                    modalBody.appendChild(errorP);
+                    return;
+                }
+
+                // Format modal content based on page configuration
+                const allowedFormatters = {
+                    formatModalContent: formatModalContent,
+                    // Add other allowed formatter functions here, e.g.:
+                    // customFormatter: customFormatter,
+                };
+                const formatterName = "{{ page_config.modal_formatter or 'formatModalContent' }}";
+                const formatterFn = allowedFormatters[formatterName] || formatModalContent;
+                modalBody.innerHTML = formatterFn(result.data);
+
+            } catch (error) {
+                const errorP = document.createElement('p');
+                errorP.style.color = '#ef4444';
+                errorP.textContent = `Error loading details: ${error.message}`;
+                modalBody.innerHTML = '';
+                modalBody.appendChild(errorP);
+            }
+        }
+        {% endif %}
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside or pressing Escape
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        };
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Additional page-specific JavaScript
+        {% if page_config.custom_js %}
+        {{ page_config.custom_js }}
+        {% endif %}
+    </script>
+</body>
+</html>

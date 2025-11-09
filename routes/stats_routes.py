@@ -12,6 +12,10 @@ from helpers.time_helpers import format_relative_time
 from helpers.validation_helpers import validate_page_param
 from helpers.response_helpers import error_response
 from helpers.request_helpers import get_real_ip
+from helpers.template_helpers import (
+    TableData, TableColumn, TableRow, TableCell,
+    create_stats_page_config, format_youtube_link
+)
 
 bp = Blueprint('stats', __name__)
 
@@ -140,18 +144,66 @@ def stats_liked_page() -> str:
             page = 1
 
         result = _db.get_rated_videos('like', page=page, per_page=50)
-
-        # Format videos
-        formatted_videos = format_videos_for_display(result['videos'])
-
-        return render_template('stats_rated.html',
-                             ingress_path=ingress_path,
-                             rating_type='liked',
-                             rating_icon='👍',
-                             videos=formatted_videos,
-                             total_count=result['total_count'],
-                             current_page=result['current_page'],
-                             total_pages=result['total_pages'])
+        
+        # Create page configuration
+        page_config = create_stats_page_config('liked', ingress_path)
+        page_config.title = '👍 Liked Videos'
+        page_config.title_suffix = f"{result['total_count']} total"
+        
+        # Create table data
+        columns = [
+            TableColumn('song', 'Song', width='50%'),
+            TableColumn('artist', 'Artist'),
+            TableColumn('plays', 'Plays'),
+            TableColumn('last_played', 'Last Played')
+        ]
+        
+        rows = []
+        for video in result['videos']:
+            formatted_video = format_videos_for_display([video])[0]
+            
+            # Format song title with YouTube link
+            song_html = format_youtube_link(
+                formatted_video.get('yt_video_id'), 
+                formatted_video.get('title', 'Unknown'),
+                icon=False
+            )
+            
+            # Format last played date
+            last_played = '-'
+            if formatted_video.get('date_last_played'):
+                last_played = str(formatted_video['date_last_played'])[:10]
+            
+            cells = [
+                TableCell(formatted_video.get('title', 'Unknown'), song_html),
+                TableCell(formatted_video.get('artist', '-'), style='color: #64748b;'),
+                TableCell(formatted_video.get('play_count', 0), style='color: #64748b;'),
+                TableCell(last_played, style='color: #64748b; white-space: nowrap;')
+            ]
+            rows.append(TableRow(cells))
+        
+        table_data = TableData(columns, rows)
+        
+        # Create pagination
+        pagination = {
+            'current_page': result['current_page'],
+            'total_pages': result['total_pages'],
+            'page_numbers': list(range(max(1, page-2), min(result['total_pages']+1, page+3))),
+            'prev_url': f"/stats/liked?page={page-1}" if page > 1 else None,
+            'next_url': f"/stats/liked?page={page+1}" if page < result['total_pages'] else None,
+            'page_url_template': "/stats/liked?page=PAGE_NUM"
+        } if result['total_pages'] > 1 else None
+        
+        # Set empty state
+        page_config.set_empty_state('👍', 'No liked videos', "You haven't liked any videos yet.")
+        
+        return render_template(
+            'table_viewer.html',
+            ingress_path=ingress_path,
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if rows else None,
+            pagination=pagination
+        )
     except Exception as e:
         logger.error(f"Error rendering liked stats: {e}")
         return "<h1>Error loading liked videos</h1>", 500
@@ -169,18 +221,66 @@ def stats_disliked_page() -> str:
             page = 1
 
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
-
-        # Format videos
-        formatted_videos = format_videos_for_display(result['videos'])
-
-        return render_template('stats_rated.html',
-                             ingress_path=ingress_path,
-                             rating_type='disliked',
-                             rating_icon='👎',
-                             videos=formatted_videos,
-                             total_count=result['total_count'],
-                             current_page=result['current_page'],
-                             total_pages=result['total_pages'])
+        
+        # Create page configuration
+        page_config = create_stats_page_config('disliked', ingress_path)
+        page_config.title = '👎 Disliked Videos'
+        page_config.title_suffix = f"{result['total_count']} total"
+        
+        # Create table data
+        columns = [
+            TableColumn('song', 'Song', width='50%'),
+            TableColumn('artist', 'Artist'),
+            TableColumn('plays', 'Plays'),
+            TableColumn('last_played', 'Last Played')
+        ]
+        
+        rows = []
+        for video in result['videos']:
+            formatted_video = format_videos_for_display([video])[0]
+            
+            # Format song title with YouTube link
+            song_html = format_youtube_link(
+                formatted_video.get('yt_video_id'), 
+                formatted_video.get('title', 'Unknown'),
+                icon=False
+            )
+            
+            # Format last played date
+            last_played = '-'
+            if formatted_video.get('date_last_played'):
+                last_played = str(formatted_video['date_last_played'])[:10]
+            
+            cells = [
+                TableCell(formatted_video.get('title', 'Unknown'), song_html),
+                TableCell(formatted_video.get('artist', '-'), style='color: #64748b;'),
+                TableCell(formatted_video.get('play_count', 0), style='color: #64748b;'),
+                TableCell(last_played, style='color: #64748b; white-space: nowrap;')
+            ]
+            rows.append(TableRow(cells))
+        
+        table_data = TableData(columns, rows)
+        
+        # Create pagination
+        pagination = {
+            'current_page': result['current_page'],
+            'total_pages': result['total_pages'],
+            'page_numbers': list(range(max(1, page-2), min(result['total_pages']+1, page+3))),
+            'prev_url': f"/stats/disliked?page={page-1}" if page > 1 else None,
+            'next_url': f"/stats/disliked?page={page+1}" if page < result['total_pages'] else None,
+            'page_url_template': "/stats/disliked?page=PAGE_NUM"
+        } if result['total_pages'] > 1 else None
+        
+        # Set empty state
+        page_config.set_empty_state('👎', 'No disliked videos', "You haven't disliked any videos yet.")
+        
+        return render_template(
+            'table_viewer.html',
+            ingress_path=ingress_path,
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if rows else None,
+            pagination=pagination
+        )
     except Exception as e:
         logger.error(f"Error rendering disliked stats: {e}")
         return "<h1>Error loading disliked videos</h1>", 500
