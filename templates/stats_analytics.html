@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Analytics</title>
+    <meta http-equiv="refresh" content="300"> <!-- Auto-refresh every 5 minutes -->
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/stats_visualizations.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    
+                    <!-- Logs dropdown menu -->
+                    <div class="nav-dropdown">
+                        <div class="nav-dropdown-btn">
+                            Logs <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="nav-dropdown-content">
+                            <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                            <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                            <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                            <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                            <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                            <a href="{{ ingress_path }}/logs/pending-ratings">Queue</a>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+            <div style="font-size: 0.65em; color: #64748b;">Auto-refresh: 5min</div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="stats-tabs">
+            <a href="{{ ingress_path }}/stats" class="{{ 'active' if current_tab == 'overview' }}">📊 Overview</a>
+            <a href="{{ ingress_path }}/stats/analytics" class="{{ 'active' if current_tab == 'analytics' }}">📈 Analytics</a>
+            <a href="{{ ingress_path }}/stats/api" class="{{ 'active' if current_tab == 'api' }}">🔧 API & Queue</a>
+            <a href="{{ ingress_path }}/stats/categories" class="{{ 'active' if current_tab == 'categories' }}">📁 Categories</a>
+            <a href="{{ ingress_path }}/stats/discovery" class="{{ 'active' if current_tab == 'discovery' }}">🔍 Discovery</a>
+        </div>
+
+        <!-- Listening Patterns Heatmap -->
+        {% if heatmap_data %}
+        <div class="card">
+            <h2>🕐 Listening Patterns Heatmap</h2>
+            <p class="text-muted mb-3">When you listen to music throughout the week (darker = more activity)</p>
+            
+            <div class="heatmap-container">
+                <!-- Hour labels -->
+                <div class="heatmap-header">
+                    <div class="heatmap-header-spacer"></div>
+                    <div class="heatmap-hour-labels">
+                        {% for hour in range(24) %}
+                        <div>{{ "%02d"|format(hour) }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Heatmap grid -->
+                <div class="heatmap-grid">
+                    {% for day_data in heatmap_data %}
+                    <div class="heatmap-day-label">{{ day_data.day }}</div>
+                    {% for heat_level in day_data.heat_levels %}
+                    <div class="heat-cell heat-{{ heat_level }}" title="{{ day_data.day }} {{ "%02d"|format(loop.index0) }}:00"></div>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Play Distribution Analysis -->
+        {% if play_distribution %}
+        <div class="card">
+            <h2>📊 Play Count Distribution</h2>
+            <p class="text-muted mb-3">How many times videos are played</p>
+            
+            <div class="bar-chart">
+                {% for item in play_distribution %}
+                <div class="bar-row">
+                    <div class="bar-label">{{ item.play_range }}</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {{ item.percentage }}%">
+                            {{ item.video_count }} videos ({{ "%.1f"|format(item.percentage) }}%)
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Retention Analysis -->
+        {% if retention_analysis %}
+        <div class="card">
+            <h2>🔁 Video Retention Analysis</h2>
+            <p class="text-muted mb-3">How often you return to videos</p>
+            
+            <div class="stat-cards-grid">
+                {% for item in retention_analysis %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ item.count }}</div>
+                    <div class="stat-label">{{ item.retention_type }}</div>
+                    <div class="stat-sublabel">{{ "%.1f"|format(item.percentage) }}% of videos</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Rating vs Play Count Correlation -->
+        {% if correlation_stats %}
+        <div class="card">
+            <h2>📈 Rating vs Play Count Correlation</h2>
+            <p class="text-muted mb-3">Relationship between ratings and listening frequency</p>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Rating</th>
+                        <th class="number">Avg Play Count</th>
+                        <th class="number">Video Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rating, stats in correlation_stats.items() %}
+                    <tr>
+                        <td>
+                            {% if rating == 'like' %}
+                                👍 Liked
+                            {% elif rating == 'dislike' %}
+                                👎 Disliked
+                            {% else %}
+                                ➖ Unrated
+                            {% endif %}
+                        </td>
+                        <td class="number font-semibold">{{ "%.1f"|format(stats.avg_play_count) }}</td>
+                        <td class="number">{{ stats.video_count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Hour-by-Hour Breakdown -->
+        {% if listening_patterns.by_hour %}
+        <div class="card">
+            <h2>⏰ Hourly Listening Activity</h2>
+            <p class="text-muted mb-3">Your listening activity throughout the day</p>
+            
+            <div class="bar-chart">
+                {% for pattern in listening_patterns.by_hour %}
+                <div class="bar-row">
+                    <div class="bar-label">{{ "%02d"|format(pattern.hour) }}:00</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {{ (pattern.play_count / ([listening_patterns.by_hour] | selectattr('play_count') | map(attribute='play_count') | max) * 100) if [listening_patterns.by_hour] | selectattr('play_count') | map(attribute='play_count') | max > 0 else 0 }}%">
+                            {{ pattern.play_count }} plays
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Day-of-Week Analysis -->
+        {% if listening_patterns.by_day %}
+        <div class="card">
+            <h2>📅 Weekly Listening Pattern</h2>
+            <p class="text-muted mb-3">Your listening habits by day of the week</p>
+            
+            {% set day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] %}
+            {% set max_day_plays = [listening_patterns.by_day] | selectattr('play_count') | map(attribute='play_count') | max %}
+            
+            <div class="bar-chart">
+                {% for pattern in listening_patterns.by_day %}
+                <div class="bar-row">
+                    <div class="bar-label">{{ day_names[pattern.day_of_week] }}</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {{ (pattern.play_count / max_day_plays * 100) if max_day_plays > 0 else 0 }}%">
+                            {{ pattern.play_count }} plays
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="text-align: center; color: #64748b; font-size: 0.8em; margin-top: 20px; padding: 10px;">
+            <em>Generated at {{ generated_at }}</em>
+        </div>
+    </div>
+</body>
+</html>
