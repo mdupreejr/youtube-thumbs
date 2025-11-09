@@ -526,6 +526,7 @@
                         <div class="detail-value">
                             <strong>${data.yt_title}</strong>
                             ${data.yt_channel ? '<br>' + data.yt_channel : ''}
+                            ${data.yt_duration ? '<br><small>' + data.yt_duration + 's duration</small>' : ''}
                         </div>
                         ` : ''}
 
@@ -548,11 +549,21 @@
 
                         <div class="detail-label">Play Count:</div>
                         <div class="detail-value">${data.play_count || 0}</div>
+
+                        ${data.ha_duration ? `
+                        <div class="detail-label">HA Duration:</div>
+                        <div class="detail-value">${data.ha_duration}s</div>
+                        ` : ''}
+
+                        ${data.yt_duration ? `
+                        <div class="detail-label">YouTube Duration:</div>
+                        <div class="detail-value">${data.yt_duration}s</div>
+                        ` : ''}
                     `;
                 } else if (data.type === 'search') {
                     html += `
                         <div class="detail-label">Search ID:</div>
-                        <div class="detail-value">${data.id}</div>
+                        <div class="detail-value">${data.queue_id}</div>
 
                         <div class="detail-label">Home Assistant:</div>
                         <div class="detail-value">
@@ -562,8 +573,13 @@
                         </div>
 
                         ${data.ha_duration ? `
-                        <div class="detail-label">Duration:</div>
+                        <div class="detail-label">HA Duration:</div>
                         <div class="detail-value">${data.ha_duration}s</div>
+                        ` : ''}
+
+                        ${data.yt_duration ? `
+                        <div class="detail-label">YouTube Duration:</div>
+                        <div class="detail-value">${data.yt_duration}s</div>
                         ` : ''}
 
                         <div class="detail-label">App:</div>
@@ -597,6 +613,9 @@
                             <a href="https://youtube.com/watch?v=${data.yt_video_id}" target="_blank" rel="noopener noreferrer">
                                 ${data.yt_video_id}
                             </a>
+                            ${data.yt_title ? '<br><strong>' + data.yt_title + '</strong>' : ''}
+                            ${data.yt_channel ? '<br>' + data.yt_channel : ''}
+                            ${data.yt_duration ? '<br><small>' + data.yt_duration + 's duration</small>' : ''}
                         </div>
                         ` : ''}
 

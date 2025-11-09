@@ -386,6 +386,50 @@ class QueueOperations:
             self._conn.commit()
             return cursor.rowcount
 
+    def remove_duplicate_searches(self) -> int:
+        """
+        Remove duplicate search queue items that have the same title+artist combination.
+        Keeps the oldest one (first created) and removes newer duplicates.
+        Only removes from pending/failed status to avoid affecting processing items.
+        
+        Returns:
+            Number of duplicate items removed
+        """
+        with self._lock:
+            # Find duplicates by title+artist combination
+            cursor = self._conn.execute(
+                """
+                WITH duplicate_searches AS (
+                    SELECT 
+                        id,
+                        json_extract(payload, '$.ha_title') as ha_title,
+                        json_extract(payload, '$.ha_artist') as ha_artist,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY 
+                                json_extract(payload, '$.ha_title'),
+                                json_extract(payload, '$.ha_artist')
+                            ORDER BY requested_at ASC
+                        ) as rn
+                    FROM queue
+                    WHERE type = 'search'
+                      AND status IN ('pending', 'failed')
+                      AND json_extract(payload, '$.ha_title') IS NOT NULL
+                      AND json_extract(payload, '$.ha_artist') IS NOT NULL
+                )
+                DELETE FROM queue
+                WHERE id IN (
+                    SELECT id FROM duplicate_searches WHERE rn > 1
+                )
+                """
+            )
+            self._conn.commit()
+            removed_count = cursor.rowcount
+            
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} duplicate search queue items")
+            
+            return removed_count
+
     # ========================================================================
     # UNIFIED QUEUE STATISTICS
     # ========================================================================
