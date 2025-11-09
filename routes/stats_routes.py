@@ -7,6 +7,7 @@ import traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, Response
 from logger import logger
+from constants import YOUTUBE_CATEGORIES
 from helpers.video_helpers import get_video_title, get_video_artist, format_videos_for_display
 from helpers.time_helpers import format_relative_time
 from helpers.validation_helpers import validate_page_param
@@ -292,25 +293,6 @@ def stats_categories_page() -> str:
         # Fetch category and duration data
         category_breakdown = _db.get_category_breakdown()
         duration_analysis = _db.get_duration_analysis()
-        
-        # YouTube category mapping
-        YOUTUBE_CATEGORIES = {
-            1: 'Film & Animation',
-            2: 'Autos & Vehicles',
-            10: 'Music',
-            15: 'Pets & Animals',
-            17: 'Sports',
-            19: 'Travel & Events',
-            20: 'Gaming',
-            22: 'People & Blogs',
-            23: 'Comedy',
-            24: 'Entertainment',
-            25: 'News & Politics',
-            26: 'Howto & Style',
-            27: 'Education',
-            28: 'Science & Technology',
-            29: 'Nonprofits & Activism'
-        }
         
         # Map category IDs to names and calculate percentages
         total_categorized = sum(item.get('count', 0) for item in category_breakdown)
