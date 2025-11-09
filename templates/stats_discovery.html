@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Discovery</title>
+    <meta http-equiv="refresh" content="300"> <!-- Auto-refresh every 5 minutes -->
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/stats_visualizations.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    
+                    <!-- Logs dropdown menu -->
+                    <div class="nav-dropdown">
+                        <div class="nav-dropdown-btn">
+                            Logs <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="nav-dropdown-content">
+                            <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                            <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                            <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                            <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                            <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                            <a href="{{ ingress_path }}/logs/pending-ratings">Queue</a>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+            <div style="font-size: 0.65em; color: #64748b;">Auto-refresh: 5min</div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="stats-tabs">
+            <a href="{{ ingress_path }}/stats" class="{{ 'active' if current_tab == 'overview' }}">📊 Overview</a>
+            <a href="{{ ingress_path }}/stats/analytics" class="{{ 'active' if current_tab == 'analytics' }}">📈 Analytics</a>
+            <a href="{{ ingress_path }}/stats/api" class="{{ 'active' if current_tab == 'api' }}">🔧 API & Queue</a>
+            <a href="{{ ingress_path }}/stats/categories" class="{{ 'active' if current_tab == 'categories' }}">📁 Categories</a>
+            <a href="{{ ingress_path }}/stats/discovery" class="{{ 'active' if current_tab == 'discovery' }}">🔍 Discovery</a>
+        </div>
+
+        <!-- Discovery Trends -->
+        {% if discovery_trends %}
+        <div class="card">
+            <h2>📈 Weekly Discovery Trends</h2>
+            <p class="text-muted mb-3">New videos added to your collection over time</p>
+            
+            <div class="sparkline-container">
+                <div class="sparkline">
+                    {% set max_discoveries = discovery_trends | map(attribute='new_videos') | max %}
+                    {% for week in discovery_trends | reverse %}
+                    <div class="spark-bar" 
+                         style="height: {{ (week.new_videos / max_discoveries * 100) if max_discoveries > 0 else 0 }}%"
+                         data-value="{{ week.new_videos }} ({{ week.week }})"
+                         title="Week {{ week.week }}: {{ week.new_videos }} new videos"></div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="text-center text-small text-muted">Last 12 weeks (hover for details)</div>
+            
+            {% if discovery_trends|length >= 2 %}
+            {% set latest_week = discovery_trends[0] %}
+            {% set previous_week = discovery_trends[1] %}
+            {% set trend_change = latest_week.new_videos - previous_week.new_videos %}
+            
+            <div class="mt-3 text-center">
+                <div class="stat-value text-small">
+                    {% if trend_change > 0 %}
+                        📈 +{{ trend_change }} videos
+                    {% elif trend_change < 0 %}
+                        📉 {{ trend_change }} videos
+                    {% else %}
+                        ➡️ No change
+                    {% endif %}
+                </div>
+                <div class="stat-label">vs. last week</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Source Breakdown -->
+        {% if source_breakdown %}
+        <div class="card">
+            <h2>📥 Video Sources</h2>
+            <p class="text-muted mb-3">How videos were added to your collection</p>
+            
+            <div class="stat-cards-grid">
+                {% for source in source_breakdown %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ source.count }}</div>
+                    <div class="stat-label">
+                        {% if source.source == 'ha_live' %}
+                            🎵 Live Tracking
+                        {% elif source.source == 'import_watch_history' %}
+                            📜 Import History
+                        {% elif source.source == 'manual' %}
+                            ✍️ Manual Entry
+                        {% else %}
+                            📁 {{ source.source | title }}
+                        {% endif %}
+                    </div>
+                    <div class="stat-sublabel">{{ "%.1f"|format(source.percentage) }}% of collection</div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-4">
+                <h3>Source Distribution</h3>
+                <div class="bar-chart">
+                    {% for source in source_breakdown %}
+                    <div class="bar-row">
+                        <div class="bar-label">
+                            {% if source.source == 'ha_live' %}
+                                Live Tracking
+                            {% elif source.source == 'import_watch_history' %}
+                                Import History
+                            {% elif source.source == 'manual' %}
+                                Manual Entry
+                            {% else %}
+                                {{ source.source | title }}
+                            {% endif %}
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill" style="width: {{ source.percentage }}%">
+                                {{ source.count }} videos ({{ "%.1f"|format(source.percentage) }}%)
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Channel Exploration -->
+        {% if top_channels %}
+        <div class="card">
+            <h2>📺 Channel Exploration</h2>
+            <p class="text-muted mb-3">Your most engaged channels and their performance</p>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th class="number">Videos</th>
+                        <th class="number">Total Plays</th>
+                        <th class="number">Avg Rating</th>
+                        <th>Engagement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for channel in top_channels %}
+                    <tr>
+                        <td>
+                            <div class="item-title">{{ channel.yt_channel or 'Unknown Channel' }}</div>
+                        </td>
+                        <td class="number font-semibold">{{ channel.video_count }}</td>
+                        <td class="number">{{ channel.total_plays }}</td>
+                        <td class="number">{{ "%.1f"|format(channel.avg_rating or 0) }}</td>
+                        <td>
+                            {% set plays_per_video = (channel.total_plays / channel.video_count) if channel.video_count > 0 else 0 %}
+                            <div class="progress-bar" style="width: 80px;">
+                                <div class="progress-fill" style="width: {{ (plays_per_video / 10 * 100) if plays_per_video <= 10 else 100 }}%"></div>
+                            </div>
+                            <div class="text-small text-muted">{{ "%.1f"|format(plays_per_video) }} plays/video</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Recommendations -->
+        {% if recommendations %}
+        <div class="card">
+            <h2>💡 Recommended Videos</h2>
+            <p class="text-muted mb-3">Unrated videos from channels you've liked</p>
+            
+            {% for video in recommendations %}
+            <div class="list-item">
+                <div class="item-info">
+                    <div class="item-title">
+                        {% if video.yt_video_id %}
+                            <a href="https://www.youtube.com/watch?v={{ video.yt_video_id }}" target="_blank" rel="noopener noreferrer">
+                                {{ video.ha_title or video.yt_title or 'Unknown Title' }}
+                            </a>
+                        {% else %}
+                            {{ video.ha_title or video.yt_title or 'Unknown Title' }}
+                        {% endif %}
+                    </div>
+                    <div class="item-meta">
+                        <span>{{ video.ha_artist or 'Unknown Artist' }}</span>
+                        {% if video.yt_channel %}
+                        • <span style="color: #64748b;">{{ video.yt_channel }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="item-stat">
+                    <span class="badge badge-info">{{ video.play_count }} plays</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <h2>💡 Recommendations</h2>
+            <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <h3>No recommendations available</h3>
+                <p>Rate some videos to get personalized recommendations!</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Discovery Insights -->
+        <div class="card">
+            <h2>🎯 Discovery Insights</h2>
+            
+            <div class="stat-cards-grid">
+                {% if discovery_trends and discovery_trends|length > 0 %}
+                {% set total_discovered = discovery_trends | sum(attribute='new_videos') %}
+                {% set avg_weekly = (total_discovered / discovery_trends|length) %}
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ total_discovered }}</div>
+                    <div class="stat-label">Total Discovered</div>
+                    <div class="stat-sublabel">{{ discovery_trends|length }} weeks tracked</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ "%.1f"|format(avg_weekly) }}</div>
+                    <div class="stat-label">Avg per Week</div>
+                    <div class="stat-sublabel">Discovery rate</div>
+                </div>
+                {% endif %}
+                
+                {% if top_channels %}
+                {% set total_channels = top_channels|length %}
+                {% set channels_with_multiple = top_channels | selectattr('video_count', 'gt', 1) | list | length %}
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ total_channels }}</div>
+                    <div class="stat-label">Active Channels</div>
+                    <div class="stat-sublabel">In your collection</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ "%.1f"|format((channels_with_multiple / total_channels * 100) if total_channels > 0 else 0) }}%</div>
+                    <div class="stat-label">Return Rate</div>
+                    <div class="stat-sublabel">Channels with multiple videos</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Exploration Suggestions -->
+        <div class="card">
+            <h2>🌟 Exploration Suggestions</h2>
+            
+            <div class="stat-cards-grid">
+                <div class="stat-card">
+                    <div class="stat-value">🎵</div>
+                    <div class="stat-label">Try New Genres</div>
+                    <div class="stat-sublabel">
+                        {% if source_breakdown %}
+                        {% set live_tracking = source_breakdown | selectattr('source', 'eq', 'ha_live') | first %}
+                        {% if live_tracking and live_tracking.percentage > 70 %}
+                        Consider importing watch history for variety
+                        {% else %}
+                        Keep up your diverse discovery methods!
+                        {% endif %}
+                        {% else %}
+                        Explore different music sources
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">📺</div>
+                    <div class="stat-label">Channel Diving</div>
+                    <div class="stat-sublabel">
+                        {% if top_channels and top_channels|length > 0 %}
+                        Explore more videos from {{ top_channels[0].yt_channel or 'your top channel' }}
+                        {% else %}
+                        Find channels that match your taste
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">⭐</div>
+                    <div class="stat-label">Rate More</div>
+                    <div class="stat-sublabel">
+                        {% if recommendations and recommendations|length > 0 %}
+                        {{ recommendations|length }} unrated videos waiting
+                        {% else %}
+                        All caught up with ratings!
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">🔄</div>
+                    <div class="stat-label">Rediscover</div>
+                    <div class="stat-sublabel">
+                        {% if discovery_trends and discovery_trends|length >= 2 %}
+                        {% set latest = discovery_trends[0].new_videos %}
+                        {% if latest == 0 %}
+                        Time to explore new music!
+                        {% else %}
+                        You're actively discovering - great job!
+                        {% endif %}
+                        {% else %}
+                        Keep exploring new music regularly
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 0.8em; margin-top: 20px; padding: 10px;">
+            <em>Generated at {{ generated_at }}</em>
+        </div>
+    </div>
+</body>
+</html>

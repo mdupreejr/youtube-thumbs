@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Statistics Overview</title>
+    <meta http-equiv="refresh" content="300"> <!-- Auto-refresh every 5 minutes -->
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/stats_visualizations.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats" class="active">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    
+                    <!-- Logs dropdown menu -->
+                    <div class="nav-dropdown">
+                        <div class="nav-dropdown-btn">
+                            Logs <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="nav-dropdown-content">
+                            <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                            <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                            <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                            <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                            <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                            <a href="{{ ingress_path }}/logs/pending-ratings">Queue</a>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                </div>
+            </div>
+            <div style="font-size: 0.65em; color: #64748b;">Auto-refresh: 5min</div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="stats-tabs">
+            <a href="{{ ingress_path }}/stats" class="{{ 'active' if current_tab == 'overview' }}">📊 Overview</a>
+            <a href="{{ ingress_path }}/stats/analytics" class="{{ 'active' if current_tab == 'analytics' }}">📈 Analytics</a>
+            <a href="{{ ingress_path }}/stats/api" class="{{ 'active' if current_tab == 'api' }}">🔧 API & Queue</a>
+            <a href="{{ ingress_path }}/stats/categories" class="{{ 'active' if current_tab == 'categories' }}">📁 Categories</a>
+            <a href="{{ ingress_path }}/stats/discovery" class="{{ 'active' if current_tab == 'discovery' }}">🔍 Discovery</a>
+        </div>
+
+        <!-- Summary Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value">{{ summary.total_videos }}</div>
+                <div class="metric-label">Total Videos</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ summary.total_plays }}</div>
+                <div class="metric-label">Total Plays</div>
+            </div>
+            <div class="metric-card clickable">
+                <a href="{{ ingress_path }}/stats/liked">
+                    <div class="metric-value">{{ summary.liked }}</div>
+                    <div class="metric-label">Liked 👍</div>
+                </a>
+            </div>
+            <div class="metric-card clickable">
+                <a href="{{ ingress_path }}/stats/disliked">
+                    <div class="metric-value">{{ summary.disliked }}</div>
+                    <div class="metric-label">Disliked 👎</div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Quick Insights Panel -->
+        {% if retention or correlation %}
+        <div class="card">
+            <h2>📋 Quick Insights</h2>
+            <div class="stat-cards-grid">
+                {% if summary.avg_rating_score %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ "%.1f"|format(summary.avg_rating_score) }}</div>
+                    <div class="stat-label">Avg Rating Score</div>
+                </div>
+                {% endif %}
+                
+                {% if summary.unique_channels %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ summary.unique_channels }}</div>
+                    <div class="stat-label">Unique Channels</div>
+                </div>
+                {% endif %}
+                
+                {% for item in retention if item.retention_type == 'Repeat play' %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ "%.1f"|format(item.percentage) }}%</div>
+                    <div class="stat-label">Repeat Plays</div>
+                    <div class="stat-sublabel">{{ item.count }} videos played multiple times</div>
+                </div>
+                {% endfor %}
+                
+                {% if discovery and discovery|length > 0 %}
+                <div class="stat-card">
+                    <div class="stat-value">{{ discovery[0].new_videos }}</div>
+                    <div class="stat-label">Weekly Discovery</div>
+                    <div class="stat-sublabel">New videos this week</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Rating Distribution -->
+        <div class="card">
+            <h2>👍👎 Rating Distribution</h2>
+            <div class="bar-chart">
+                <div class="bar-row">
+                    <div class="bar-label"><strong>👍 Liked</strong></div>
+                    <div class="bar-container">
+                        <div class="bar-fill bar-success" style="width: {{ rating_percentages.liked }}%">
+                            {{ summary.liked }} songs ({{ "%.1f"|format(rating_percentages.liked) }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="bar-row">
+                    <div class="bar-label"><strong>👎 Disliked</strong></div>
+                    <div class="bar-container">
+                        <div class="bar-fill bar-danger" style="width: {{ rating_percentages.disliked }}%">
+                            {{ summary.disliked }} songs ({{ "%.1f"|format(rating_percentages.disliked) }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="bar-row">
+                    <div class="bar-label"><strong>➖ Unrated</strong></div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {{ rating_percentages.unrated }}%">
+                            {{ summary.unrated }} songs ({{ "%.1f"|format(rating_percentages.unrated) }}%)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Play Distribution Mini-Chart -->
+        {% if play_distribution %}
+        <div class="card">
+            <h2>▶️ Play Distribution</h2>
+            <div class="bar-chart">
+                {% for item in play_distribution %}
+                <div class="bar-row">
+                    <div class="bar-label">{{ item.play_range }}</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: {{ item.percentage }}%">
+                            {{ item.video_count }} videos ({{ "%.1f"|format(item.percentage) }}%)
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Most Played Videos -->
+        <div class="card">
+            <h2>🎵 Most Played Videos</h2>
+            {% if most_played %}
+                {% for video in most_played %}
+                <div class="list-item">
+                    <div class="item-info">
+                        <div class="item-title">
+                            {% if video.yt_video_id %}
+                                <a href="https://www.youtube.com/watch?v={{ video.yt_video_id }}" target="_blank" rel="noopener noreferrer">{{ video.title }}</a>
+                            {% else %}
+                                {{ video.title }}
+                            {% endif %}
+                            <span class="item-meta">• {{ video.artist }}</span>
+                        </div>
+                    </div>
+                    <div class="item-stat">{{ video.play_count }} plays</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #666; text-align: center; padding: 20px;">No data available</p>
+            {% endif %}
+        </div>
+
+        <!-- Top Channels -->
+        <div class="card">
+            <h2>📺 Top Channels</h2>
+            {% if top_channels %}
+                {% for channel in top_channels %}
+                <div class="list-item">
+                    <div class="item-info">
+                        <div class="item-title">
+                            {{ channel.yt_channel or 'Unknown' }}
+                            <span class="item-meta">• {{ channel.video_count }} videos • {{ channel.total_plays }} plays</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #666; text-align: center; padding: 20px;">No data available</p>
+            {% endif %}
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+            <h2>⏰ Recent Activity</h2>
+            {% if recent_activity %}
+                {% for item in recent_activity %}
+                <div class="list-item">
+                    <div class="item-info">
+                        <div class="item-title">
+                            {% if item.yt_video_id %}
+                                <a href="https://www.youtube.com/watch?v={{ item.yt_video_id }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+                            {% else %}
+                                {{ item.title }}
+                            {% endif %}
+                            <span class="item-meta">• {{ item.artist }} • {{ item.time_ago }}</span>
+                        </div>
+                    </div>
+                    <div class="item-stat">{{ item.rating_icon }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #666; text-align: center; padding: 20px;">No recent activity</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

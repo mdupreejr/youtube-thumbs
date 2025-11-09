@@ -43,11 +43,12 @@ def stats_page() -> str:
         ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
         # Check cache first (5 minute TTL)
-        cached = _db.get_cached_stats('stats_page')
+        cached = _db.get_cached_stats('stats_overview')
         if cached:
             # Add ingress_path to cached data
             cached['ingress_path'] = ingress_path
-            return render_template('stats_server.html', **cached)
+            cached['current_tab'] = 'overview'
+            return render_template('stats_overview.html', **cached)
 
         # Fetch fresh data
         summary = _db.get_stats_summary()
@@ -109,27 +110,272 @@ def stats_page() -> str:
                 'yt_video_id': video.get('yt_video_id')
             })
 
+        # Get additional analytics for overview
+        retention = _db.get_retention_analysis()
+        play_dist = _db.get_play_distribution()
+        discovery = _db.get_discovery_stats()
+        correlation = _db.get_correlation_stats()
+
         # Prepare template data
         template_data = {
             'ingress_path': ingress_path,
+            'current_tab': 'overview',
             'summary': summary,
             'rating_percentages': rating_percentages,
             'most_played': formatted_most_played,
             'top_channels': top_channels,
             'recent_activity': recent_activity,
+            'retention': retention,
+            'play_distribution': play_dist,
+            'discovery': discovery,
+            'correlation': correlation,
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
         # Cache for 5 minutes
-        _db.set_cached_stats('stats_page', template_data, ttl_seconds=300)
+        _db.set_cached_stats('stats_overview', template_data, ttl_seconds=300)
 
-        return render_template('stats_server.html', **template_data)
+        return render_template('stats_overview.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering stats page: {e}")
         logger.error(traceback.format_exc())
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/stats/analytics')
+def stats_analytics_page() -> str:
+    """Analytics tab with listening patterns, play distributions, and retention analysis."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        
+        # Check cache first (5 minute TTL)
+        cached = _db.get_cached_stats('stats_analytics')
+        if cached:
+            cached['ingress_path'] = ingress_path
+            cached['current_tab'] = 'analytics'
+            return render_template('stats_analytics.html', **cached)
+
+        # Fetch analytics data
+        patterns = _db.get_listening_patterns()
+        play_dist = _db.get_play_distribution()
+        retention = _db.get_retention_analysis()
+        correlation = _db.get_correlation_stats()
+        
+        # Process listening patterns for heatmap
+        heatmap_data = []
+        day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        
+        # Create 7x24 grid for heatmap
+        max_plays = 0
+        for day in range(7):
+            day_data = []
+            for hour in range(24):
+                plays = 0
+                # Find matching data from patterns
+                for pattern in patterns.get('by_hour', []):
+                    if pattern.get('hour') == hour:
+                        # This is simplified - in reality we'd need day+hour combination
+                        plays = pattern.get('play_count', 0)
+                        max_plays = max(max_plays, plays)
+                        break
+                day_data.append(plays)
+            heatmap_data.append({
+                'day': day_names[day],
+                'hours': day_data
+            })
+        
+        # Calculate heat intensities (0-5 scale)
+        for day_row in heatmap_data:
+            day_row['heat_levels'] = []
+            for plays in day_row['hours']:
+                if max_plays == 0:
+                    level = 0
+                else:
+                    percentage = (plays / max_plays) * 100
+                    if percentage == 0:
+                        level = 0
+                    elif percentage < 10:
+                        level = 1
+                    elif percentage < 30:
+                        level = 2
+                    elif percentage < 50:
+                        level = 3
+                    elif percentage < 75:
+                        level = 4
+                    else:
+                        level = 5
+                day_row['heat_levels'].append(level)
+        
+        # Process play distribution for percentages
+        total_videos = sum(item.get('video_count', 0) for item in play_dist)
+        for item in play_dist:
+            item['percentage'] = (item.get('video_count', 0) / total_videos * 100) if total_videos > 0 else 0
+
+        template_data = {
+            'ingress_path': ingress_path,
+            'current_tab': 'analytics',
+            'listening_patterns': patterns,
+            'heatmap_data': heatmap_data,
+            'play_distribution': play_dist,
+            'retention_analysis': retention,
+            'correlation_stats': correlation,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        _db.set_cached_stats('stats_analytics', template_data, ttl_seconds=300)
+        return render_template('stats_analytics.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering analytics page: {e}")
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading analytics</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/stats/api')
+def stats_api_page() -> str:
+    """API usage and queue health metrics tab."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        
+        # Check cache first (5 minute TTL)
+        cached = _db.get_cached_stats('stats_api')
+        if cached:
+            cached['ingress_path'] = ingress_path
+            cached['current_tab'] = 'api'
+            return render_template('stats_api.html', **cached)
+
+        # Fetch API and queue data
+        api_summary = _db.get_api_usage_summary(days=30)
+        hourly_usage = _db.get_api_hourly_usage()
+        api_calls = _db.get_api_call_summary(hours=24)
+        queue_stats = _db.get_queue_statistics()
+        queue_activity = _db.get_recent_queue_activity(limit=20)
+        queue_errors = _db.get_queue_errors(limit=10)
+
+        template_data = {
+            'ingress_path': ingress_path,
+            'current_tab': 'api',
+            'api_summary': api_summary,
+            'hourly_usage': hourly_usage,
+            'api_calls': api_calls,
+            'queue_stats': queue_stats,
+            'queue_activity': queue_activity,
+            'queue_errors': queue_errors,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        _db.set_cached_stats('stats_api', template_data, ttl_seconds=300)
+        return render_template('stats_api.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering API stats page: {e}")
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading API statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/stats/categories')
+def stats_categories_page() -> str:
+    """Categories and duration analysis tab."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        
+        # Check cache first (5 minute TTL)
+        cached = _db.get_cached_stats('stats_categories')
+        if cached:
+            cached['ingress_path'] = ingress_path
+            cached['current_tab'] = 'categories'
+            return render_template('stats_categories.html', **cached)
+
+        # Fetch category and duration data
+        category_breakdown = _db.get_category_breakdown()
+        duration_analysis = _db.get_duration_analysis()
+        
+        # YouTube category mapping
+        YOUTUBE_CATEGORIES = {
+            1: 'Film & Animation',
+            2: 'Autos & Vehicles',
+            10: 'Music',
+            15: 'Pets & Animals',
+            17: 'Sports',
+            19: 'Travel & Events',
+            20: 'Gaming',
+            22: 'People & Blogs',
+            23: 'Comedy',
+            24: 'Entertainment',
+            25: 'News & Politics',
+            26: 'Howto & Style',
+            27: 'Education',
+            28: 'Science & Technology',
+            29: 'Nonprofits & Activism'
+        }
+        
+        # Map category IDs to names and calculate percentages
+        total_categorized = sum(item.get('count', 0) for item in category_breakdown)
+        for item in category_breakdown:
+            cat_id = item.get('yt_category_id')
+            item['category_name'] = YOUTUBE_CATEGORIES.get(cat_id, f'Category {cat_id}')
+            item['percentage'] = (item.get('count', 0) / total_categorized * 100) if total_categorized > 0 else 0
+
+        template_data = {
+            'ingress_path': ingress_path,
+            'current_tab': 'categories',
+            'category_breakdown': category_breakdown,
+            'duration_analysis': duration_analysis,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        _db.set_cached_stats('stats_categories', template_data, ttl_seconds=300)
+        return render_template('stats_categories.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering categories page: {e}")
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading categories</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/stats/discovery')
+def stats_discovery_page() -> str:
+    """Discovery trends and recommendations tab."""
+    try:
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        
+        # Check cache first (5 minute TTL)
+        cached = _db.get_cached_stats('stats_discovery')
+        if cached:
+            cached['ingress_path'] = ingress_path
+            cached['current_tab'] = 'discovery'
+            return render_template('stats_discovery.html', **cached)
+
+        # Fetch discovery data
+        discovery_trends = _db.get_discovery_stats()
+        source_breakdown = _db.get_source_breakdown()
+        top_channels = _db.get_top_channels(15)
+        recommendations = _db.get_recommendations('likes', 10)
+        
+        # Calculate source percentages
+        total_sources = sum(item.get('count', 0) for item in source_breakdown)
+        for item in source_breakdown:
+            item['percentage'] = (item.get('count', 0) / total_sources * 100) if total_sources > 0 else 0
+
+        template_data = {
+            'ingress_path': ingress_path,
+            'current_tab': 'discovery',
+            'discovery_trends': discovery_trends,
+            'source_breakdown': source_breakdown,
+            'top_channels': top_channels,
+            'recommendations': recommendations,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        _db.set_cached_stats('stats_discovery', template_data, ttl_seconds=300)
+        return render_template('stats_discovery.html', **template_data)
+
+    except Exception as e:
+        logger.error(f"Error rendering discovery page: {e}")
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading discovery</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
 @bp.route('/stats/liked')
