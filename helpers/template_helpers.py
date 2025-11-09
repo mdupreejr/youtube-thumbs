@@ -6,10 +6,89 @@ Provides utilities to format data for the table_viewer.html template.
 
 from typing import Dict, Any, List, Optional
 import html
+import re
+
+
+def sanitize_html(html_content: str) -> str:
+    """
+    Sanitize HTML content to prevent XSS attacks.
+    
+    This function allows only safe HTML tags and attributes while stripping
+    potentially dangerous content.
+    
+    Args:
+        html_content: Raw HTML content to sanitize
+        
+    Returns:
+        Sanitized HTML content safe for rendering
+    """
+    if not html_content:
+        return ''
+    
+    # Try to use bleach if available, otherwise fall back to basic cleaning
+    try:
+        import bleach
+        
+        # Define allowed tags and attributes for safe HTML
+        allowed_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre']
+        allowed_attributes = {
+            'a': ['href', 'target', 'rel', 'title'],
+            'span': ['class', 'title', 'style'],
+            '*': ['class', 'title']
+        }
+        
+        # Define allowed protocols for links
+        allowed_protocols = ['http', 'https', 'mailto']
+        
+        return bleach.clean(
+            html_content,
+            tags=allowed_tags,
+            attributes=allowed_attributes,
+            protocols=allowed_protocols,
+            strip=True
+        )
+    except ImportError:
+        # Fallback: basic HTML sanitization using regex
+        # This is a simple approach but better than no sanitization
+        
+        # Remove script tags and their content
+        html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove potentially dangerous attributes
+        html_content = re.sub(r'\son\w+\s*=\s*["\'][^"\']*["\']', '', html_content, flags=re.IGNORECASE)
+        
+        # Remove javascript: protocols
+        html_content = re.sub(r'javascript\s*:', '', html_content, flags=re.IGNORECASE)
+        
+        # Remove data: protocols (except for safe image data)
+        html_content = re.sub(r'data\s*:(?!image/)', '', html_content, flags=re.IGNORECASE)
+        
+        # Allow only specific safe tags
+        allowed_pattern = r'<(/?)(?:a|span|strong|em|br|small|code|pre)(\s[^>]*)>'
+        
+        def replace_tag(match):
+            closing = match.group(1)
+            tag = match.group(2) if match.group(2) else ''
+            attrs = match.group(3) if match.group(3) else ''
+            return f'<{closing}{tag}{attrs}>'
+        
+        # Keep only allowed tags, remove others
+        sanitized = re.sub(r'<(/?)(\w+)([^>]*)>', replace_tag, html_content)
+        
+        return sanitized
 
 
 class TableColumn:
-    """Represents a table column configuration."""
+    """
+    Represents a table column configuration for the unified table viewer.
+    
+    Args:
+        key: Unique identifier for the column (used for sorting/filtering)
+        label: Display name for the column header
+        sortable: Whether this column can be sorted by clicking the header
+        resizable: Whether this column can be resized by dragging
+        width: Optional CSS width value (e.g., "200px", "20%")
+    """
     
     def __init__(self, key: str, label: str, sortable: bool = True, 
                  resizable: bool = True, width: Optional[str] = None):
@@ -30,14 +109,32 @@ class TableColumn:
 
 
 class TableCell:
-    """Represents a table cell with value and optional formatting."""
+    """
+    Represents a table cell with value and optional formatting.
+    
+    Automatically sanitizes HTML content to prevent XSS attacks while preserving
+    safe formatting elements like links, spans, and basic text formatting.
+    
+    Args:
+        value: The plain text value of the cell
+        html: Optional HTML content (will be sanitized)
+        style: Optional CSS style string
+        title: Optional title attribute for hover tooltips
+    """
     
     def __init__(self, value: Any, html: Optional[str] = None, 
                  style: Optional[str] = None, title: Optional[str] = None):
         self.value = str(value) if value is not None else ''
-        self.html = html
-        self.style = style
-        self.title = title
+        
+        # Sanitize HTML content to prevent XSS
+        if html:
+            self.html = sanitize_html(html)
+        else:
+            self.html = None
+            
+        # Sanitize style and title attributes
+        self.style = html.escape(style) if style else None
+        self.title = html.escape(title) if title else None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -49,7 +146,14 @@ class TableCell:
 
 
 class TableRow:
-    """Represents a table row with cells and optional click handling."""
+    """
+    Represents a table row with cells and optional click handling.
+    
+    Args:
+        cells: List of TableCell objects for each column
+        clickable: Whether this row should respond to click events
+        row_id: Unique identifier passed to click handler if clickable
+    """
     
     def __init__(self, cells: List[TableCell], clickable: bool = False, 
                  row_id: Optional[str] = None):
@@ -66,7 +170,16 @@ class TableRow:
 
 
 class TableData:
-    """Container for table columns and rows."""
+    """
+    Container for table columns and rows in the unified table viewer.
+    
+    This class holds the complete data structure needed to render a table
+    with the table_viewer.html template.
+    
+    Args:
+        columns: List of TableColumn objects defining the table structure
+        rows: List of TableRow objects containing the actual data
+    """
     
     def __init__(self, columns: List[TableColumn], rows: List[TableRow]):
         self.columns = columns
@@ -80,32 +193,55 @@ class TableData:
 
 
 class PageConfig:
-    """Configuration for a page using the table viewer template."""
+    """
+    Configuration for a page using the table viewer template.
+    
+    This class contains all the configuration options for customizing
+    the appearance and behavior of a table viewer page.
+    
+    Args:
+        title: The page title displayed in the header
+        nav_active: Which top-level navigation item is active
+        storage_key: localStorage key for saving user preferences
+    """
     
     def __init__(self, title: str, nav_active: str = '', storage_key: str = ''):
+        # Basic page settings
         self.title = title
         self.nav_active = nav_active
         self.storage_key = storage_key or f"table-{nav_active}"
         self.show_title = True
         self.title_suffix = None
+        
+        # Navigation settings
         self.back_link = None
         self.back_text = None
         self.main_tabs = []
         self.sub_tabs = []
+        self.logs_tab = None  # For dropdown navigation highlighting
+        
+        # Filtering and form settings
         self.filters = []
         self.hidden_fields = []
         self.current_url = ''
         self.filter_button_text = 'Apply'
+        
+        # Empty state configuration
         self.empty_state = None
+        
+        # Table functionality settings
         self.enable_sorting = True
         self.enable_resizing = True
         self.enable_column_toggle = True
+        
+        # Row interaction settings
         self.row_click_handler = None
         self.modal_api_url = None
         self.modal_title = 'Details'
         self.modal_formatter = None
+        
+        # Custom JavaScript
         self.custom_js = None
-        self.logs_tab = None  # For dropdown navigation highlighting
     
     def add_back_link(self, url: str, text: str):
         """Add a back navigation link."""
@@ -307,3 +443,87 @@ def truncate_text(text: str, max_length: int = 80, suffix: str = '...') -> str:
         return text
     
     return text[:max_length] + suffix
+
+
+def create_pagination_info(page: int, per_page: int, total_count: int, base_url: str) -> Dict[str, Any]:
+    """
+    Create pagination information for the unified table template.
+    
+    Args:
+        page: Current page number (1-based)
+        per_page: Number of items per page
+        total_count: Total number of items
+        base_url: Base URL for pagination links
+        
+    Returns:
+        Dictionary containing pagination information for the template
+    """
+    total_pages = (total_count + per_page - 1) // per_page
+    
+    if total_pages <= 1:
+        return None
+    
+    # Generate page numbers to display
+    page_numbers = []
+    start_page = max(1, page - 2)
+    end_page = min(total_pages, page + 2)
+    
+    if start_page > 1:
+        page_numbers.append(1)
+        if start_page > 2:
+            page_numbers.append('...')
+    
+    for p in range(start_page, end_page + 1):
+        page_numbers.append(p)
+    
+    if end_page < total_pages:
+        if end_page < total_pages - 1:
+            page_numbers.append('...')
+        page_numbers.append(total_pages)
+    
+    return {
+        'current_page': page,
+        'total_pages': total_pages,
+        'page_numbers': page_numbers,
+        'prev_url': f"{base_url}?page={page-1}" if page > 1 else None,
+        'next_url': f"{base_url}?page={page+1}" if page < total_pages else None,
+        'page_url_template': f"{base_url}?page=PAGE_NUM"
+    }
+
+
+def create_status_message(items_count: int, total_count: int = None, 
+                         item_type: str = 'items') -> str:
+    """
+    Create a standardized status message for table displays.
+    
+    Args:
+        items_count: Number of items currently displayed
+        total_count: Total number of items available (if different from displayed)
+        item_type: Type of items being displayed (e.g., 'songs', 'errors')
+        
+    Returns:
+        Formatted status message
+    """
+    if total_count and total_count > items_count:
+        return f"Showing {items_count:,} of {total_count:,} {item_type}"
+    else:
+        return f"Showing {items_count:,} {item_type}"
+
+
+def create_filter_option(value: str, label: str, selected: bool = False) -> Dict[str, Any]:
+    """
+    Create a filter option for use in PageConfig.add_filter().
+    
+    Args:
+        value: The value to submit when this option is selected
+        label: The display text for the option
+        selected: Whether this option is currently selected
+        
+    Returns:
+        Dictionary formatted for use in filter dropdowns
+    """
+    return {
+        'value': value,
+        'label': label,
+        'selected': selected
+    }

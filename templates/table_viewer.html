@@ -154,10 +154,11 @@
                                 data-sortable="{{ 'true' if column.sortable else 'false' }}"
                                 data-resizable="{{ 'true' if column.resizable else 'false' }}"
                                 {% if column.width %}style="width: {{ column.width }};"{% endif %}
+                                {% if column.sortable %}role="columnheader" aria-sort="none"{% endif %}
                             >
                                 {{ column.label }}
                                 {% if column.sortable %}
-                                <span class="sort-indicator"></span>
+                                <span class="sort-indicator" aria-label="Sort by {{ column.label }}"></span>
                                 {% endif %}
                             </th>
                             {% endfor %}
@@ -174,7 +175,7 @@
                                 {% if cell.html %}
                                     {{ cell.html|safe }}
                                 {% else %}
-                                    {{ cell.value }}
+                                    {{ cell.value|e }}
                                 {% endif %}
                             </td>
                             {% endfor %}
@@ -275,9 +276,15 @@
                 document.querySelectorAll('.clickable-row').forEach(row => {
                     row.addEventListener('click', function() {
                         const rowId = this.dataset.rowId;
-                        // Only call if the handler name is a valid identifier and exists as a function
-                        if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(rowClickHandlerName) && typeof window[rowClickHandlerName] === "function") {
-                            window[rowClickHandlerName](rowId);
+                        // Whitelist of allowed row click handlers for security
+                        const allowedHandlers = {
+                            showRowDetails: showRowDetails,
+                            // Add other allowed handler functions here as needed
+                        };
+                        
+                        // Only call if the handler is in the allowed list
+                        if (allowedHandlers[rowClickHandlerName]) {
+                            allowedHandlers[rowClickHandlerName](rowId);
                         }
                     });
                 });
@@ -315,8 +322,8 @@
                 // Format modal content based on page configuration
                 const allowedFormatters = {
                     formatModalContent: formatModalContent,
-                    // Add other allowed formatter functions here, e.g.:
-                    // customFormatter: customFormatter,
+                    showRowDetails: showRowDetails,
+                    // Add other allowed formatter functions here as needed
                 };
                 const formatterName = "{{ page_config.modal_formatter or 'formatModalContent' }}";
                 const formatterFn = allowedFormatters[formatterName] || formatModalContent;
