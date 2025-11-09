@@ -2,12 +2,6 @@ configuration:
   media_player_entity:
     name: Media player entity
     description: Entity ID of the Apple TV (or other player) to monitor, e.g. media_player.apple_tv.
-  sqlite_web_host:
-    name: sqlite_web host
-    description: Bind address for the sqlite_web UI. Keep 127.0.0.1 for local-only access; use 0.0.0.0 to expose the DB UI to your LAN.
-  sqlite_web_port:
-    name: sqlite_web port
-    description: Port for the sqlite_web database viewer when exposed to your LAN; ignored while using HA ingress (default).
   log_level:
     name: Log level
     description: Controls verbosity in the add-on logs (DEBUG provides the most detail).
