@@ -52,7 +52,12 @@ def sanitize_html(html_content: str) -> str:
         # This is a simple approach but better than no sanitization
         
         # Remove script tags and their content
-        html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        html_content = re.sub(
+            r'<script\b[^>]*>.*?</script\b[^>]*>',
+            '',
+            html_content,
+            flags=re.DOTALL | re.IGNORECASE
+        )
         
         # Remove potentially dangerous attributes
         html_content = re.sub(r'\son\w+\s*=\s*["\'][^"\']*["\']', '', html_content, flags=re.IGNORECASE)
