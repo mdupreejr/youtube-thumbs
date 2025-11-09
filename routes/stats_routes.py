@@ -112,11 +112,10 @@ def stats_page() -> str:
             })
 
         # Get additional analytics for overview
-        overview_analytics = _db.get_overview_analytics()
-        retention = overview_analytics.get('retention')
-        play_dist = overview_analytics.get('play_distribution')
-        discovery = overview_analytics.get('discovery')
-        correlation = overview_analytics.get('correlation')
+        retention = _db.get_retention_analysis()
+        play_dist = _db.get_play_distribution()
+        discovery = _db.get_discovery_stats()
+        correlation = _db.get_correlation_stats()
 
         # Prepare template data
         template_data = {
