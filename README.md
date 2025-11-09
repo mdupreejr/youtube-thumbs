@@ -100,8 +100,9 @@ Access via **OPEN WEB UI** button in the add-on page:
 3. **Check database cache** for exact match (content hash or title+duration)
 4. **If no cache hit**: Enqueue search operation
 5. **Queue worker processes**:
-   - Searches YouTube with cleaned title
-   - Filters by duration match (±2 seconds)
+   - Searches YouTube with cleaned title + artist/album metadata
+   - Filters by duration match (YouTube always reports +1s longer than HA)
+   - Uses ±2s tolerance to handle variations
    - Caches match for future lookups
 6. **Enqueue rating operation**
 7. **Queue worker rates** the video on YouTube
