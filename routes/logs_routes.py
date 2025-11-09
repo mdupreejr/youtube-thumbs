@@ -68,7 +68,8 @@ def api_calls_log():
 
         # Create page configuration
         page_config = create_api_calls_page_config(ingress_path)
-        
+        page_config.logs_tab = 'api-calls'  # For navbar highlighting
+
         # Add filters
         page_config.add_filter('method', 'API Method', [
             {'value': '', 'label': 'All Methods', 'selected': not method_filter},
