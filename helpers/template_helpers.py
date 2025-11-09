@@ -105,6 +105,7 @@ class PageConfig:
         self.modal_title = 'Details'
         self.modal_formatter = None
         self.custom_js = None
+        self.logs_tab = None  # For dropdown navigation highlighting
     
     def add_back_link(self, url: str, text: str):
         """Add a back navigation link."""
@@ -174,7 +175,8 @@ class PageConfig:
             'modal_api_url': self.modal_api_url,
             'modal_title': self.modal_title,
             'modal_formatter': self.modal_formatter,
-            'custom_js': self.custom_js
+            'custom_js': self.custom_js,
+            'logs_tab': self.logs_tab
         }
 
 

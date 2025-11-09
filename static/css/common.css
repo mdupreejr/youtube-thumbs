@@ -239,6 +239,195 @@ table tr:hover {
     background: #f8fafc;
 }
 
+/* Enhanced table styles for global template */
+.enhanced-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.enhanced-table th {
+    background: #f8fafc;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+    position: relative;
+    user-select: none;
+}
+
+.enhanced-table th.sortable {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.enhanced-table th.sortable:hover {
+    background: #e2e8f0;
+}
+
+.enhanced-table td {
+    padding: 12px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    word-wrap: break-word;
+}
+
+/* Colorbanding - alternating row colors */
+.enhanced-table tbody tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+.enhanced-table tbody tr:nth-child(odd) {
+    background: white;
+}
+
+.enhanced-table tbody tr:hover {
+    background: #f1f5f9 !important;
+}
+
+/* Sort indicators */
+.enhanced-table .sort-indicator {
+    font-size: 0.8em;
+    margin-left: 4px;
+    color: #94a3b8;
+    transition: color 0.2s;
+}
+
+.enhanced-table .sort-indicator.active {
+    color: #2563eb;
+}
+
+/* Column resizing handles */
+.enhanced-table .column-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    user-select: none;
+}
+
+.enhanced-table .column-resizer:hover {
+    background: #2563eb;
+}
+
+/* Column configuration */
+.column-config {
+    margin: 15px 0 10px 0;
+}
+
+.column-config label {
+    font-weight: 500;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.column-config select {
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.85em;
+    min-width: 200px;
+}
+
+/* Column toggle button and dropdown */
+.column-toggle-btn {
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.85em;
+    transition: all 0.2s;
+}
+
+.column-toggle-btn:hover {
+    background: #f3f4f6;
+    border-color: #2563eb;
+}
+
+.column-dropdown {
+    position: absolute;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+    padding: 12px;
+    min-width: 180px;
+}
+
+.column-dropdown label {
+    display: block;
+    margin: 8px 0;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #374151;
+}
+
+.column-dropdown input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+/* Filters */
+.filters {
+    display: flex;
+    gap: 15px;
+    align-items: end;
+    flex-wrap: wrap;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filter-group label {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: #374151;
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.85em;
+    background: white;
+}
+
+.apply-btn {
+    padding: 6px 16px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.apply-btn:hover {
+    background: #1d4ed8;
+}
+
 /* Pagination */
 .pagination {
     display: flex;
@@ -304,6 +493,76 @@ table tr:hover {
     color: #2563eb;
     border-bottom-color: #2563eb;
     font-weight: 600;
+}
+
+/* Dropdown navigation */
+.nav-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-dropdown-btn {
+    color: #475569;
+    text-decoration: none;
+    font-size: 0.7em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nav-dropdown-btn:hover,
+.nav-dropdown-btn.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.nav-dropdown-content {
+    display: none;
+    position: absolute;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    min-width: 160px;
+    top: 100%;
+    left: 0;
+}
+
+.nav-dropdown:hover .nav-dropdown-content,
+.nav-dropdown-content.show {
+    display: block;
+}
+
+.nav-dropdown-content a {
+    color: #475569;
+    padding: 8px 12px;
+    text-decoration: none;
+    display: block;
+    font-size: 0.75em;
+    transition: background-color 0.2s;
+}
+
+.nav-dropdown-content a:hover,
+.nav-dropdown-content a.active {
+    background: #f1f5f9;
+    color: #2563eb;
+}
+
+.dropdown-arrow {
+    font-size: 0.6em;
+    transition: transform 0.2s;
+}
+
+.nav-dropdown:hover .dropdown-arrow {
+    transform: rotate(180deg);
 }
 
 /* Status indicators */

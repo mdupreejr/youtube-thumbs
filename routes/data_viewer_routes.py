@@ -11,6 +11,7 @@ from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.request_helpers import get_real_ip
+from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell, PageConfig
 
 bp = Blueprint('data_viewer', __name__)
 
@@ -298,7 +299,7 @@ def _format_data_rows(rows, selected_columns):
 def data_viewer() -> str:
     """
     Server-side rendered database viewer with column selection and sorting.
-    All processing done on server, no client-side JavaScript required.
+    Now uses the unified table_viewer.html template.
     """
     try:
         # Get ingress path for proper link generation
@@ -313,28 +314,90 @@ def data_viewer() -> str:
             _db, selected_columns, sort_by, sort_order, page
         )
 
-        # Format rows for display
-        formatted_rows = _format_data_rows(rows, selected_columns)
+        # Create page configuration
+        page_config = PageConfig('Database Viewer', nav_active='data', storage_key='database-viewer')
+        page_config.logs_tab = 'database'  # For dropdown highlighting
+        page_config.current_url = '/data'
+        page_config.title_suffix = f'{total_count} records'
+        
+        # Set empty state
+        page_config.set_empty_state('📭', 'No data found', 'No records match your criteria.')
+        
+        # Enable all table features
+        page_config.enable_sorting = True
+        page_config.enable_resizing = True
+        page_config.enable_column_toggle = True
 
-        # Generate page numbers for pagination
+        # Create table columns based on selected columns
+        columns = []
+        for col_key in selected_columns:
+            col_label = all_columns.get(col_key, col_key)
+            # Make columns sortable and resizable
+            column = TableColumn(col_key, col_label, sortable=True, resizable=True)
+            columns.append(column)
+
+        # Create table rows
+        table_rows = []
+        for row_data in rows:
+            cells = []
+            for col_key in selected_columns:
+                value = row_data[col_key]
+                
+                # Format specific column types
+                if col_key == 'rating':
+                    if value == 'like':
+                        html = '<span style="color: #10b981;">👍 Like</span>'
+                    elif value == 'dislike':
+                        html = '<span style="color: #ef4444;">👎 Dislike</span>'
+                    else:
+                        html = '<span style="color: #94a3b8;">➖ None</span>'
+                    cells.append(TableCell(value or 'None', html))
+                elif col_key == 'yt_url' and value:
+                    # Make URL clickable
+                    html = f'<a href="{value}" target="_blank" style="color: #2563eb;">🔗 Watch</a>'
+                    cells.append(TableCell('YouTube Link', html))
+                elif col_key in ['date_added', 'date_last_played', 'yt_published_at']:
+                    if value:
+                        try:
+                            dt = parse_timestamp(value)
+                            formatted_time = dt.strftime('%Y-%m-%d %H:%M')
+                            cells.append(TableCell(formatted_time))
+                        except (ValueError, TypeError):
+                            cells.append(TableCell(value or '-'))
+                    else:
+                        cells.append(TableCell('-'))
+                else:
+                    # Default cell
+                    display_value = str(value) if value is not None else '-'
+                    cells.append(TableCell(display_value))
+            
+            table_rows.append(TableRow(cells))
+
+        # Create table data
+        table_data = TableData(columns, table_rows)
+
+        # Create pagination
         page_numbers = generate_page_numbers(page, total_pages)
-
-        # Prepare template data
-        template_data = {
-            'ingress_path': ingress_path,
-            'rows': formatted_rows,
-            'selected_columns': selected_columns,
-            'all_columns': all_columns,
-            'sort_by': sort_by,
-            'sort_order': sort_order,
-            'page': page,
+        pagination = {
+            'current_page': page,
             'total_pages': total_pages,
-            'total_count': total_count,
-            'columns_param': columns_param,
-            'page_numbers': page_numbers
-        }
+            'page_numbers': page_numbers,
+            'prev_url': f"/data?page={page-1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
+            'next_url': f"/data?page={page+1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
+            'page_url_template': f"/data?page=PAGE_NUM&sort={sort_by}&order={sort_order}&columns={columns_param}"
+        } if total_pages > 1 else None
 
-        return render_template('data_viewer.html', **template_data)
+        # Status message
+        status_message = f"Showing {len(table_rows)} of {total_count} records • Page {page}/{total_pages}"
+
+        return render_template(
+            'table_viewer.html',
+            ingress_path=ingress_path,
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if table_rows else None,
+            pagination=pagination,
+            status_message=status_message
+        )
 
     except Exception as e:
         logger.error(f"Error rendering data viewer: {e}")

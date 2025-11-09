@@ -17,7 +17,24 @@
                     <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats" class="{{ 'active' if page_config.nav_active == 'stats' else '' }}">Stats</a>
                     <a href="{{ ingress_path }}/data" class="{{ 'active' if page_config.nav_active == 'data' else '' }}">Database</a>
-                    <a href="{{ ingress_path }}/logs" class="{{ 'active' if page_config.nav_active == 'logs' else '' }}">Logs</a>
+                    
+                    <!-- Logs dropdown menu -->
+                    <div class="nav-dropdown">
+                        <div class="nav-dropdown-btn {{ 'active' if page_config.nav_active == 'logs' else '' }}">
+                            Logs <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="nav-dropdown-content">
+                            <a href="{{ ingress_path }}/logs?tab=rated" class="{{ 'active' if page_config.logs_tab == 'rated' else '' }}">Rated Songs</a>
+                            <a href="{{ ingress_path }}/logs?tab=matches" class="{{ 'active' if page_config.logs_tab == 'matches' else '' }}">Matches</a>
+                            <a href="{{ ingress_path }}/logs?tab=recent" class="{{ 'active' if page_config.logs_tab == 'recent' else '' }}">Recent</a>
+                            <a href="{{ ingress_path }}/logs?tab=errors" class="{{ 'active' if page_config.logs_tab == 'errors' else '' }}">Errors</a>
+                            <a href="{{ ingress_path }}/logs/api-calls" class="{{ 'active' if page_config.logs_tab == 'api-calls' else '' }}">API Calls</a>
+                            <a href="{{ ingress_path }}/logs/pending-ratings" class="{{ 'active' if page_config.logs_tab == 'queue' else '' }}">Queue</a>
+                            <a href="{{ ingress_path }}/data" class="{{ 'active' if page_config.logs_tab == 'database' else '' }}">Database</a>
+                            <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if page_config.logs_tab == 'bulk-rating' else '' }}">Bulk Rating</a>
+                        </div>
+                    </div>
+                    
                     <a href="{{ ingress_path }}/database">DB Admin</a>
                 </div>
             </div>
