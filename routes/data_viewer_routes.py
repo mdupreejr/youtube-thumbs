@@ -316,7 +316,7 @@ def data_viewer() -> str:
 
         # Create page configuration
         page_config = PageConfig('Database Viewer', nav_active='data', storage_key='database-viewer')
-        page_config.logs_tab = 'database'  # For dropdown highlighting
+        page_config.dropdown_section = 'database'  # For dropdown highlighting
         page_config.current_url = '/data'
         page_config.title_suffix = f'{total_count} records'
         
