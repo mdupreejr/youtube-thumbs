@@ -249,6 +249,20 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
                 artist = ha_media.get('artist', '')
                 media_info = format_media_info(title, artist)
 
+                # v4.2.5: Check if search was skipped due to recent failure
+                if search_id is None:
+                    user_action_logger.info(f"{rating_type.upper()} | {media_info} | SKIPPED (recent failed search)")
+                    logger.info(f"Skipping rating for '{title}' - recent failed search found")
+
+                    return jsonify({
+                        'success': False,
+                        'message': f'Video not found in recent search. Try again in 24 hours or add manually.',
+                        'queued': False,
+                        'search_queued': False,
+                        'rating': rating_type,
+                        'reason': 'recent_search_failure'
+                    }), 404
+
                 user_action_logger.info(f"{rating_type.upper()} | {media_info} | SEARCH+RATING-QUEUED")
                 logger.info(f"Queued search for '{title}' with {rating_type} callback (search_id: {search_id})")
 

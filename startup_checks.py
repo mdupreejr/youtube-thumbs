@@ -447,8 +447,10 @@ def run_pending_migrations(db):
                             'app_name': row['ha_app_name'] or 'YouTube'
                         }
                         try:
-                            db.enqueue_search(media)
-                            queued_count += 1
+                            # v4.2.5: enqueue_search() now returns None if recently failed
+                            search_id = db.enqueue_search(media)
+                            if search_id is not None:
+                                queued_count += 1
                         except Exception as e:
                             logger.debug(f"Failed to enqueue '{row['ha_title']}': {e}")
 

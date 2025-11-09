@@ -294,27 +294,31 @@ class QueueOperations:
     ) -> int:
         """
         Enqueue a search operation with deduplication (convenience method).
-        
-        v4.0.81: Added deduplication logic to prevent multiple queue entries 
-        for the same song. Checks for existing pending/processing searches 
+
+        v4.0.81: Added deduplication logic to prevent multiple queue entries
+        for the same song. Checks for existing pending/processing searches
         with the same title+artist combination.
+
+        v4.2.5: CRITICAL FIX - Now also checks for recent failed searches (within 24 hours)
+        to prevent quota burning. If a search failed within the last 24 hours, don't retry.
+        This prevents burning 100 quota units per search on songs that don't exist.
 
         Args:
             ha_media: Home Assistant media info
             callback_rating: Optional rating to apply after search succeeds
 
         Returns:
-            Queue item ID (existing or newly created)
+            Queue item ID (existing or newly created), or None if recently failed
         """
         ha_title = ha_media.get('title')
         ha_artist = ha_media.get('artist')
-        
-        # Check for existing pending/processing search with same title+artist
+
         with self._lock:
+            # Check for existing pending/processing search with same title+artist
             cursor = self._conn.execute(
                 """
-                SELECT id, payload FROM queue
-                WHERE type = 'search' 
+                SELECT id, payload, status FROM queue
+                WHERE type = 'search'
                   AND status IN ('pending', 'processing')
                   AND json_extract(payload, '$.ha_title') = ?
                   AND json_extract(payload, '$.ha_artist') = ?
@@ -324,14 +328,40 @@ class QueueOperations:
                 (ha_title, ha_artist)
             )
             existing = cursor.fetchone()
-            
+
             if existing:
-                # Found existing search - return its ID instead of creating duplicate
+                # Found existing pending/processing search - return its ID instead of creating duplicate
                 existing_id = existing['id']
-                logger.info(f"Found existing search for '{ha_title}' by '{ha_artist}' (queue_id: {existing_id})")
+                logger.info(f"Found existing {existing['status']} search for '{ha_title}' by '{ha_artist}' (queue_id: {existing_id})")
                 return existing_id
-        
-        # No existing search found - create new one
+
+            # v4.2.5: Check for recent failed searches (within 24 hours)
+            # This prevents re-searching songs that don't exist and burning quota
+            cursor = self._conn.execute(
+                """
+                SELECT id, last_attempt, last_error FROM queue
+                WHERE type = 'search'
+                  AND status = 'failed'
+                  AND json_extract(payload, '$.ha_title') = ?
+                  AND json_extract(payload, '$.ha_artist') = ?
+                  AND last_attempt >= datetime('now', '-24 hours')
+                ORDER BY last_attempt DESC
+                LIMIT 1
+                """,
+                (ha_title, ha_artist)
+            )
+            recent_failure = cursor.fetchone()
+
+            if recent_failure:
+                # Found recent failed search - skip to prevent quota burning
+                logger.info(
+                    f"Skipping search for '{ha_title}' by '{ha_artist}' - "
+                    f"failed search exists from {recent_failure['last_attempt']} "
+                    f"(error: {recent_failure['last_error'][:50]})"
+                )
+                return None
+
+        # No existing or recently failed search found - create new one
         payload = {
             'ha_title': ha_title,
             'ha_artist': ha_artist,

@@ -113,8 +113,12 @@ class SongTracker:
             else:
                 # Not in cache - queue YouTube search (same as rating endpoints)
                 # This uses the established queue logic and caching strategy
-                self.db.enqueue_search(media)
-                logger.info(f"New song detected: '{title}' - queued for YouTube search")
+                # v4.2.5: enqueue_search() now returns None if recently failed search exists
+                search_id = self.db.enqueue_search(media)
+                if search_id is None:
+                    logger.debug(f"Skipping search for '{title}' - recent failed search found (quota protection)")
+                else:
+                    logger.info(f"New song detected: '{title}' - queued for YouTube search (queue_id: {search_id})")
 
         except Exception as e:
             logger.error(f"Error checking/tracking song: {e}", exc_info=True)
