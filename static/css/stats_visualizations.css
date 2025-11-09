@@ -454,7 +454,7 @@
 .text-small { font-size: 0.85em; }
 .text-muted { color: #64748b; }
 .font-semibold { font-weight: 600; }
-.font-mono { font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; }
+.font-mono { font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; }
 
 .mb-1 { margin-bottom: 4px; }
 .mb-2 { margin-bottom: 8px; }
