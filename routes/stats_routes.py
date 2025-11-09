@@ -175,8 +175,8 @@ def stats_analytics_page() -> str:
                 plays = 0
                 # Find matching data from patterns
                 for pattern in patterns.get('by_hour', []):
-                    if pattern.get('hour') == hour:
-                        # This is simplified - in reality we'd need day+hour combination
+                    if pattern.get('hour') == hour and pattern.get('day') == day:
+                        # Now matches both day and hour combination
                         plays = pattern.get('play_count', 0)
                         max_plays = max(max_plays, plays)
                         break
