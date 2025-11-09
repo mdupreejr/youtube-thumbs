@@ -343,6 +343,8 @@ def get_queue_item_details(queue_id: int):
                 'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
                 'yt_title': video.get('yt_title') if video else None,
                 'yt_channel': video.get('yt_channel') if video else None,
+                'yt_duration': video.get('yt_duration') if video else None,
+                'ha_duration': video.get('ha_duration') if video else None,
                 'operation': f"Rate as {rating}",
                 'rating': rating,
                 'requested_at': queue_item.get('requested_at'),
@@ -366,6 +368,25 @@ def get_queue_item_details(queue_id: int):
             ha_media = payload
             callback_rating = ha_media.get('callback_rating')
 
+            # Try to find if search found a video to get YouTube metadata
+            found_video = None
+            if queue_item.get('status') == 'completed':
+                # Search was completed, try to find the video by title+artist
+                try:
+                    found_video = _db.find_by_title_and_duration(
+                        ha_media.get('ha_title'),
+                        ha_media.get('ha_duration')
+                    )
+                    if not found_video and ha_media.get('ha_artist'):
+                        # Try content hash lookup as fallback
+                        found_video = _db.find_by_content_hash(
+                            ha_media.get('ha_title'),
+                            ha_media.get('ha_duration'),
+                            ha_media.get('ha_artist')
+                        )
+                except Exception as e:
+                    logger.debug(f"Could not find completed search result for queue {queue_id}: {e}")
+
             details = {
                 'type': 'search',
                 'queue_id': queue_id,
@@ -383,7 +404,13 @@ def get_queue_item_details(queue_id: int):
                 'last_error': queue_item.get('last_error'),
                 'completed_at': queue_item.get('completed_at'),
                 'api_response_data': queue_item.get('api_response_data'),  # v4.0.64: YouTube API debug data
-                'payload': payload
+                'payload': payload,
+                # Add YouTube metadata if found
+                'yt_video_id': found_video.get('yt_video_id') if found_video else None,
+                'yt_title': found_video.get('yt_title') if found_video else None,
+                'yt_channel': found_video.get('yt_channel') if found_video else None,
+                'yt_duration': found_video.get('yt_duration') if found_video else None,
+                'yt_url': found_video.get('yt_url') if found_video else None
             }
 
             return jsonify({'success': True, 'data': details})
