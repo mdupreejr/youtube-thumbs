@@ -164,7 +164,7 @@
                 <div class="bar-row">
                     <div class="bar-label">{{ "%02d"|format(pattern.hour) }}:00</div>
                     <div class="bar-container">
-                        <div class="bar-fill" style="width: {{ (pattern.play_count / ([listening_patterns.by_hour] | selectattr('play_count') | map(attribute='play_count') | max) * 100) if [listening_patterns.by_hour] | selectattr('play_count') | map(attribute='play_count') | max > 0 else 0 }}%">
+                        <div class="bar-fill" style="width: {{ (pattern.play_count / max_hour_plays * 100) if max_hour_plays > 0 else 0 }}%">
                             {{ pattern.play_count }} plays
                         </div>
                     </div>
