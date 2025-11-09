@@ -159,20 +159,28 @@ def search_and_match_video(
     #          to cache ALL fetched videos, not just duration-matched candidates
     # v4.0.68: Pass artist to improve search accuracy for generic titles
     # v4.0.71: Use album (channel name) as fallback when artist is generic/missing
+    # v4.2.3: Use BOTH artist and album when both are available and useful
     artist = ha_media.get('artist')
     album = ha_media.get('album')
 
-    # Use album (channel name) if artist is generic or missing
-    # This dramatically improves accuracy for generic titles like "Electric", "Flowers", etc.
-    if artist in ['Unknown', 'YouTube', None, ''] and album:
-        artist = album
+    # Build comprehensive search context from all available HA metadata
+    search_artist = None
+    if artist and artist not in ['Unknown', 'YouTube', None, '']:
+        search_artist = artist
+        # Also append album if it's different and useful
+        if album and album not in ['Unknown', 'YouTube', None, ''] and album.lower() != artist.lower():
+            search_artist = f"{artist} {album}"
+            logger.debug(f"Using both artist '{artist}' and album '{album}' for enhanced search")
+    elif album and album not in ['Unknown', 'YouTube', None, '']:
+        # Fallback to album if artist is generic/missing
+        search_artist = album
         logger.debug(f"Using album '{album}' as artist for search (original artist was generic/missing)")
 
     if return_api_response:
-        result = search_youtube_for_video(yt_api, title, duration, artist, return_api_response=True)
+        result = search_youtube_for_video(yt_api, title, duration, search_artist, return_api_response=True)
         candidates, api_debug_data = result if result else (None, {})
     else:
-        candidates = search_youtube_for_video(yt_api, title, duration, artist)
+        candidates = search_youtube_for_video(yt_api, title, duration, search_artist)
         api_debug_data = None
 
     if not candidates:

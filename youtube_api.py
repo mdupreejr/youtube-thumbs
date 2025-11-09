@@ -310,12 +310,14 @@ class YouTubeAPI:
 
         # Check duration matching if expected_duration is provided
         if expected_duration is not None and duration is not None:
-            # YouTube always reports exactly 1 second more than HA
+            # YouTube typically reports 1 second more than HA, but allow ±2s tolerance
+            # v4.2.3: Changed from exact match to ±2s tolerance to handle minor duration variations
             expected_youtube_duration = expected_duration + YOUTUBE_DURATION_OFFSET
-            if duration != expected_youtube_duration:
-                return None  # Skip videos that don't match duration
+            duration_diff = abs(duration - expected_youtube_duration)
+            if duration_diff > 2:
+                return None  # Skip videos that don't match duration (±2s tolerance)
             logger.debug(
-                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | '{video_info['title']}'"
+                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | Diff: {duration_diff}s | '{video_info['title']}'"
             )
         elif duration is None and expected_duration is not None:
             logger.warning(
