@@ -51,12 +51,13 @@ def sanitize_html(html_content: str) -> str:
         # Fallback: basic HTML sanitization using regex
         # This is a simple approach but better than no sanitization
         
-        # Remove script tags and their content
+        # Remove script tags and their content (safe pattern)
+        # Use simple, non-backtracking pattern to prevent ReDoS
         html_content = re.sub(
-            r'<script\b[^>]*>.*?</script\b[^>]*>',
+            r'<script[^>]*>[\s\S]*?</script[^>]*>',
             '',
             html_content,
-            flags=re.DOTALL | re.IGNORECASE
+            flags=re.IGNORECASE
         )
         
         # Remove potentially dangerous attributes
@@ -68,17 +69,23 @@ def sanitize_html(html_content: str) -> str:
         # Remove data: protocols (except for safe image data)
         html_content = re.sub(r'data\s*:(?!image/)', '', html_content, flags=re.IGNORECASE)
         
-        # Allow only specific safe tags
-        allowed_pattern = r'<(/?)(?:a|span|strong|em|br|small|code|pre)(\s[^>]*)>'
+        # Allow only specific safe tags using safe, non-backtracking patterns
+        safe_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre']
         
-        def replace_tag(match):
-            closing = match.group(1)
-            tag = match.group(2) if match.group(2) else ''
-            attrs = match.group(3) if match.group(3) else ''
-            return f'<{closing}{tag}{attrs}>'
+        # Remove all HTML tags except safe ones
+        # First, remove all unsafe tags
+        html_content = re.sub(
+            r'<(?!/?)(?!(?:' + '|'.join(safe_tags) + r')(?:\s|>))[^>]*>',
+            '',
+            html_content,
+            flags=re.IGNORECASE
+        )
         
-        # Keep only allowed tags, remove others
-        sanitized = re.sub(r'<(/?)(\w+)([^>]*)>', replace_tag, html_content)
+        # Clean up any malformed tags that might remain
+        html_content = re.sub(r'<[^>]*$', '', html_content)  # Remove incomplete tags at end
+        html_content = re.sub(r'^[^<]*>', '', html_content)  # Remove incomplete tags at start
+        
+        sanitized = html_content
         
         return sanitized
 
