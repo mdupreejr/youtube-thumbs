@@ -432,6 +432,181 @@ def get_queue_item_details(queue_id: int):
         return jsonify({'success': False, 'error': f'Internal server error: {str(e)}'}), 500
 
 
+@bp.route('/logs/pending-ratings/item/<int:item_id>')
+def queue_item_detail_page(item_id: int):
+    """Render a full page with queue item details."""
+    from helpers.static_helpers import static_url
+    import json
+
+    ingress_path = g.ingress_path
+
+    try:
+        # Get queue item from unified queue
+        queue_item = _db.get_queue_item_by_id(item_id)
+        if not queue_item:
+            logger.error(f"Queue item not found: {item_id}")
+            return render_template('error.html',
+                                 error=f'Queue item not found: {item_id}',
+                                 ingress_path=ingress_path,
+                                 static_url=static_url), 404
+
+        payload = queue_item.get('payload', {})
+        item_type = queue_item['type']
+
+        if item_type == 'rating':
+            # Extract rating info from payload
+            yt_video_id = payload.get('yt_video_id')
+            rating = payload.get('rating')
+
+            # Get video details if available
+            video = _db.get_video(yt_video_id) if yt_video_id else None
+
+            # Format the response with all available details
+            details = {
+                'type': 'rating',
+                'queue_id': item_id,
+                'yt_video_id': yt_video_id,
+                'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
+                'ha_artist': video.get('ha_artist', 'Unknown') if video else 'Unknown',
+                'yt_title': video.get('yt_title') if video else None,
+                'yt_channel': video.get('yt_channel') if video else None,
+                'yt_duration': video.get('yt_duration') if video else None,
+                'ha_duration': video.get('ha_duration') if video else None,
+                'operation': f"Rate as {rating}",
+                'rating': rating,
+                'requested_at': queue_item.get('requested_at'),
+                'attempts': queue_item.get('attempts', 0),
+                'last_attempt': queue_item.get('last_attempt'),
+                'last_error': queue_item.get('last_error'),
+                'status': queue_item.get('status'),
+                'completed_at': queue_item.get('completed_at'),
+                'current_rating': video.get('rating') if video else None,
+                'play_count': video.get('play_count', 0) if video else 0,
+                'date_added': video.get('date_added') if video else None,
+                'date_last_played': video.get('date_last_played') if video else None,
+                'api_response_data': queue_item.get('api_response_data'),
+                'payload': payload
+            }
+
+        elif item_type == 'search':
+            # Extract search info from payload
+            ha_media = payload
+            callback_rating = ha_media.get('callback_rating')
+
+            # Try to find if search found a video to get YouTube metadata
+            found_video = None
+            if queue_item.get('status') == 'completed':
+                # Search was completed, try to find the video by title+artist
+                try:
+                    found_video = _db.find_by_title_and_duration(
+                        ha_media.get('ha_title'),
+                        ha_media.get('ha_duration')
+                    )
+                    if not found_video and ha_media.get('ha_artist'):
+                        # Try content hash lookup as fallback
+                        found_video = _db.find_by_content_hash(
+                            ha_media.get('ha_title'),
+                            ha_media.get('ha_duration'),
+                            ha_media.get('ha_artist')
+                        )
+                except Exception as e:
+                    logger.debug(f"Could not find completed search result for queue {item_id}: {e}")
+
+            details = {
+                'type': 'search',
+                'queue_id': item_id,
+                'ha_title': ha_media.get('ha_title', 'Unknown'),
+                'ha_artist': ha_media.get('ha_artist', 'Unknown'),
+                'ha_album': ha_media.get('ha_album'),
+                'ha_duration': ha_media.get('ha_duration'),
+                'ha_app_name': ha_media.get('ha_app_name'),
+                'operation': 'Search for YouTube match',
+                'callback_rating': callback_rating,
+                'status': queue_item.get('status'),
+                'requested_at': queue_item.get('requested_at'),
+                'attempts': queue_item.get('attempts', 0),
+                'last_attempt': queue_item.get('last_attempt'),
+                'last_error': queue_item.get('last_error'),
+                'completed_at': queue_item.get('completed_at'),
+                'api_response_data': queue_item.get('api_response_data'),
+                'payload': payload,
+                # Add YouTube metadata if found
+                'yt_video_id': found_video.get('yt_video_id') if found_video else None,
+                'yt_title': found_video.get('yt_title') if found_video else None,
+                'yt_channel': found_video.get('yt_channel') if found_video else None,
+                'yt_duration': found_video.get('yt_duration') if found_video else None,
+                'yt_url': found_video.get('yt_url') if found_video else None
+            }
+
+        else:
+            logger.error(f"Invalid queue item type: {item_type}")
+            return render_template('error.html',
+                                 error=f'Invalid item type: {item_type}',
+                                 ingress_path=ingress_path,
+                                 static_url=static_url), 400
+
+        # Parse API response data for template
+        api_debug = {}
+        if details.get('api_response_data'):
+            try:
+                api_data = details['api_response_data']
+                if isinstance(api_data, str):
+                    api_data = json.loads(api_data)
+
+                api_debug['cache_hit'] = api_data.get('cache_hit', False)
+                api_debug['search_query'] = api_data.get('search_query')
+
+                # Parse search results
+                if api_data.get('search_response'):
+                    items = api_data['search_response'].get('items', [])
+                    api_debug['search_results_count'] = len(items)
+                    api_debug['top_results'] = [
+                        {
+                            'title': item.get('snippet', {}).get('title', 'Unknown'),
+                            'video_id': item.get('id', {}).get('videoId', 'Unknown')
+                        }
+                        for item in items[:5]
+                    ]
+
+                api_debug['videos_checked'] = api_data.get('videos_checked')
+                api_debug['candidates_found'] = api_data.get('candidates_found')
+
+                if api_data.get('batch_responses'):
+                    api_debug['batch_responses_count'] = len(api_data['batch_responses'])
+
+                if api_data.get('error'):
+                    api_debug['error'] = {
+                        'type': api_data['error'].get('type', 'Unknown'),
+                        'message': api_data['error'].get('message', 'Unknown')
+                    }
+
+                # Store raw JSON for details view
+                api_debug['raw_json'] = json.dumps(api_data, indent=2)
+
+            except Exception as e:
+                logger.warning(f"Failed to parse API response data for display: {e}")
+                api_debug['raw_json'] = str(details.get('api_response_data'))
+
+        # Determine back URL from referer
+        back_url = request.referrer if request.referrer and 'pending-ratings' in request.referrer else None
+
+        return render_template('queue_item_detail.html',
+                             data=details,
+                             api_debug=api_debug,
+                             ingress_path=ingress_path,
+                             back_url=back_url,
+                             static_url=static_url)
+
+    except Exception as e:
+        logger.error(f"Error rendering queue item detail page ({item_id}): {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return render_template('error.html',
+                             error=f'Internal server error: {str(e)}',
+                             ingress_path=ingress_path,
+                             static_url=static_url), 500
+
+
 def parse_error_log(
     period_filter: str = 'all',
     level_filter: str = 'all',
