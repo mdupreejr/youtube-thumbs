@@ -17,6 +17,7 @@ from helpers.template_helpers import (
     TableData, TableColumn, TableRow, TableCell,
     create_stats_page_config, format_youtube_link
 )
+from helpers.page_builder import StatsPageBuilder
 
 bp = Blueprint('stats', __name__)
 
@@ -373,11 +374,11 @@ def stats_liked_page() -> str:
 
         result = _db.get_rated_videos('like', page=page, per_page=50)
         
-        # Create page configuration
-        page_config = create_stats_page_config('liked', ingress_path)
-        page_config.title = '👍 Liked Videos'
-        page_config.title_suffix = f"{result['total_count']} total"
-        
+        # Use builder pattern for consistent page creation
+        builder = StatsPageBuilder('liked', ingress_path)
+        builder.set_title('👍 Liked Videos', f"{result['total_count']} total")
+        builder.set_empty_state('👍', 'No liked videos', "You haven't liked any videos yet.")
+
         # Create table data
         columns = [
             TableColumn('song', 'Song', width='50%'),
@@ -409,27 +410,20 @@ def stats_liked_page() -> str:
                 TableCell(last_played, style='color: #64748b; white-space: nowrap;')
             ]
             rows.append(TableRow(cells))
-        
-        table_data = TableData(columns, rows)
-        
-        # Create pagination
-        pagination = {
-            'current_page': result['current_page'],
-            'total_pages': result['total_pages'],
-            'page_numbers': list(range(max(1, page-2), min(result['total_pages']+1, page+3))),
-            'prev_url': f"/stats/liked?page={page-1}" if page > 1 else None,
-            'next_url': f"/stats/liked?page={page+1}" if page < result['total_pages'] else None,
-            'page_url_template': "/stats/liked?page=PAGE_NUM"
-        } if result['total_pages'] > 1 else None
-        
-        # Set empty state
-        page_config.set_empty_state('👍', 'No liked videos', "You haven't liked any videos yet.")
-        
+
+        # Set table and pagination
+        builder.set_table(columns, rows)
+        page_numbers = list(range(max(1, page-2), min(result['total_pages']+1, page+3)))
+        builder.set_pagination(result['current_page'], result['total_pages'], page_numbers)
+
+        # Build and render
+        page_config, table_data, pagination = builder.build()
+
         return render_template(
             'table_viewer.html',
             ingress_path=ingress_path,
             page_config=page_config.to_dict(),
-            table_data=table_data.to_dict() if rows else None,
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
             pagination=pagination
         )
     except Exception as e:
@@ -449,12 +443,12 @@ def stats_disliked_page() -> str:
             page = 1
 
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
-        
-        # Create page configuration
-        page_config = create_stats_page_config('disliked', ingress_path)
-        page_config.title = '👎 Disliked Videos'
-        page_config.title_suffix = f"{result['total_count']} total"
-        
+
+        # Use builder pattern for consistent page creation
+        builder = StatsPageBuilder('disliked', ingress_path)
+        builder.set_title('👎 Disliked Videos', f"{result['total_count']} total")
+        builder.set_empty_state('👎', 'No disliked videos', "You haven't disliked any videos yet.")
+
         # Create table data
         columns = [
             TableColumn('song', 'Song', width='50%'),
@@ -486,27 +480,20 @@ def stats_disliked_page() -> str:
                 TableCell(last_played, style='color: #64748b; white-space: nowrap;')
             ]
             rows.append(TableRow(cells))
-        
-        table_data = TableData(columns, rows)
-        
-        # Create pagination
-        pagination = {
-            'current_page': result['current_page'],
-            'total_pages': result['total_pages'],
-            'page_numbers': list(range(max(1, page-2), min(result['total_pages']+1, page+3))),
-            'prev_url': f"/stats/disliked?page={page-1}" if page > 1 else None,
-            'next_url': f"/stats/disliked?page={page+1}" if page < result['total_pages'] else None,
-            'page_url_template': "/stats/disliked?page=PAGE_NUM"
-        } if result['total_pages'] > 1 else None
-        
-        # Set empty state
-        page_config.set_empty_state('👎', 'No disliked videos', "You haven't disliked any videos yet.")
-        
+
+        # Set table and pagination
+        builder.set_table(columns, rows)
+        page_numbers = list(range(max(1, page-2), min(result['total_pages']+1, page+3)))
+        builder.set_pagination(result['current_page'], result['total_pages'], page_numbers)
+
+        # Build and render
+        page_config, table_data, pagination = builder.build()
+
         return render_template(
             'table_viewer.html',
             ingress_path=ingress_path,
             page_config=page_config.to_dict(),
-            table_data=table_data.to_dict() if rows else None,
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
             pagination=pagination
         )
     except Exception as e:

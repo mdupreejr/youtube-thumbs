@@ -12,6 +12,7 @@ from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.request_helpers import get_real_ip
 from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell, PageConfig
+from helpers.page_builder import DataViewerPageBuilder
 
 bp = Blueprint('data_viewer', __name__)
 
@@ -314,19 +315,11 @@ def data_viewer() -> str:
             _db, selected_columns, sort_by, sort_order, page
         )
 
-        # Create page configuration
-        page_config = PageConfig('Database Viewer', nav_active='data', storage_key='database-viewer')
-        page_config.dropdown_section = 'database'  # For dropdown highlighting
-        page_config.current_url = '/data'
-        page_config.title_suffix = f'{total_count} records'
-        
-        # Set empty state
-        page_config.set_empty_state('📭', 'No data found', 'No records match your criteria.')
-        
-        # Enable all table features
-        page_config.enable_sorting = True
-        page_config.enable_resizing = True
-        page_config.enable_column_toggle = True
+        # Use builder pattern for consistent page creation
+        builder = DataViewerPageBuilder(ingress_path)
+        builder.set_title_suffix(f'{total_count} records')
+        builder.set_empty_state('📭', 'No data found', 'No records match your criteria.')
+        builder.enable_table_features(sorting=True, resizing=True, column_toggle=True)
 
         # Create table columns based on selected columns
         columns = []
@@ -373,28 +366,19 @@ def data_viewer() -> str:
             
             table_rows.append(TableRow(cells))
 
-        # Create table data
-        table_data = TableData(columns, table_rows)
+        # Set table and pagination
+        builder.set_table(columns, table_rows)
+        builder.set_pagination(page, total_pages, sort_by, sort_order, columns_param)
+        builder.set_status_message(f"Showing {len(table_rows)} of {total_count} records • Page {page}/{total_pages}")
 
-        # Create pagination
-        page_numbers = generate_page_numbers(page, total_pages)
-        pagination = {
-            'current_page': page,
-            'total_pages': total_pages,
-            'page_numbers': page_numbers,
-            'prev_url': f"/data?page={page-1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
-            'next_url': f"/data?page={page+1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
-            'page_url_template': f"/data?page=PAGE_NUM&sort={sort_by}&order={sort_order}&columns={columns_param}"
-        } if total_pages > 1 else None
-
-        # Status message
-        status_message = f"Showing {len(table_rows)} of {total_count} records • Page {page}/{total_pages}"
+        # Build and render
+        page_config, table_data, pagination, status_message = builder.build()
 
         return render_template(
             'table_viewer.html',
             ingress_path=ingress_path,
             page_config=page_config.to_dict(),
-            table_data=table_data.to_dict() if table_rows else None,
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
             pagination=pagination,
             status_message=status_message
         )

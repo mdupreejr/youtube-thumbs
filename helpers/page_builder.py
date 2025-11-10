@@ -280,6 +280,205 @@ class LogsPageBuilder:
         )
 
 
+class StatsPageBuilder:
+    """
+    Builder class for stats pages (liked/disliked videos).
+
+    Provides consistent page creation for /stats/liked and /stats/disliked routes.
+    """
+
+    def __init__(self, rating_type: str, ingress_path: str):
+        """
+        Initialize builder for stats page.
+
+        Args:
+            rating_type: 'liked' or 'disliked'
+            ingress_path: The ingress path from the request
+        """
+        from helpers.template_helpers import create_stats_page_config
+
+        self.rating_type = rating_type
+        self.ingress_path = ingress_path
+        self.page_config = create_stats_page_config(rating_type, ingress_path)
+
+        # Initialize optional attributes
+        self.table_data: Optional[TableData] = None
+        self.pagination: Optional[Dict[str, Any]] = None
+        self._table_set = False
+
+    def set_title(self, title: str, suffix: Optional[str] = None) -> 'StatsPageBuilder':
+        """Set custom page title."""
+        self.page_config.title = title
+        if suffix:
+            self.page_config.title_suffix = suffix
+        return self
+
+    def set_empty_state(self, icon: str, title: str, message: str) -> 'StatsPageBuilder':
+        """Set empty state display."""
+        self.page_config.set_empty_state(icon, title, message)
+        return self
+
+    def set_table(self, columns: List[TableColumn], rows: List[TableRow]) -> 'StatsPageBuilder':
+        """Set table data."""
+        self.table_data = TableData(columns, rows)
+        self._table_set = True
+        return self
+
+    def set_pagination(
+        self,
+        current_page: int,
+        total_pages: int,
+        page_numbers: List[int]
+    ) -> 'StatsPageBuilder':
+        """Set pagination configuration."""
+        if total_pages <= 1:
+            self.pagination = None
+            return self
+
+        base_url = f"/stats/{self.rating_type}"
+        self.pagination = {
+            'current_page': current_page,
+            'total_pages': total_pages,
+            'page_numbers': page_numbers,
+            'prev_url': f"{base_url}?page={current_page-1}" if current_page > 1 else None,
+            'next_url': f"{base_url}?page={current_page+1}" if current_page < total_pages else None,
+            'page_url_template': f"{base_url}?page=PAGE_NUM"
+        }
+        return self
+
+    def validate(self) -> None:
+        """Validate all required attributes are set."""
+        if not self.page_config.current_url:
+            raise ValueError("current_url not set")
+
+        if not self._table_set:
+            raise ValueError("Table data not set - call set_table() before build()")
+
+    def build(self) -> tuple:
+        """
+        Build and return the page tuple.
+
+        Returns:
+            Tuple of (page_config, table_data, pagination)
+        """
+        self.validate()
+
+        return (
+            self.page_config,
+            self.table_data,
+            self.pagination
+        )
+
+
+class DataViewerPageBuilder:
+    """
+    Builder class for database viewer page.
+
+    Provides consistent page creation for /data route.
+    """
+
+    def __init__(self, ingress_path: str):
+        """
+        Initialize builder for data viewer page.
+
+        Args:
+            ingress_path: The ingress path from the request
+        """
+        self.ingress_path = ingress_path
+        self.page_config = PageConfig('Database Viewer', nav_active='data', storage_key='database-viewer')
+        self.page_config.dropdown_section = 'database'
+        self.page_config.current_url = '/data'
+
+        # Initialize optional attributes
+        self.table_data: Optional[TableData] = None
+        self.pagination: Optional[Dict[str, Any]] = None
+        self.status_message: str = ''
+        self._table_set = False
+
+    def set_title_suffix(self, suffix: str) -> 'DataViewerPageBuilder':
+        """Set title suffix."""
+        self.page_config.title_suffix = suffix
+        return self
+
+    def set_empty_state(self, icon: str, title: str, message: str) -> 'DataViewerPageBuilder':
+        """Set empty state display."""
+        self.page_config.set_empty_state(icon, title, message)
+        return self
+
+    def enable_table_features(
+        self,
+        sorting: bool = True,
+        resizing: bool = True,
+        column_toggle: bool = True
+    ) -> 'DataViewerPageBuilder':
+        """Enable table features."""
+        self.page_config.enable_sorting = sorting
+        self.page_config.enable_resizing = resizing
+        self.page_config.enable_column_toggle = column_toggle
+        return self
+
+    def set_table(self, columns: List[TableColumn], rows: List[TableRow]) -> 'DataViewerPageBuilder':
+        """Set table data."""
+        self.table_data = TableData(columns, rows)
+        self._table_set = True
+        return self
+
+    def set_pagination(
+        self,
+        current_page: int,
+        total_pages: int,
+        sort_by: str,
+        sort_order: str,
+        columns_param: str
+    ) -> 'DataViewerPageBuilder':
+        """Set pagination configuration."""
+        if total_pages <= 1:
+            self.pagination = None
+            return self
+
+        self.pagination = {
+            'current_page': current_page,
+            'total_pages': total_pages,
+            'page_numbers': list(range(max(1, current_page-2), min(total_pages+1, current_page+3))),
+            'prev_url': f"/data?page={current_page-1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
+            'next_url': f"/data?page={current_page+1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
+            'page_url_template': f"/data?page=PAGE_NUM&sort={sort_by}&order={sort_order}&columns={columns_param}"
+        }
+        return self
+
+    def set_status_message(self, message: str) -> 'DataViewerPageBuilder':
+        """Set status message."""
+        self.status_message = message
+        return self
+
+    def validate(self) -> None:
+        """Validate all required attributes are set."""
+        if not self.page_config.current_url:
+            raise ValueError("current_url not set")
+
+        if not self._table_set:
+            raise ValueError("Table data not set - call set_table() before build()")
+
+        if not self.status_message:
+            raise ValueError("Status message not set - call set_status_message() before build()")
+
+    def build(self) -> tuple:
+        """
+        Build and return the page tuple.
+
+        Returns:
+            Tuple of (page_config, table_data, pagination, status_message)
+        """
+        self.validate()
+
+        return (
+            self.page_config,
+            self.table_data,
+            self.pagination,
+            self.status_message
+        )
+
+
 class ApiCallsPageBuilder:
     """
     Builder class for API calls page (separate route from main logs).
