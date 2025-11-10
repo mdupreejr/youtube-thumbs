@@ -343,7 +343,7 @@ def data_viewer() -> str:
                     elif value == 'dislike':
                         html = format_badge('👎 Dislike', 'error')
                     else:
-                        html = format_badge('➖ None', 'secondary')
+                        html = format_badge('➖ None', 'default')
                     cells.append(TableCell(value or 'None', html))
                 elif col_key == 'yt_url' and value:
                     # Make URL clickable
