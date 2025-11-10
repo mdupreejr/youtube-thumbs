@@ -261,16 +261,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             # SECURITY: Add comprehensive security headers to prevent XSS
             # Strict CSP: only allow scripts/styles from self
+            # Allow frame-ancestors 'self' to enable embedding in our own wrapper page
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
                 "style-src 'self' 'unsafe-inline'; "
                 "img-src 'self' data:; "
                 "connect-src 'self'; "
-                "frame-ancestors 'none'"
+                "frame-ancestors 'self'"
             )
             response.headers['X-Content-Type-Options'] = 'nosniff'
-            response.headers['X-Frame-Options'] = 'DENY'
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['X-XSS-Protection'] = '1; mode=block'
 
             return response

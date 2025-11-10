@@ -388,3 +388,26 @@ def data_viewer() -> str:
         logger.error(traceback.format_exc())
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading database viewer</h1><p>An internal error occurred. Please try again later.</p>", 500
+
+
+@bp.route('/db-admin')
+def database_admin_wrapper():
+    """
+    Database admin wrapper page that embeds sqlite_web with the navbar.
+
+    This provides access to the sqlite_web admin interface while maintaining
+    the YouTube Thumbs navigation context.
+    """
+    try:
+        # Get ingress path from Home Assistant proxy
+        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+
+        return render_template(
+            'database_admin.html',
+            ingress_path=ingress_path
+        )
+
+    except Exception as e:
+        logger.error(f"Error rendering database admin wrapper: {e}")
+        logger.error(traceback.format_exc())
+        return "<h1>Error loading database admin</h1><p>An internal error occurred. Please try again later.</p>", 500
