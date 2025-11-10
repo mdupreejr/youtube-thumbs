@@ -11,7 +11,7 @@ from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.request_helpers import get_real_ip
-from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell, PageConfig
+from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell, PageConfig, format_badge
 from helpers.page_builder import DataViewerPageBuilder
 
 bp = Blueprint('data_viewer', __name__)
@@ -339,11 +339,11 @@ def data_viewer() -> str:
                 # Format specific column types
                 if col_key == 'rating':
                     if value == 'like':
-                        html = '<span style="color: #10b981;">👍 Like</span>'
+                        html = format_badge('👍 Like', 'success')
                     elif value == 'dislike':
-                        html = '<span style="color: #ef4444;">👎 Dislike</span>'
+                        html = format_badge('👎 Dislike', 'error')
                     else:
-                        html = '<span style="color: #94a3b8;">➖ None</span>'
+                        html = format_badge('➖ None', 'secondary')
                     cells.append(TableCell(value or 'None', html))
                 elif col_key == 'yt_url' and value:
                     # Make URL clickable
