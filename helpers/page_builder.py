@@ -49,7 +49,7 @@ class LogsPageBuilder:
         # Create page config with automatic defaults
         self.page_config = PageConfig(
             title=self._default_title(tab_name),
-            nav_active='logs',
+            nav_active=f'logs-{tab_name}',
             storage_key=f'logs-{tab_name}'
         )
 
@@ -245,7 +245,7 @@ class LogsPageBuilder:
             raise ValueError("current_url not set (should be '/logs')")
 
         if not self.page_config.nav_active:
-            raise ValueError("nav_active not set (should be 'logs')")
+            raise ValueError(f"nav_active not set (should be 'logs-{self.tab_name}')")
 
         # Check that table was set
         if not self._table_set:
