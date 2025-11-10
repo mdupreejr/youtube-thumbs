@@ -57,6 +57,11 @@ class SongTracker:
 
     def _tracking_loop(self):
         """Main loop that polls HA and tracks songs."""
+        # Wait one poll interval before first check to avoid duplicate startup fetch
+        # (startup health checks already fetch current media)
+        if self._stop_event.wait(timeout=self.poll_interval):
+            return
+
         while self._running:
             try:
                 self._check_and_track_song()
