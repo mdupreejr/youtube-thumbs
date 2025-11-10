@@ -115,6 +115,16 @@ def stats_page() -> str:
         # Get additional analytics for overview
         retention = _db.get_retention_analysis()
         play_dist = _db.get_play_distribution()
+
+        # Calculate percentage for play distribution
+        total_videos = sum(item['video_count'] for item in play_dist)
+        if total_videos > 0:
+            for item in play_dist:
+                item['percentage'] = (item['video_count'] / total_videos) * 100
+        else:
+            for item in play_dist:
+                item['percentage'] = 0
+
         discovery = _db.get_discovery_stats()
         correlation = _db.get_correlation_stats()
 
