@@ -508,6 +508,7 @@ def index() -> str:
     """
     Server-side rendered main page with connection tests and bulk rating.
     All processing done on server, no client-side JavaScript required.
+    Now uses unified table_viewer.html for bulk rating tab.
     """
     try:
         # Get current tab from query parameter (default: tests)
@@ -518,22 +519,20 @@ def index() -> str:
         # Get ingress path for proper link generation
         ingress_path = g.ingress_path
 
-        # Initialize template data
-        # v4.0.23: Use cached health check results from startup instead of re-running on every page load
-        template_data = {
-            'current_tab': current_tab,
-            'ingress_path': ingress_path,
-            'ha_test': _cached_health_checks['ha_test'],
-            'yt_test': _cached_health_checks['yt_test'],
-            'db_test': _cached_health_checks['db_test'],
-            'songs': [],
-            'current_page': 1,
-            'total_pages': 0,
-            'total_unrated': 0
-        }
-
-        # Add comprehensive metrics for tests tab
+        # Handle tests tab with old template
         if current_tab == 'tests':
+            template_data = {
+                'current_tab': current_tab,
+                'ingress_path': ingress_path,
+                'ha_test': _cached_health_checks['ha_test'],
+                'yt_test': _cached_health_checks['yt_test'],
+                'db_test': _cached_health_checks['db_test'],
+                'songs': [],
+                'current_page': 1,
+                'total_pages': 0,
+                'total_unrated': 0
+            }
+
             try:
                 template_data['metrics'] = {
                     'cache_stats': metrics.get_cache_stats(),
@@ -547,40 +546,96 @@ def index() -> str:
                 logger.warning(f"Failed to gather metrics for tests page: {e}")
                 template_data['metrics'] = None
 
-        # Get unrated songs if on rating tab
-        if current_tab == 'rating':
+            return render_template('index_server.html', **template_data)
+
+        # Handle rating tab with table_viewer.html
+        else:  # current_tab == 'rating'
             page, _ = validate_page_param(request.args)
-            if not page:  # If validation failed, default to 1
+            if not page:
                 page = 1
 
             result = db.get_unrated_videos(page=page, limit=50)
 
-            # Format songs for template
-            formatted_songs = []
+            # Create page configuration
+            from helpers.template_helpers import PageConfig, TableData, TableColumn, TableRow, TableCell
+            from helpers.pagination_helpers import generate_page_numbers
+
+            page_config = PageConfig(
+                title='Bulk Rating',
+                nav_active='rating',
+                storage_key='bulk-rating'
+            )
+
+            # Add main tabs
+            page_config.add_main_tab('Tests', '/?tab=tests', False)
+            page_config.add_main_tab('Bulk Rating', '/?tab=rating', True)
+
+            # Set empty state
+            page_config.set_empty_state('🎉', 'All songs rated!', "You've rated all your songs. Great job!")
+
+            # Create table columns
+            columns = [
+                TableColumn('title', 'Song Title', width='30%'),
+                TableColumn('artist', 'Artist', width='25%'),
+                TableColumn('duration', 'Duration', width='10%'),
+                TableColumn('actions', 'Actions', width='35%')
+            ]
+
+            # Create table rows with action buttons
+            rows = []
             for song in result['songs']:
                 title = get_video_title(song)
                 artist = get_video_artist(song)
 
-                # Format duration if available (prefer yt_duration, fallback to ha_duration)
+                # Format duration
                 duration = song.get('yt_duration') or song.get('ha_duration')
-                if duration:
-                    duration_str = format_duration(int(duration))
-                else:
-                    duration_str = ''
+                duration_str = format_duration(int(duration)) if duration else '—'
 
-                formatted_songs.append({
-                    'id': song.get('yt_video_id'),
-                    'title': title,
-                    'artist': artist,
-                    'duration': duration_str
-                })
+                # Create action buttons HTML with form
+                csrf_token_value = generate_csrf()
+                actions_html = f'''
+                    <form method="POST" action="{ingress_path}/rate-song" style="display: inline-flex; gap: 5px;">
+                        <input type="hidden" name="csrf_token" value="{csrf_token_value}">
+                        <input type="hidden" name="song_id" value="{song.get('yt_video_id')}">
+                        <input type="hidden" name="page" value="{page}">
+                        <button type="submit" name="rating" value="like" class="btn-like" style="padding: 5px 12px; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white; border-radius: 4px; font-size: 14px;">👍 Like</button>
+                        <button type="submit" name="rating" value="dislike" class="btn-dislike" style="padding: 5px 12px; cursor: pointer; border: 1px solid #ef4444; background: #ef4444; color: white; border-radius: 4px; font-size: 14px;">👎 Dislike</button>
+                        <button type="submit" name="rating" value="skip" class="btn-skip" style="padding: 5px 12px; cursor: pointer; border: 1px solid #6b7280; background: #6b7280; color: white; border-radius: 4px; font-size: 14px;">⏭️ Skip</button>
+                    </form>
+                '''
 
-            template_data['songs'] = formatted_songs
-            template_data['current_page'] = result['page']
-            template_data['total_pages'] = result['total_pages']
-            template_data['total_unrated'] = result['total_count']
+                cells = [
+                    TableCell(title),
+                    TableCell(artist or '—'),
+                    TableCell(duration_str),
+                    TableCell('actions', actions_html)
+                ]
+                rows.append(TableRow(cells))
 
-        return render_template('index_server.html', **template_data)
+            table_data = TableData(columns, rows)
+
+            # Build pagination
+            total_pages = result['total_pages']
+            page_numbers = generate_page_numbers(page, total_pages)
+            pagination = {
+                'current_page': page,
+                'total_pages': total_pages,
+                'page_numbers': page_numbers,
+                'prev_url': f'/?tab=rating&page={page-1}' if page > 1 else None,
+                'next_url': f'/?tab=rating&page={page+1}' if page < total_pages else None,
+                'page_url_template': '/?tab=rating&page=PAGE_NUM'
+            }
+
+            status_message = f"{result['total_count']} unrated songs • Page {page} of {total_pages}"
+
+            return render_template(
+                'table_viewer.html',
+                ingress_path=ingress_path,
+                page_config=page_config.to_dict(),
+                table_data=table_data.to_dict() if table_data and table_data.rows else None,
+                pagination=pagination,
+                status_message=status_message
+            )
 
     except Exception as e:
         logger.error(f"Error rendering index page: {e}")
