@@ -11,7 +11,7 @@ from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.request_helpers import get_real_ip
-from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell, PageConfig, format_badge
+from helpers.template_helpers import TableColumn, TableRow, TableCell, format_badge
 from helpers.page_builder import DataViewerPageBuilder
 
 bp = Blueprint('data_viewer', __name__)
