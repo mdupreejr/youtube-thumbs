@@ -19,6 +19,7 @@ from helpers.template_helpers import (
     create_api_calls_page_config,
     format_badge, format_time_ago, truncate_text
 )
+from helpers.page_builder import LogsPageBuilder, ApiCallsPageBuilder
 
 bp = Blueprint('logs', __name__)
 
@@ -66,22 +67,22 @@ def api_calls_log():
         # Get summary statistics
         summary = _db.get_api_call_summary(hours=24)
 
-        # Create page configuration
-        page_config = create_api_calls_page_config(ingress_path)
-        page_config.logs_tab = 'api-calls'  # For navbar highlighting
+        # Use builder pattern for consistent page creation
+        builder = ApiCallsPageBuilder(ingress_path)
 
         # Add filters
-        page_config.add_filter('method', 'API Method', [
+        builder.add_filter('method', 'API Method', [
             {'value': '', 'label': 'All Methods', 'selected': not method_filter},
             {'value': 'search', 'label': 'search', 'selected': method_filter == 'search'},
             {'value': 'videos.list', 'label': 'videos.list', 'selected': method_filter == 'videos.list'}
         ])
-        page_config.add_filter('success', 'Status', [
+        builder.add_filter('success', 'Status', [
             {'value': '', 'label': 'All', 'selected': success_filter_str is None},
             {'value': 'true', 'label': 'Success', 'selected': success_filter_str == 'true'},
             {'value': 'false', 'label': 'Failed', 'selected': success_filter_str == 'false'}
         ])
-        page_config.filter_button_text = 'Apply Filters'
+        builder.set_filter_button_text('Apply Filters')
+        builder.set_empty_state('📊', 'No API calls found', 'No API calls have been logged yet, or none match your filters.')
 
         # Create table data
         columns = [
@@ -138,7 +139,8 @@ def api_calls_log():
             ]
             rows.append(TableRow(cells))
 
-        table_data = TableData(columns, rows)
+        # Set table
+        builder.set_table(columns, rows)
 
         # Create summary statistics
         summary_stats = None
@@ -149,7 +151,7 @@ def api_calls_log():
                 {'label': 'Successful Calls', 'value': summary['summary'].get('successful_calls', 0), 'style': 'color: #16a34a;'},
                 {'label': 'Failed Calls', 'value': summary['summary'].get('failed_calls', 0), 'style': 'color: #dc2626;'}
             ]
-            
+
             breakdowns = []
             if summary.get('by_method'):
                 breakdowns.append({
@@ -164,7 +166,7 @@ def api_calls_log():
                         for method in summary['by_method']
                     ]
                 })
-            
+
             if summary.get('by_operation'):
                 breakdowns.append({
                     'title': '🔧 By Operation Type',
@@ -178,37 +180,39 @@ def api_calls_log():
                         for op in summary['by_operation']
                     ]
                 })
-            
+
             summary_stats = {
                 'main_stats': main_stats,
                 'breakdowns': breakdowns
             }
 
-        # Create pagination
+        builder.set_summary_stats(summary_stats)
+
+        # Set pagination
         total_count = result['total_count']
         total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
         page_numbers = generate_page_numbers(page, total_pages)
-        
-        pagination = {
-            'current_page': page,
-            'total_pages': total_pages,
-            'page_numbers': page_numbers,
-            'prev_url': f"/logs/api-calls?page={page-1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
-            'next_url': f"/logs/api-calls?page={page+1}" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else ""),
-            'page_url_template': f"/logs/api-calls?page=PAGE_NUM" + (f"&method={method_filter}" if method_filter else "") + (f"&success={success_filter_str}" if success_filter_str else "")
-        } if total_pages > 1 else None
 
-        # Set empty state
-        page_config.set_empty_state('📊', 'No API calls found', 'No API calls have been logged yet, or none match your filters.')
+        query_params = {}
+        if method_filter:
+            query_params['method'] = method_filter
+        if success_filter_str:
+            query_params['success'] = success_filter_str
 
-        # Status message
-        status_message = f"Showing {len(result['logs'])} of {total_count} API calls • Page {page}/{total_pages}"
+        builder.set_pagination(page, total_pages, page_numbers, query_params)
+
+        builder.set_status_message(
+            f"Showing {len(result['logs'])} of {total_count} API calls • Page {page}/{total_pages}"
+        )
+
+        # Build and render
+        page_config, table_data, pagination, status_message, summary_stats = builder.build()
 
         return render_template(
             'table_viewer.html',
             ingress_path=ingress_path,
             page_config=page_config.to_dict(),
-            table_data=table_data.to_dict() if rows else None,
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
             summary_stats=summary_stats,
             pagination=pagination,
             status_message=status_message
@@ -1056,34 +1060,31 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str):
     rating_filter = request.args.get('rating', 'all')
     if rating_filter not in ['like', 'dislike', 'all']:
         rating_filter = 'all'
-    
-    # Create page config
-    page_config = PageConfig('Rated Songs', nav_active='logs', storage_key='logs-rated')
-    page_config.logs_tab = 'rated'
-    page_config.current_url = '/logs'
-    
-    # Add period filter
-    page_config.add_filter('period', 'Time Period', [
+
+    # Use builder pattern for consistent page creation
+    builder = LogsPageBuilder('rated', ingress_path)
+
+    # Add filters
+    builder.add_filter('period', 'Time Period', [
         {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
         {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
         {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
         {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
         {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
     ])
-    
-    # Add rating filter
-    page_config.add_filter('rating', 'Rating Type', [
+
+    builder.add_filter('rating', 'Rating Type', [
         {'value': 'all', 'label': 'All', 'selected': rating_filter == 'all'},
         {'value': 'like', 'label': 'Likes', 'selected': rating_filter == 'like'},
         {'value': 'dislike', 'label': 'Dislikes', 'selected': rating_filter == 'dislike'}
     ])
-    
-    # Add hidden fields
-    page_config.add_hidden_field('tab', 'rated')
-    
+
+    builder.add_hidden_field('tab', 'rated')
+    builder.set_empty_state('📭', 'No rated songs found', 'Try adjusting your filters')
+
     # Get data
     result = _db.get_rated_songs(page, 50, period_filter, rating_filter)
-    
+
     # Create table columns
     columns = [
         TableColumn('time', 'Time'),
@@ -1093,17 +1094,17 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str):
         TableColumn('plays', 'Plays'),
         TableColumn('video_id', 'Video ID')
     ]
-    
+
     # Create table rows
     rows = []
     for song in result['songs']:
         title = get_video_title(song)
         artist = get_video_artist(song)
-        
+
         # Format relative time
         timestamp = song.get('date_last_played') or song.get('date_added')
         time_ago = format_relative_time(timestamp) if timestamp else 'unknown'
-        
+
         # Format rating
         rating = song.get('rating')
         if rating == 'like':
@@ -1112,11 +1113,11 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str):
             rating_html = format_badge('👎 Dislike', 'error')
         else:
             rating_html = format_badge('➖ None', 'info')
-        
+
         # Format video link
         video_id = song.get('yt_video_id')
         video_link = f'<a href="https://youtube.com/watch?v={video_id}" target="_blank">{video_id}</a>'
-        
+
         cells = [
             TableCell(time_ago),
             TableCell(title),
@@ -1126,51 +1127,48 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str):
             TableCell(video_id, video_link)
         ]
         rows.append(TableRow(cells))
-    
-    table_data = TableData(columns, rows)
-    
-    # Create pagination
+
+    # Set table data
+    builder.set_table(columns, rows)
+
+    # Set pagination
     total_count = result['total_count']
     total_pages = result['total_pages']
     page_numbers = generate_page_numbers(page, total_pages)
-    
-    pagination = {
-        'current_page': page,
-        'total_pages': total_pages,
-        'page_numbers': page_numbers,
-        'prev_url': f"/logs?tab=rated&page={page-1}&period={period_filter}&rating={rating_filter}",
-        'next_url': f"/logs?tab=rated&page={page+1}&period={period_filter}&rating={rating_filter}",
-        'page_url_template': f"/logs?tab=rated&page=PAGE_NUM&period={period_filter}&rating={rating_filter}"
-    } if total_pages > 1 else None
-    
-    # Set empty state
-    page_config.set_empty_state('📭', 'No rated songs found', 'Try adjusting your filters')
-    
-    # Status message
-    status_message = f"Showing {len(result['songs'])} of {total_count} rated songs • Page {page}/{total_pages}"
-    
-    return page_config, table_data, pagination, status_message
+
+    builder.set_pagination(
+        page,
+        total_pages,
+        page_numbers,
+        '/logs',
+        {'tab': 'rated', 'period': period_filter, 'rating': rating_filter}
+    )
+
+    # Set status message
+    builder.set_status_message(
+        f"Showing {len(result['songs'])} of {total_count} rated songs • Page {page}/{total_pages}"
+    )
+
+    return builder.build()
 
 
 def _create_matches_page(page: int, period_filter: str, ingress_path: str):
     """Create page config and table data for matches."""
-    # Create page config
-    page_config = PageConfig('Matches', nav_active='logs', storage_key='logs-matches')
-    page_config.logs_tab = 'matches'
-    page_config.current_url = '/logs'
-    
+    # Use builder pattern for consistent page creation
+    builder = LogsPageBuilder('matches', ingress_path)
+
     # Add period filter
-    page_config.add_filter('period', 'Time Period', [
+    builder.add_filter('period', 'Time Period', [
         {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
         {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
         {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
         {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
         {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
     ])
-    
-    # Add hidden fields
-    page_config.add_hidden_field('tab', 'matches')
-    
+
+    builder.add_hidden_field('tab', 'matches')
+    builder.set_empty_state('🔍', 'No matches found', 'Try adjusting your filters')
+
     # Get data
     result = _db.get_match_history(page, 50, period_filter)
     
@@ -1241,30 +1239,27 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str):
             TableCell(match.get('play_count', 0), style='text-align: center;')
         ]
         rows.append(TableRow(cells))
-    
-    table_data = TableData(columns, rows)
-    
-    # Create pagination
+
+    # Set table and pagination
+    builder.set_table(columns, rows)
+
     total_count = result['total_count']
     total_pages = result['total_pages']
     page_numbers = generate_page_numbers(page, total_pages)
-    
-    pagination = {
-        'current_page': page,
-        'total_pages': total_pages,
-        'page_numbers': page_numbers,
-        'prev_url': f"/logs?tab=matches&page={page-1}&period={period_filter}",
-        'next_url': f"/logs?tab=matches&page={page+1}&period={period_filter}",
-        'page_url_template': f"/logs?tab=matches&page=PAGE_NUM&period={period_filter}"
-    } if total_pages > 1 else None
-    
-    # Set empty state
-    page_config.set_empty_state('🔍', 'No matches found', 'Try adjusting your filters')
-    
-    # Status message
-    status_message = f"Showing {len(result['matches'])} of {total_count} matches • Page {page}/{total_pages}"
-    
-    return page_config, table_data, pagination, status_message
+
+    builder.set_pagination(
+        page,
+        total_pages,
+        page_numbers,
+        '/logs',
+        {'tab': 'matches', 'period': period_filter}
+    )
+
+    builder.set_status_message(
+        f"Showing {len(result['matches'])} of {total_count} matches • Page {page}/{total_pages}"
+    )
+
+    return builder.build()
 
 
 def _create_errors_page(page: int, period_filter: str, ingress_path: str):
@@ -1273,31 +1268,29 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str):
     level_filter = request.args.get('level', 'all')
     if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
         level_filter = 'all'
-    
-    # Create page config
-    page_config = PageConfig('Errors', nav_active='logs', storage_key='logs-errors')
-    page_config.logs_tab = 'errors'
-    page_config.current_url = '/logs'
-    
+
+    # Use builder pattern for consistent page creation
+    builder = LogsPageBuilder('errors', ingress_path)
+
     # Add filters
-    page_config.add_filter('period', 'Time Period', [
+    builder.add_filter('period', 'Time Period', [
         {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
         {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
         {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
         {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
         {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
     ])
-    
-    page_config.add_filter('level', 'Level', [
+
+    builder.add_filter('level', 'Level', [
         {'value': 'all', 'label': 'All', 'selected': level_filter == 'all'},
         {'value': 'ERROR', 'label': 'ERROR', 'selected': level_filter == 'ERROR'},
         {'value': 'WARNING', 'label': 'WARNING', 'selected': level_filter == 'WARNING'},
         {'value': 'INFO', 'label': 'INFO', 'selected': level_filter == 'INFO'}
     ])
-    
-    # Add hidden fields
-    page_config.add_hidden_field('tab', 'errors')
-    
+
+    builder.add_hidden_field('tab', 'errors')
+    builder.set_empty_state('✓', 'No errors found', 'System is running smoothly!')
+
     # Get data
     result = parse_error_log(period_filter, level_filter, page, 50)
     
@@ -1340,36 +1333,33 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str):
             TableCell(message, message_html)
         ]
         rows.append(TableRow(cells))
-    
-    table_data = TableData(columns, rows)
-    
-    # Create pagination
+
+    # Set table and pagination
+    builder.set_table(columns, rows)
+
     total_count = result.get('total_count', 0)
     total_pages = result.get('total_pages', 0)
     page_numbers = generate_page_numbers(page, total_pages)
-    
-    pagination = {
-        'current_page': page,
-        'total_pages': total_pages,
-        'page_numbers': page_numbers,
-        'prev_url': f"/logs?tab=errors&page={page-1}&period={period_filter}&level={level_filter}",
-        'next_url': f"/logs?tab=errors&page={page+1}&period={period_filter}&level={level_filter}",
-        'page_url_template': f"/logs?tab=errors&page=PAGE_NUM&period={period_filter}&level={level_filter}"
-    } if total_pages > 1 else None
-    
-    # Set empty state
-    page_config.set_empty_state('✓', 'No errors found', 'System is running smoothly!')
-    
-    # Status message
-    status_message = f"Showing {len(result.get('errors', []))} of {total_count} errors • Page {page}/{total_pages}"
-    
+
+    builder.set_pagination(
+        page,
+        total_pages,
+        page_numbers,
+        '/logs',
+        {'tab': 'errors', 'period': period_filter, 'level': level_filter}
+    )
+
+    builder.set_status_message(
+        f"Showing {len(result.get('errors', []))} of {total_count} errors • Page {page}/{total_pages}"
+    )
+
     # Add custom JS for message expansion
-    page_config.custom_js = '''
+    builder.set_custom_js('''
         function showFullMessage(btn) {
             const container = btn.parentNode;
             const shortMsg = container.firstChild;
             const fullMsg = container.lastChild;
-            
+
             if (fullMsg.style.display === 'none') {
                 shortMsg.style.display = 'none';
                 fullMsg.style.display = 'block';
@@ -1380,21 +1370,20 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str):
                 btn.textContent = 'Show more';
             }
         }
-    '''
-    
-    return page_config, table_data, pagination, status_message
+    ''')
+
+    return builder.build()
 
 
 def _create_recent_page(ingress_path: str):
     """Create page config and table data for recent videos."""
-    # Create page config
-    page_config = PageConfig('Recent Videos', nav_active='logs', storage_key='logs-recent')
-    page_config.logs_tab = 'recent'
-    page_config.current_url = '/logs'
+    # Use builder pattern for consistent page creation
+    builder = LogsPageBuilder('recent', ingress_path)
+    builder.set_empty_state('📭', 'No Videos Yet', 'No videos have been added to the database yet.')
 
     # Get data
     videos = _db.get_recently_added(limit=25)
-    
+
     # Create table columns
     columns = [
         TableColumn('date_added', 'Date Added', width='15%'),
@@ -1405,14 +1394,14 @@ def _create_recent_page(ingress_path: str):
         TableColumn('plays', 'Plays', width='10%'),
         TableColumn('link', 'Link', width='5%')
     ]
-    
+
     # Create table rows
     rows = []
     for video in videos:
         # Format relative time for date_added
         date_added = video.get('date_added')
         time_ago = format_relative_time(date_added) if date_added else 'unknown'
-        
+
         # Format rating
         rating = video.get('rating')
         if rating == 'like':
@@ -1421,14 +1410,14 @@ def _create_recent_page(ingress_path: str):
             rating_html = '<span style="color: #ef4444;">👎 Dislike</span>'
         else:
             rating_html = '<span style="color: #94a3b8;">- None</span>'
-        
+
         # Format link
         yt_url = video.get('yt_url')
         link_html = '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: none; font-size: 1.2em;" title="Watch on YouTube">🔗</a>'.format(yt_url) if yt_url else '-'
-        
+
         cells = [
             TableCell(time_ago, f'<span title="{date_added or "Unknown"}">{time_ago}</span>'),
-            TableCell(video.get('ha_title') or video.get('yt_title') or 'Unknown', 
+            TableCell(video.get('ha_title') or video.get('yt_title') or 'Unknown',
                      f'<span style="font-weight: 500;">{video.get("ha_title") or video.get("yt_title") or "Unknown"}</span>'),
             TableCell(video.get('ha_artist') or '-'),
             TableCell(video.get('yt_channel') or '-'),
@@ -1437,29 +1426,24 @@ def _create_recent_page(ingress_path: str):
             TableCell('Link' if yt_url else '-', link_html, style='text-align: center;')
         ]
         rows.append(TableRow(cells))
-    
-    table_data = TableData(columns, rows)
-    
-    # Set empty state
-    page_config.set_empty_state('📭', 'No Videos Yet', 'No videos have been added to the database yet.')
-    
-    # Status message
-    status_message = f"Showing {len(videos)} recently added videos"
-    
-    return page_config, table_data, None, status_message
+
+    # Set table and status
+    builder.set_table(columns, rows)
+    builder.set_status_message(f"Showing {len(videos)} recently added videos")
+
+    return builder.build()
 
 
 def _create_queue_page(ingress_path: str):
     """Create page config and table data for queue statistics."""
-    # Create page config
-    page_config = PageConfig('Queue Statistics', nav_active='logs', storage_key='logs-queue')
-    page_config.logs_tab = 'queue'
-    page_config.current_url = '/logs'
+    # Use builder pattern for consistent page creation
+    builder = LogsPageBuilder('queue', ingress_path)
+    builder.set_empty_state('⚙️', 'No Queue Activity', 'No rating queue activity found.')
 
     # Get queue statistics
     stats = _db.get_queue_statistics()
     activity = _db.get_recent_queue_activity(limit=30)
-    
+
     # For now, create a simplified view of recent ratings
     columns = [
         TableColumn('requested', 'Requested'),
@@ -1470,19 +1454,19 @@ def _create_queue_page(ingress_path: str):
         TableColumn('last_attempt', 'Last Attempt'),
         TableColumn('error', 'Error')
     ]
-    
+
     rows = []
     for rating in activity['recent_ratings']:
         if rating.get('requested_at'):
             requested_relative = format_relative_time(parse_timestamp(rating['requested_at']))
         else:
             requested_relative = 'Unknown'
-        
+
         if rating.get('last_attempt'):
             last_attempt_relative = format_relative_time(parse_timestamp(rating['last_attempt']))
         else:
             last_attempt_relative = 'Never'
-        
+
         # Format status badge
         status = rating.get('status', 'pending')
         if status == 'success':
@@ -1491,11 +1475,11 @@ def _create_queue_page(ingress_path: str):
             status_html = format_badge('✗ Failed', 'error')
         else:
             status_html = format_badge('⏳ Pending', 'warning')
-        
+
         # Format rating
         rating_type = rating.get('requested_rating')
         rating_emoji = '👍' if rating_type == 'like' else '👎' if rating_type == 'dislike' else '?'
-        
+
         cells = [
             TableCell(requested_relative),
             TableCell(rating.get('ha_title', 'Unknown')),
@@ -1506,13 +1490,11 @@ def _create_queue_page(ingress_path: str):
             TableCell(rating.get('error') or '-')
         ]
         rows.append(TableRow(cells))
-    
-    table_data = TableData(columns, rows)
-    
-    # Set empty state
-    page_config.set_empty_state('⚙️', 'No Queue Activity', 'No rating queue activity found.')
-    
-    # Status message
-    status_message = f"Queue: {stats['rating_queue']['pending']} pending, {stats['rating_queue']['processed_24h']} processed (24h)"
-    
-    return page_config, table_data, None, status_message
+
+    # Set table and status
+    builder.set_table(columns, rows)
+    builder.set_status_message(
+        f"Queue: {stats['rating_queue']['pending']} pending, {stats['rating_queue']['processed_24h']} processed (24h)"
+    )
+
+    return builder.build()
