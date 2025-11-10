@@ -117,11 +117,82 @@ git push
 
 ## Code Style and Conventions
 
+### General Guidelines
 - Follow existing code style and patterns in the repository
 - Use descriptive variable and function names
 - Add comments for complex logic
 - Validate JSON files after editing
 - Check Python syntax before committing
+
+### Helper Functions (v4.5.0+)
+
+**IMPORTANT**: Use existing helper functions instead of writing duplicate code.
+
+#### Formatting Helpers (`helpers/template_helpers.py`)
+
+**Always use these helpers for consistent formatting:**
+
+1. **Song Display Formatting**
+   ```python
+   from helpers.template_helpers import format_song_display
+
+   # ✅ DO THIS:
+   html = format_song_display(title, artist)
+
+   # ❌ DON'T DO THIS:
+   html = f'<strong>{title}</strong><br><span style="font-size: 0.85em; color: #64748b;">{artist}</span>'
+   ```
+
+2. **Status Badges**
+   ```python
+   from helpers.template_helpers import format_status_badge
+
+   # ✅ DO THIS:
+   status_html = format_status_badge(success_bool)
+
+   # ❌ DON'T DO THIS:
+   status_html = format_badge('✓ Success', 'success') if success else format_badge('✗ Failed', 'error')
+   ```
+
+3. **Other Badges**
+   ```python
+   from helpers.template_helpers import format_badge
+
+   badge = format_badge('⏳ Pending', 'warning')
+   badge = format_badge('🔍 search', 'info')
+   ```
+
+#### Ingress Path (v4.5.0+)
+
+**CRITICAL**: Always use `g.ingress_path` instead of retrieving from request.
+
+```python
+from flask import g
+
+# ✅ DO THIS:
+ingress_path = g.ingress_path
+
+# ❌ DON'T DO THIS:
+ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+```
+
+**Why?** The `before_request` hook in `app.py` centralizes this. Using the old pattern creates duplication.
+
+### Code Organization
+
+**See `CODE_ORGANIZATION.md` for detailed documentation on:**
+- Project structure
+- Helper functions and utilities
+- Template system
+- Database operations
+- Common patterns
+
+**Key Principles:**
+1. Use builder pattern for page construction (`helpers/page_builder.py`)
+2. Use specialized helpers for formatting (`helpers/template_helpers.py`)
+3. Use `g.ingress_path` for ingress path retrieval
+4. Use `table_viewer.html` template for table-based pages
+5. Modularize database operations by domain
 
 ## Testing Guidelines
 
