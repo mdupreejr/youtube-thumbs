@@ -21,6 +21,12 @@ from helpers.template_helpers import (
     format_song_display, format_status_badge
 )
 from helpers.page_builder import LogsPageBuilder, ApiCallsPageBuilder
+from routes.logs_routes_queue_helpers import (
+    _create_queue_pending_tab,
+    _create_queue_history_tab,
+    _create_queue_errors_tab,
+    _create_queue_statistics_tab
+)
 
 bp = Blueprint('logs', __name__)
 
@@ -229,87 +235,41 @@ def pending_ratings_log():
     """
     Display comprehensive queue viewer with multiple tabs.
     Architecture spec: Pending, History, Errors, Statistics tabs.
+    Now uses the unified table_viewer.html template.
     """
-    ingress_path = g.ingress_path
-    current_tab = request.args.get('tab', 'pending')
-
     try:
-        # Helper function to format queue items
-        def format_queue_item(item):
-            payload = item.get('payload', {})
+        current_tab = request.args.get('tab', 'pending')
+        if current_tab not in ['pending', 'history', 'errors', 'statistics']:
+            current_tab = 'pending'
 
-            if item['type'] == 'search':
-                ha_media = payload
-                callback_rating = ha_media.get('callback_rating')
+        ingress_path = g.ingress_path
 
-                return {
-                    'type': 'search',
-                    'id': str(item['id']),
-                    'ha_title': ha_media.get('ha_title', 'Unknown'),
-                    'ha_artist': ha_media.get('ha_artist'),
-                    'operation': 'Search for YouTube match',
-                    'callback': f"then rate {callback_rating}" if callback_rating else None,
-                    'requested_at': format_absolute_timestamp(item.get('requested_at')),
-                    'completed_at': format_absolute_timestamp(item.get('completed_at')),
-                    'last_attempt': format_absolute_timestamp(item.get('last_attempt')),
-                    'attempts': item.get('attempts', 0),
-                    'last_error': item.get('last_error'),
-                    'status': item.get('status'),
-                    'yt_video_id': None
-                }
-
-            elif item['type'] == 'rating':
-                yt_video_id = payload.get('yt_video_id')
-                rating = payload.get('rating')
-                video = _db.get_video(yt_video_id) if yt_video_id else None
-
-                return {
-                    'type': 'rating',
-                    'id': str(item['id']),
-                    'ha_title': video.get('ha_title', 'Unknown') if video else 'Unknown',
-                    'ha_artist': video.get('ha_artist') if video else None,
-                    'operation': f"Rate as {rating}",
-                    'callback': None,
-                    'requested_at': format_absolute_timestamp(item.get('requested_at')),
-                    'completed_at': format_absolute_timestamp(item.get('completed_at')),
-                    'last_attempt': format_absolute_timestamp(item.get('last_attempt')),
-                    'attempts': item.get('attempts', 0),
-                    'last_error': item.get('last_error'),
-                    'status': item.get('status'),
-                    'yt_video_id': yt_video_id
-                }
-            return None
-
-        # Fetch data based on tab
-        data = {}
-
+        # Create page configuration based on tab
         if current_tab == 'pending':
-            # Get pending items
-            pending_items = _db.list_pending_queue_items(limit=1000)
-            data['queue_items'] = [format_queue_item(item) for item in pending_items if format_queue_item(item)]
-            data['queue_items'].sort(key=lambda x: x.get('requested_at') or '', reverse=True)
-
+            page_config, table_data, status_message = _create_queue_pending_tab(ingress_path, current_tab, _db)
         elif current_tab == 'history':
-            # Get completed and failed items
-            history_items = _db.list_queue_history(limit=200)
-            data['history_items'] = [format_queue_item(item) for item in history_items if format_queue_item(item)]
-
+            page_config, table_data, status_message = _create_queue_history_tab(ingress_path, current_tab, _db)
         elif current_tab == 'errors':
-            # Get failed items
-            error_items = _db.list_queue_failed(limit=200)
-            data['error_items'] = [format_queue_item(item) for item in error_items if format_queue_item(item)]
-
+            page_config, table_data, status_message = _create_queue_errors_tab(ingress_path, current_tab, _db)
         elif current_tab == 'statistics':
-            # Get queue statistics
-            data['statistics'] = _db.get_queue_statistics()
-            data['recent_activity'] = _db.get_recent_queue_activity(limit=50)
-            data['performance'] = _db.get_queue_performance_metrics(hours=24)
+            page_config, table_data, status_message, summary_stats = _create_queue_statistics_tab(ingress_path, current_tab, _db)
+            return render_template(
+                'table_viewer.html',
+                ingress_path=ingress_path,
+                page_config=page_config.to_dict(),
+                table_data=None,
+                summary_stats=summary_stats,
+                status_message=status_message
+            )
+        else:
+            page_config, table_data, status_message = _create_queue_pending_tab(ingress_path, current_tab, _db)
 
         return render_template(
-            'logs_queue.html',
+            'table_viewer.html',
             ingress_path=ingress_path,
-            current_tab=current_tab,
-            **data
+            page_config=page_config.to_dict(),
+            table_data=table_data.to_dict() if table_data and table_data.rows else None,
+            status_message=status_message
         )
 
     except Exception as e:
