@@ -16,23 +16,13 @@
                     <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats">Stats</a>
                     <a href="{{ ingress_path }}/data">Database</a>
-
-                    <!-- Logs dropdown menu -->
-                    <div class="nav-dropdown">
-                        <div class="nav-dropdown-btn">
-                            Logs <span class="dropdown-arrow">▼</span>
-                        </div>
-                        <div class="nav-dropdown-content">
-                            <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
-                            <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
-                            <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
-                            <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
-                            <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
-                        </div>
-                    </div>
-
+                    <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                    <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                    <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                    <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                    <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
                     <a href="{{ ingress_path }}/logs/pending-ratings" class="active">Queue</a>
-                    <a href="{{ ingress_path }}/database">DB Admin</a>
+                    <a href="{{ ingress_path }}/db-admin">DB Admin</a>
                 </div>
             </div>
         </header>
