@@ -17,7 +17,7 @@
                     <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats" class="{{ 'active' if page_config.nav_active == 'stats' else '' }}">Stats</a>
                     <a href="{{ ingress_path }}/data" class="{{ 'active' if page_config.nav_active == 'data' else '' }}">Database</a>
-                    
+
                     <!-- Logs dropdown menu -->
                     <div class="nav-dropdown">
                         <div class="nav-dropdown-btn {{ 'active' if page_config.nav_active == 'logs' else '' }}">
@@ -29,10 +29,10 @@
                             <a href="{{ ingress_path }}/logs?tab=recent" class="{{ 'active' if page_config.logs_tab == 'recent' else '' }}">Recent</a>
                             <a href="{{ ingress_path }}/logs?tab=errors" class="{{ 'active' if page_config.logs_tab == 'errors' else '' }}">Errors</a>
                             <a href="{{ ingress_path }}/logs/api-calls" class="{{ 'active' if page_config.logs_tab == 'api-calls' else '' }}">API Calls</a>
-                            <a href="{{ ingress_path }}/logs/pending-ratings" class="{{ 'active' if page_config.logs_tab == 'queue' else '' }}">Queue</a>
                         </div>
                     </div>
-                    
+
+                    <a href="{{ ingress_path }}/logs/pending-ratings" class="{{ 'active' if page_config.nav_active == 'queue' else '' }}">Queue</a>
                     <a href="{{ ingress_path }}/database">DB Admin</a>
                 </div>
             </div>

@@ -1005,7 +1005,7 @@ def logs_viewer():
     try:
         # Get query parameters
         current_tab = request.args.get('tab', 'rated')
-        if current_tab not in ['rated', 'matches', 'errors', 'recent', 'queue']:
+        if current_tab not in ['rated', 'matches', 'errors', 'recent']:
             current_tab = 'rated'
 
         page, _ = validate_page_param(request.args)
@@ -1028,8 +1028,6 @@ def logs_viewer():
             page_config, table_data, pagination, status_message = _create_errors_page(page, period_filter, ingress_path)
         elif current_tab == 'recent':
             page_config, table_data, pagination, status_message = _create_recent_page(ingress_path)
-        elif current_tab == 'queue':
-            page_config, table_data, pagination, status_message = _create_queue_page(ingress_path)
         else:
             page_config, table_data, pagination, status_message = _create_rated_songs_page(page, period_filter, ingress_path)
 

@@ -332,37 +332,29 @@ def create_logs_page_config(current_tab: str, ingress_path: str) -> PageConfig:
     """Create page configuration for logs pages."""
     config = PageConfig('Logs', 'logs', f'logs-{current_tab}')
     config.current_url = f'{ingress_path}/logs'
-    
+
     # Add main navigation tabs
     config.add_main_tab('Rated Songs', f'/logs?tab=rated', current_tab == 'rated')
     config.add_main_tab('Matches', f'/logs?tab=matches', current_tab == 'matches')
     config.add_main_tab('Recent', f'/logs?tab=recent', current_tab == 'recent')
     config.add_main_tab('Errors', f'/logs?tab=errors', current_tab == 'errors')
     config.add_main_tab('API Calls', f'/logs/api-calls', current_tab == 'api-calls')
-    config.add_main_tab('Queue', f'/logs/pending-ratings', current_tab == 'queue')
-    
+
     return config
 
 
 def create_queue_page_config(current_tab: str, ingress_path: str) -> PageConfig:
     """Create page configuration for queue pages."""
-    config = PageConfig('📊 Queue Monitor', 'logs', f'queue-{current_tab}')
+    config = PageConfig('📊 Queue Monitor', 'queue', f'queue-{current_tab}')
     config.current_url = f'{ingress_path}/logs/pending-ratings'
-    
-    # Add main navigation tabs (same as logs)
-    config.add_main_tab('Rated Songs', f'/logs?tab=rated', False)
-    config.add_main_tab('Matches', f'/logs?tab=matches', False)
-    config.add_main_tab('Recent', f'/logs?tab=recent', False)
-    config.add_main_tab('Errors', f'/logs?tab=errors', False)
-    config.add_main_tab('API Calls', f'/logs/api-calls', False)
-    config.add_main_tab('Queue', f'/logs/pending-ratings', True)
-    
-    # Add sub-navigation tabs
+
+    # Queue is now a top-level nav item, so no logs main tabs needed
+    # Just add the queue sub-tabs
     config.add_sub_tab('Pending', f'/logs/pending-ratings?tab=pending', current_tab == 'pending')
     config.add_sub_tab('History', f'/logs/pending-ratings?tab=history', current_tab == 'history')
     config.add_sub_tab('Errors', f'/logs/pending-ratings?tab=errors', current_tab == 'errors')
     config.add_sub_tab('Statistics', f'/logs/pending-ratings?tab=statistics', current_tab == 'statistics')
-    
+
     return config
 
 
@@ -370,15 +362,14 @@ def create_api_calls_page_config(ingress_path: str) -> PageConfig:
     """Create page configuration for API calls page."""
     config = PageConfig('📊 YouTube API Call Logs', 'logs', 'api-calls')
     config.current_url = f'{ingress_path}/logs/api-calls'
-    
-    # Add main navigation tabs (same as logs)
+
+    # Add main navigation tabs (Queue removed - it's now a top-level nav item)
     config.add_main_tab('Rated Songs', f'/logs?tab=rated', False)
     config.add_main_tab('Matches', f'/logs?tab=matches', False)
     config.add_main_tab('Recent', f'/logs?tab=recent', False)
     config.add_main_tab('Errors', f'/logs?tab=errors', False)
     config.add_main_tab('API Calls', f'/logs/api-calls', True)
-    config.add_main_tab('Queue', f'/logs/pending-ratings', False)
-    
+
     return config
 
 

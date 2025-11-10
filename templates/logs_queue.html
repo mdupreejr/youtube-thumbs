@@ -16,35 +16,28 @@
                     <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats">Stats</a>
                     <a href="{{ ingress_path }}/data">Database</a>
-                    <a href="{{ ingress_path }}/logs" class="active">Logs</a>
+
+                    <!-- Logs dropdown menu -->
+                    <div class="nav-dropdown">
+                        <div class="nav-dropdown-btn">
+                            Logs <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="nav-dropdown-content">
+                            <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                            <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                            <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                            <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                            <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                        </div>
+                    </div>
+
+                    <a href="{{ ingress_path }}/logs/pending-ratings" class="active">Queue</a>
                     <a href="{{ ingress_path }}/database">DB Admin</a>
                 </div>
             </div>
         </header>
 
         <div class="card">
-            <!-- Main Logs Tab Navigation (consistent with logs_viewer.html) -->
-            <div class="tab-navigation">
-                <a href="{{ ingress_path }}/logs?tab=rated" class="tab-button">
-                    Rated Songs
-                </a>
-                <a href="{{ ingress_path }}/logs?tab=matches" class="tab-button">
-                    Matches
-                </a>
-                <a href="{{ ingress_path }}/logs?tab=recent" class="tab-button">
-                    Recent
-                </a>
-                <a href="{{ ingress_path }}/logs?tab=errors" class="tab-button">
-                    Errors
-                </a>
-                <a href="{{ ingress_path }}/logs/api-calls" class="tab-button">
-                    API Calls
-                </a>
-                <a href="{{ ingress_path }}/logs/pending-ratings" class="tab-button active">
-                    Queue
-                </a>
-            </div>
-
             <h2>📊 Queue Monitor</h2>
 
             <!-- Queue Sub-Tabs -->
