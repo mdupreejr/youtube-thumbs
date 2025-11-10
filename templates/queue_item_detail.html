@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Thumbs - Queue Item Details</title>
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
+    <style>
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .detail-value {
+            color: #1e293b;
+        }
+
+        .error-box {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .info-box {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>YouTube Thumbs Rating</h1>
+                <div class="nav-links">
+                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
+                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
+                    <a href="{{ ingress_path }}/stats">Stats</a>
+                    <a href="{{ ingress_path }}/data">Database</a>
+                    <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
+                    <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
+                    <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
+                    <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
+                    <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                    <a href="{{ ingress_path }}/logs/pending-ratings" class="active">Queue</a>
+                    <a href="{{ ingress_path }}/db-admin">DB Admin</a>
+                </div>
+            </div>
+        </header>
+
+        <div class="card">
+            <a href="{{ back_url or (ingress_path + '/logs/pending-ratings') }}" class="back-link">← Back to Queue</a>
+
+            <h2>
+                {% if data.type == 'search' %}
+                🔍 Search Queue Item Details
+                {% else %}
+                ⭐ Rating Queue Item Details
+                {% endif %}
+            </h2>
+
+            <div class="detail-grid">
+                {% if data.type == 'rating' %}
+                    <div class="detail-label">Video ID:</div>
+                    <div class="detail-value">
+                        <a href="https://youtube.com/watch?v={{ data.yt_video_id }}" target="_blank" rel="noopener noreferrer">
+                            {{ data.yt_video_id }}
+                        </a>
+                    </div>
+
+                    <div class="detail-label">Home Assistant:</div>
+                    <div class="detail-value">
+                        <strong>{{ data.ha_title }}</strong>
+                        {% if data.ha_artist %}<br>{{ data.ha_artist }}{% endif %}
+                    </div>
+
+                    {% if data.yt_title %}
+                    <div class="detail-label">YouTube:</div>
+                    <div class="detail-value">
+                        <strong>{{ data.yt_title }}</strong>
+                        {% if data.yt_channel %}<br>{{ data.yt_channel }}{% endif %}
+                        {% if data.yt_duration %}<br><small>{{ data.yt_duration }}s duration</small>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="detail-label">Operation:</div>
+                    <div class="detail-value">{{ data.operation }}</div>
+
+                    <div class="detail-label">Current Rating:</div>
+                    <div class="detail-value">{{ data.current_rating or 'none' }}</div>
+
+                    <div class="detail-label">Queued At:</div>
+                    <div class="detail-value">{{ data.requested_at or 'Unknown' }}</div>
+
+                    <div class="detail-label">Attempts:</div>
+                    <div class="detail-value">{{ data.attempts or 0 }}</div>
+
+                    {% if data.last_attempt %}
+                    <div class="detail-label">Last Attempt:</div>
+                    <div class="detail-value">{{ data.last_attempt }}</div>
+                    {% endif %}
+
+                    <div class="detail-label">Play Count:</div>
+                    <div class="detail-value">{{ data.play_count or 0 }}</div>
+
+                    {% if data.ha_duration %}
+                    <div class="detail-label">HA Duration:</div>
+                    <div class="detail-value">{{ data.ha_duration }}s</div>
+                    {% endif %}
+
+                    {% if data.yt_duration %}
+                    <div class="detail-label">YouTube Duration:</div>
+                    <div class="detail-value">{{ data.yt_duration }}s</div>
+                    {% endif %}
+
+                {% elif data.type == 'search' %}
+                    <div class="detail-label">Search ID:</div>
+                    <div class="detail-value">{{ data.queue_id }}</div>
+
+                    <div class="detail-label">Home Assistant:</div>
+                    <div class="detail-value">
+                        <strong>{{ data.ha_title }}</strong>
+                        {% if data.ha_artist %}<br>{{ data.ha_artist }}{% endif %}
+                        {% if data.ha_album %}<br><em>{{ data.ha_album }}</em>{% endif %}
+                    </div>
+
+                    {% if data.ha_duration %}
+                    <div class="detail-label">HA Duration:</div>
+                    <div class="detail-value">{{ data.ha_duration }}s</div>
+                    {% endif %}
+
+                    {% if data.yt_duration %}
+                    <div class="detail-label">YouTube Duration:</div>
+                    <div class="detail-value">{{ data.yt_duration }}s</div>
+                    {% endif %}
+
+                    <div class="detail-label">App:</div>
+                    <div class="detail-value">{{ data.ha_app_name or 'Unknown' }}</div>
+
+                    <div class="detail-label">Operation:</div>
+                    <div class="detail-value">{{ data.operation }}</div>
+
+                    {% if data.callback_rating %}
+                    <div class="detail-label">Then:</div>
+                    <div class="detail-value">Rate as {{ data.callback_rating }}</div>
+                    {% endif %}
+
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value">{{ data.status or 'pending' }}</div>
+
+                    <div class="detail-label">Queued At:</div>
+                    <div class="detail-value">{{ data.requested_at or 'Unknown' }}</div>
+
+                    <div class="detail-label">Attempts:</div>
+                    <div class="detail-value">{{ data.attempts or 0 }}</div>
+
+                    {% if data.last_attempt %}
+                    <div class="detail-label">Last Attempt:</div>
+                    <div class="detail-value">{{ data.last_attempt }}</div>
+                    {% endif %}
+
+                    {% if data.yt_video_id %}
+                    <div class="detail-label">Found Video:</div>
+                    <div class="detail-value">
+                        <a href="https://youtube.com/watch?v={{ data.yt_video_id }}" target="_blank" rel="noopener noreferrer">
+                            {{ data.yt_video_id }}
+                        </a>
+                        {% if data.yt_title %}<br><strong>{{ data.yt_title }}</strong>{% endif %}
+                        {% if data.yt_channel %}<br>{{ data.yt_channel }}{% endif %}
+                        {% if data.yt_duration %}<br><small>{{ data.yt_duration }}s duration</small>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if data.completed_at %}
+                    <div class="detail-label">Completed:</div>
+                    <div class="detail-value">{{ data.completed_at }}</div>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- Show error if present -->
+            {% if data.last_error %}
+            <div class="error-box">
+                <strong style="color: #ef4444;">Last Error:</strong>
+                <p style="margin: 8px 0 0 0; color: #991b1b; font-family: monospace; font-size: 0.9em;">
+                    {{ data.last_error }}
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Show YouTube API response for debugging -->
+            {% if data.api_response_data %}
+            <div class="info-box">
+                <strong style="color: #1e40af;">📊 YouTube API Response Debug Data</strong>
+
+                {% if api_debug.cache_hit %}
+                <p style="margin: 8px 0 0 0; color: #059669;">✓ Cache Hit - No API call made</p>
+                {% else %}
+                    {% if api_debug.search_query %}
+                    <p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Search Query:</strong> "{{ api_debug.search_query }}"</p>
+                    {% endif %}
+
+                    {% if api_debug.search_results_count is defined %}
+                    <p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Search Results:</strong> {{ api_debug.search_results_count }} videos found</p>
+                    {% endif %}
+
+                    {% if api_debug.top_results %}
+                    <p style="margin: 8px 0 0 0; color: #64748b; font-size: 0.9em;">Top results:</p>
+                    <ul style="margin: 4px 0 0 20px; color: #64748b; font-size: 0.85em;">
+                        {% for result in api_debug.top_results %}
+                        <li>{{ result.title }} ({{ result.video_id }})</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    {% if api_debug.videos_checked is defined %}
+                    <p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Videos Checked:</strong> {{ api_debug.videos_checked }}</p>
+                    {% endif %}
+
+                    {% if api_debug.candidates_found is defined %}
+                    <p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Duration Matches:</strong> {{ api_debug.candidates_found }}</p>
+                    {% endif %}
+
+                    {% if api_debug.batch_responses_count is defined %}
+                    <p style="margin: 8px 0 0 0; color: #1e40af;"><strong>Batch API Calls:</strong> {{ api_debug.batch_responses_count }}</p>
+                    {% endif %}
+
+                    {% if api_debug.error %}
+                    <p style="margin: 8px 0 0 0; color: #dc2626;"><strong>API Error:</strong> {{ api_debug.error.type }} - {{ api_debug.error.message }}</p>
+                    {% endif %}
+                {% endif %}
+
+                <!-- Expandable JSON view -->
+                <details style="margin-top: 12px;">
+                    <summary style="cursor: pointer; color: #1e40af; font-weight: 600; user-select: none;">
+                        View Full API Response JSON
+                    </summary>
+                    <pre style="margin: 8px 0 0 0; padding: 12px; background-color: #f1f5f9; border-radius: 4px; overflow-x: auto; font-size: 0.75em; color: #334155;">{{ api_debug.raw_json }}</pre>
+                </details>
+            </div>
+            {% endif %}
+
+            <!-- Show warning for high attempts -->
+            {% if data.attempts >= 100 %}
+            <div class="warning-box">
+                <strong style="color: #f59e0b;">⚠️ High Attempt Count</strong>
+                <p style="margin: 8px 0 0 0; color: #92400e;">
+                    This item has been attempted {{ data.attempts }} times. Check the error message above to understand why it's failing.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
