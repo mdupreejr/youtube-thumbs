@@ -123,30 +123,31 @@ class TableColumn:
 class TableCell:
     """
     Represents a table cell with value and optional formatting.
-    
+
     Automatically sanitizes HTML content to prevent XSS attacks while preserving
     safe formatting elements like links, spans, and basic text formatting.
-    
+
     Args:
         value: The plain text value of the cell
-        html: Optional HTML content (will be sanitized)
+        display_html: Optional HTML content (will be sanitized)
         style: Optional CSS style string
         title: Optional title attribute for hover tooltips
     """
-    
-    def __init__(self, value: Any, html: Optional[str] = None, 
+
+    def __init__(self, value: Any, display_html: Optional[str] = None,
                  style: Optional[str] = None, title: Optional[str] = None):
         self.value = str(value) if value is not None else ''
-        
+
         # Sanitize HTML content to prevent XSS
-        if html:
-            self.html = sanitize_html(html)
+        if display_html:
+            self.html = sanitize_html(display_html)
         else:
             self.html = None
-            
+
         # Sanitize style and title attributes
-        self.style = html.escape(style) if style else None
-        self.title = html.escape(title) if title else None
+        import html as html_module
+        self.style = html_module.escape(style) if style else None
+        self.title = html_module.escape(title) if title else None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
