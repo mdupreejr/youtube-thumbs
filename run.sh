@@ -189,12 +189,12 @@ SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 # sqlite_web always uses port 8080 or configured port, NOT the ingress port
 # (ingress port is now used by Flask app for bulk rating interface)
 if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
-    SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
+    export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
     bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
 elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}"; then
-    SQLITE_WEB_PORT="${SQLITE_WEB_PORT_CONFIG}"
+    export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_CONFIG}"
 else
-    SQLITE_WEB_PORT=8080
+    export SQLITE_WEB_PORT=8080
 fi
 
 bashio::log.info "sqlite_web will run on port ${SQLITE_WEB_PORT}"
