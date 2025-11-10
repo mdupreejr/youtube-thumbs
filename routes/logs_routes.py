@@ -1300,7 +1300,7 @@ def _create_recent_page(ingress_path: str):
         elif rating == 'dislike':
             rating_html = format_badge('👎 Dislike', 'error')
         else:
-            rating_html = format_badge('- None', 'secondary')
+            rating_html = format_badge('- None', 'default')
 
         # Format link
         yt_url = video.get('yt_url')
