@@ -1390,7 +1390,8 @@ def _create_recent_page(ingress_path: str):
     # Create page config
     page_config = PageConfig('Recent Videos', nav_active='logs', storage_key='logs-recent')
     page_config.logs_tab = 'recent'
-    
+    page_config.current_url = '/logs'
+
     # Get data
     videos = _db.get_recently_added(limit=25)
     
@@ -1453,7 +1454,8 @@ def _create_queue_page(ingress_path: str):
     # Create page config
     page_config = PageConfig('Queue Statistics', nav_active='logs', storage_key='logs-queue')
     page_config.logs_tab = 'queue'
-    
+    page_config.current_url = '/logs'
+
     # Get queue statistics
     stats = _db.get_queue_statistics()
     activity = _db.get_recent_queue_activity(limit=30)
