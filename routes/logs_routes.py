@@ -4,7 +4,7 @@ Routes for logs viewer page.
 Provides endpoints for viewing rated songs, match history, and error logs.
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, g
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import os
@@ -17,7 +17,8 @@ from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.template_helpers import (
     TableData, TableColumn, TableRow, TableCell, PageConfig,
     create_api_calls_page_config,
-    format_badge, format_time_ago, truncate_text
+    format_badge, format_time_ago, truncate_text,
+    format_song_display, format_status_badge
 )
 from helpers.page_builder import LogsPageBuilder, ApiCallsPageBuilder
 
@@ -41,7 +42,7 @@ def init_logs_routes(database):
 @bp.route('/logs/api-calls')
 def api_calls_log():
     """Display detailed YouTube API call logs."""
-    ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    ingress_path = g.ingress_path
 
     try:
         # Get pagination parameters
@@ -108,7 +109,7 @@ def api_calls_log():
                 method_html = format_badge(method_html)
 
             # Format status badge
-            status_html = format_badge('✓ Success', 'success') if log.get('success') else format_badge('✗ Failed', 'error')
+            status_html = format_status_badge(log.get('success'))
             
             # Format quota cost
             quota_cost = log.get('quota_cost', 0)
@@ -229,7 +230,7 @@ def pending_ratings_log():
     Display comprehensive queue viewer with multiple tabs.
     Architecture spec: Pending, History, Errors, Statistics tabs.
     """
-    ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    ingress_path = g.ingress_path
     current_tab = request.args.get('tab', 'pending')
 
     try:
@@ -713,289 +714,6 @@ def parse_quota_prober_log(
         'stats': stats
     }
 
-
-def _handle_rated_tab(page, period_filter):
-    """Handle rated songs tab."""
-    rating_filter = request.args.get('rating', 'all')
-    if rating_filter not in ['like', 'dislike', 'all']:
-        rating_filter = 'all'
-
-    result = _db.get_rated_songs(page, 50, period_filter, rating_filter)
-
-    # Format songs for template
-    formatted_songs = []
-    for song in result['songs']:
-        title = get_video_title(song)
-        artist = get_video_artist(song)
-
-        # Format relative time - use date_last_played, fallback to date_added
-        timestamp = song.get('date_last_played') or song.get('date_added')
-        time_ago = format_relative_time(timestamp) if timestamp else 'unknown'
-
-        formatted_songs.append({
-            'yt_video_id': song.get('yt_video_id'),
-            'title': title,
-            'artist': artist,
-            'rating': song.get('rating'),
-            'play_count': song.get('play_count', 0),
-            'time_ago': time_ago,
-            'timestamp': timestamp,
-            'source': song.get('source', 'unknown')
-        })
-
-    return {
-        'rating_filter': rating_filter,
-        'songs': formatted_songs,
-        'total_count': result['total_count'],
-        'total_pages': result['total_pages']
-    }
-
-
-def _handle_matches_tab(page, period_filter):
-    """Handle match history tab."""
-    result = _db.get_match_history(page, 50, period_filter)
-
-    # Format matches for template
-    formatted_matches = []
-    for match in result['matches']:
-        ha_title = (match.get('ha_title') or 'Unknown').strip() or 'Unknown'
-        ha_artist = (match.get('ha_artist') or 'Unknown').strip() or 'Unknown'
-        yt_title = (match.get('yt_title') or 'Unknown').strip() or 'Unknown'
-        yt_channel = (match.get('yt_channel') or 'Unknown').strip() or 'Unknown'
-
-        # Calculate duration difference
-        ha_duration = match.get('ha_duration') or 0
-        yt_duration = match.get('yt_duration') or 0
-        duration_diff = yt_duration - ha_duration
-
-        # Determine match quality (good if duration diff <= 2 seconds)
-        match_quality = 'good' if abs(duration_diff) <= 2 else 'fair'
-
-        # Format relative time - use most recent activity (played, matched, or added)
-        activity_timestamp = match.get('date_last_played') or match.get('yt_match_last_attempt') or match.get('date_added')
-        time_ago = format_relative_time(activity_timestamp) if activity_timestamp else 'Unknown'
-
-        # Format YouTube published date if available
-        yt_published_at = match.get('yt_published_at')
-        yt_published_formatted = None
-        if yt_published_at:
-            try:
-                # YouTube API returns ISO 8601 string like "2023-10-15T12:00:00Z"
-                if isinstance(yt_published_at, str):
-                    pub_dt = datetime.fromisoformat(yt_published_at.replace('Z', '+00:00'))
-                else:
-                    pub_dt = yt_published_at
-                yt_published_formatted = pub_dt.strftime('%b %d, %Y')
-            except (ValueError, TypeError, AttributeError) as e:
-                logger.debug(f"Failed to format YouTube published date '{yt_published_at}': {e}")
-                yt_published_formatted = None
-
-        formatted_matches.append({
-            'yt_video_id': match.get('yt_video_id'),
-            'ha_title': ha_title,
-            'ha_artist': ha_artist,
-            'ha_duration': ha_duration,
-            'yt_title': yt_title,
-            'yt_channel': yt_channel,
-            'yt_duration': yt_duration,
-            'yt_published_at': yt_published_formatted,
-            'duration_diff': duration_diff,
-            'match_quality': match_quality,
-            # v4.0.0: Removed match_attempts (yt_match_attempts field removed from schema)
-            'play_count': match.get('play_count', 0),
-            'time_ago': time_ago,
-            'timestamp': activity_timestamp,
-            'date_last_played': match.get('date_last_played')
-        })
-
-    return {
-        'matches': formatted_matches,
-        'total_count': result['total_count'],
-        'total_pages': result['total_pages']
-    }
-
-
-def _handle_errors_tab(page, period_filter):
-    """Handle error logs tab."""
-    level_filter = request.args.get('level', 'all')
-    if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
-        level_filter = 'all'
-
-    result = parse_error_log(period_filter, level_filter, page, 50)
-
-    # Format errors for template
-    formatted_errors = []
-    for error in result.get('errors', []):
-        # Format relative time
-        time_ago = format_relative_time(error['timestamp'])
-
-        # Truncate long messages
-        message = error['message']
-        truncated = len(message) > 150
-        if truncated:
-            display_message = message[:150] + '...'
-        else:
-            display_message = message
-
-        formatted_errors.append({
-            'timestamp': error['timestamp'],
-            'time_ago': time_ago,
-            'level': error['level'],
-            'message': message,
-            'display_message': display_message,
-            'truncated': truncated
-        })
-
-    return {
-        'level_filter': level_filter,
-        'errors': formatted_errors,
-        'total_count': result.get('total_count', 0),
-        'total_pages': result.get('total_pages', 0),
-        'log_error': result.get('error')
-    }
-
-
-def _handle_quota_prober_tab(page, period_filter):
-    """Handle quota prober logs tab."""
-    # Get quota prober specific filters
-    event_filter = request.args.get('event', 'all')
-    if event_filter not in ['probe', 'retry', 'success', 'error', 'recovery', 'all']:
-        event_filter = 'all'
-
-    level_filter = request.args.get('level', 'all')
-    if level_filter not in ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'all']:
-        level_filter = 'all'
-
-    # Parse quota prober logs
-    result = parse_quota_prober_log(
-        time_filter=period_filter,
-        event_filter=event_filter,
-        level_filter=level_filter,
-        page=page,
-        limit=50
-    )
-
-    # Format logs for template
-    formatted_logs = []
-    for log in result['logs']:
-        message = log['message']
-        truncated = len(message) > 200
-        if truncated:
-            display_message = message[:200] + '...'
-        else:
-            display_message = message
-
-        # Calculate time_ago fresh instead of using stale database value
-        time_ago = format_relative_time(log['timestamp'])
-
-        formatted_logs.append({
-            'timestamp': log['timestamp'],
-            'time_ago': time_ago,
-            'level': log['level'],
-            'event_type': log['event_type'],
-            'message': message,
-            'display_message': display_message,
-            'truncated': truncated
-        })
-
-    return {
-        'event_filter': event_filter,
-        'level_filter': level_filter,
-        'quota_prober_logs': formatted_logs,
-        'quota_prober_stats': result.get('stats', {}),
-        'total_count': result.get('total_count', 0),
-        'total_pages': result.get('total_pages', 0)
-    }
-
-
-def _handle_recent_tab():
-    """Handle recently added videos tab."""
-    videos = _db.get_recently_added(limit=25)
-
-    # v4.0.33: Format videos with relative time for issue #68
-    formatted_videos = []
-    for video in videos:
-        # Format relative time for date_added
-        date_added = video.get('date_added')
-        time_ago = format_relative_time(date_added) if date_added else 'unknown'
-
-        formatted_videos.append({
-            'yt_video_id': video.get('yt_video_id'),
-            'ha_title': video.get('ha_title'),
-            'ha_artist': video.get('ha_artist'),
-            'yt_title': video.get('yt_title'),
-            'yt_channel': video.get('yt_channel'),
-            'yt_url': video.get('yt_url'),
-            'rating': video.get('rating'),
-            'play_count': video.get('play_count', 0),
-            'date_added': date_added,
-            'time_ago': time_ago,
-            'source': video.get('source')
-        })
-
-    return {
-        'recent_videos': formatted_videos,
-        'total_count': len(formatted_videos),
-        'total_pages': 0  # Recent tab doesn't use pagination
-    }
-
-
-def _handle_queue_tab():
-    """Handle queue statistics and activity tab."""
-    # Get queue statistics
-    stats = _db.get_queue_statistics()
-
-    # Get recent activity
-    activity = _db.get_recent_queue_activity(limit=30)
-
-    # Get performance metrics
-    metrics = _db.get_queue_performance_metrics(hours=24)
-
-    # Get recent errors
-    errors = _db.get_queue_errors(limit=20)
-
-    # Format timestamps in activity
-    for rating in activity['recent_ratings']:
-        if rating.get('requested_at'):
-            rating['requested_at_relative'] = format_relative_time(parse_timestamp(rating['requested_at']))
-        if rating.get('last_attempt'):
-            rating['last_attempt_relative'] = format_relative_time(parse_timestamp(rating['last_attempt']))
-
-    for search in activity['recent_searches']:
-        if search.get('requested_at'):
-            search['requested_at_relative'] = format_relative_time(parse_timestamp(search['requested_at']))
-        if search.get('last_attempt'):
-            search['last_attempt_relative'] = format_relative_time(parse_timestamp(search['last_attempt']))
-
-    # Format timestamps in errors
-    for error in errors['rating_errors']:
-        if error.get('last_attempt'):
-            error['last_attempt_relative'] = format_relative_time(parse_timestamp(error['last_attempt']))
-
-    for error in errors['search_errors']:
-        if error.get('last_attempt'):
-            error['last_attempt_relative'] = format_relative_time(parse_timestamp(error['last_attempt']))
-
-    # Format last activity timestamps in stats
-    if stats['worker_health'].get('last_rating_activity'):
-        stats['worker_health']['last_rating_activity_relative'] = format_relative_time(
-            parse_timestamp(stats['worker_health']['last_rating_activity'])
-        )
-    if stats['worker_health'].get('last_search_activity'):
-        stats['worker_health']['last_search_activity_relative'] = format_relative_time(
-            parse_timestamp(stats['worker_health']['last_search_activity'])
-        )
-
-    return {
-        'queue_stats': stats,
-        'queue_activity': activity,
-        'queue_metrics': metrics,
-        'queue_errors': errors,
-        'total_count': 0,  # Queue tab doesn't use pagination
-        'total_pages': 0
-    }
-
-
 @bp.route('/logs')
 def logs_viewer():
     """
@@ -1017,7 +735,7 @@ def logs_viewer():
             period_filter = 'all'
 
         # Get ingress path
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         # Create page configuration
         if current_tab == 'rated':
@@ -1189,7 +907,7 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str):
         # Format HA song info
         ha_title = match.get('ha_title', 'Unknown').strip() or 'Unknown'
         ha_artist = match.get('ha_artist', 'Unknown').strip() or 'Unknown'
-        ha_song_html = f'<strong>{ha_title}</strong><br><span style="font-size: 0.85em; color: #64748b;">{ha_artist}</span>'
+        ha_song_html = format_song_display(ha_title, ha_artist)
         
         # Format YouTube match info
         yt_title = match.get('yt_title', 'Unknown').strip() or 'Unknown'
@@ -1468,9 +1186,9 @@ def _create_queue_page(ingress_path: str):
         # Format status badge
         status = rating.get('status', 'pending')
         if status == 'success':
-            status_html = format_badge('✓ Success', 'success')
+            status_html = format_status_badge(True)
         elif status == 'failed':
-            status_html = format_badge('✗ Failed', 'error')
+            status_html = format_status_badge(False)
         else:
             status_html = format_badge('⏳ Pending', 'warning')
 

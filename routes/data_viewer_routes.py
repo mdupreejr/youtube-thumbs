@@ -5,7 +5,7 @@ Extracted from app.py for better organization.
 import re
 import types
 import traceback
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, g
 from logger import logger
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
@@ -304,7 +304,7 @@ def data_viewer() -> str:
     """
     try:
         # Get ingress path for proper link generation
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         # Validate and parse request parameters
         page, sort_by, sort_order, selected_columns, columns_param, all_columns = \
@@ -400,7 +400,7 @@ def database_admin_wrapper():
     """
     try:
         # Get ingress path from Home Assistant proxy
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         return render_template(
             'database_admin.html',
