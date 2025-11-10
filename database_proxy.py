@@ -6,7 +6,7 @@ import os
 import re
 import traceback
 import requests
-from flask import request, Response
+from flask import request, Response, g
 from logger import logger
 
 
@@ -110,7 +110,7 @@ def create_database_proxy_handler(csrf=None):
                 # Rewrite links for ingress compatibility
                 # sqlite_web generates links like href="/ratings.db/table"
                 # We need to rewrite them to include the ingress prefix
-                raw_ingress_path = request.environ.get('HTTP_X_INGRESS_PATH')
+                raw_ingress_path = g.ingress_path
                 if raw_ingress_path:
                     # SECURITY: Sanitize ingress path to prevent XSS/HTML injection
                     ingress_path = sanitize_ingress_path(raw_ingress_path)

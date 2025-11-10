@@ -1121,11 +1121,11 @@ def _create_recent_page(ingress_path: str):
         # Format rating
         rating = video.get('rating')
         if rating == 'like':
-            rating_html = '<span style="color: #10b981;">👍 Like</span>'
+            rating_html = format_badge('👍 Like', 'success')
         elif rating == 'dislike':
-            rating_html = '<span style="color: #ef4444;">👎 Dislike</span>'
+            rating_html = format_badge('👎 Dislike', 'error')
         else:
-            rating_html = '<span style="color: #94a3b8;">- None</span>'
+            rating_html = format_badge('- None', 'secondary')
 
         # Format link
         yt_url = video.get('yt_url')
