@@ -10,6 +10,7 @@ import time
 import sys
 import os
 import signal
+import traceback
 from datetime import datetime, timezone
 from logger import logger
 from database import get_database
@@ -241,7 +242,6 @@ def process_next_item(db, yt_api):
         # Unexpected error - log with full context and continue processing
         error_msg = f"Unexpected error processing {item_type}"
         logger.error(f"{error_msg}: {str(e)}")
-        import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         db.mark_queue_item_failed(queue_id, str(e))
         logger.debug(f"Marked queue item #{queue_id} as FAILED (unexpected): {str(e)}")
@@ -251,7 +251,6 @@ def process_next_item(db, yt_api):
 def main():
     """Main worker loop - simple and straightforward."""
     global running
-    from datetime import datetime, timezone
 
     # Ensure only ONE queue worker runs at a time
     pid_file = '/tmp/youtube_thumbs_queue_worker.pid'
@@ -366,7 +365,6 @@ def main():
 
         except Exception as e:
             logger.error(f"Queue worker error: {e}")
-            import traceback
             logger.error(traceback.format_exc())
             time.sleep(60)
 

@@ -209,59 +209,9 @@ class DatabaseConnection:
                         "CREATE INDEX IF NOT EXISTS idx_video_ratings_ha_content_id ON video_ratings(ha_content_id)"
                     )
 
-                    # v4.0.46: Migrate existing search_results_cache to include all video fields
-                    self._migrate_search_cache_columns()
-
-                    # v4.0.64: Migrate existing queue table to include api_response_data
-                    self._migrate_queue_api_response_column()
-
-
             except sqlite3.DatabaseError as exc:
                 logger.error(f"Failed to initialize SQLite schema: {exc}")
                 raise
-
-    def _migrate_search_cache_columns(self) -> None:
-        """Add missing columns to search_results_cache table for existing databases."""
-        try:
-            # Check if yt_description column exists
-            cursor = self._conn.execute("PRAGMA table_info(search_results_cache)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-            # Add missing columns if they don't exist
-            new_columns = {
-                'yt_description': 'TEXT',
-                'yt_published_at': 'TEXT',
-                'yt_category_id': 'TEXT',
-                'yt_live_broadcast': 'TEXT',
-                'yt_location': 'TEXT',
-                'yt_recording_date': 'TEXT'
-            }
-
-            for col_name, col_type in new_columns.items():
-                if col_name not in columns:
-                    logger.info(f"Adding column {col_name} to search_results_cache")
-                    self._conn.execute(f"ALTER TABLE search_results_cache ADD COLUMN {col_name} {col_type}")
-
-            self._conn.commit()
-
-        except Exception as e:
-            logger.warning(f"Failed to migrate search_results_cache columns: {e}")
-
-    def _migrate_queue_api_response_column(self) -> None:
-        """Add api_response_data column to queue table for existing databases."""
-        try:
-            # Check if api_response_data column exists
-            cursor = self._conn.execute("PRAGMA table_info(queue)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-            if 'api_response_data' not in columns:
-                logger.info("Adding column api_response_data to queue table")
-                self._conn.execute("ALTER TABLE queue ADD COLUMN api_response_data TEXT")
-                self._conn.commit()
-
-        except Exception as e:
-            logger.warning(f"Failed to migrate queue api_response_data column: {e}")
-
 
     @staticmethod
     def timestamp(ts = None) -> str:

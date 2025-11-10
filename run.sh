@@ -183,23 +183,6 @@ else
     bashio::log.info "No failed queue items to retry"
 fi
 
-# v4.0.70: Clean up pending_match=1 rows from old pre-v4.0.0 system
-# These are obsolete since queue system handles unmatched videos differently
-bashio::log.info "Checking for obsolete pending_match rows in video_ratings..."
-PENDING_MATCH_COUNT=$(sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM video_ratings WHERE pending_match = 1;" 2>/dev/null || echo "0")
-
-if [ "${PENDING_MATCH_COUNT}" -gt 0 ]; then
-    bashio::log.info "Found ${PENDING_MATCH_COUNT} obsolete pending_match=1 rows - removing them"
-    DELETED=$(sqlite3 "${DB_PATH}" <<'EOF'
-DELETE FROM video_ratings WHERE pending_match = 1;
-SELECT changes();
-EOF
-)
-    bashio::log.info "Removed ${DELETED} obsolete pending_match rows from old system"
-else
-    bashio::log.info "No pending_match rows to clean up"
-fi
-
 SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
 SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 

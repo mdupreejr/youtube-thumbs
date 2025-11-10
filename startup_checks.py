@@ -394,119 +394,6 @@ def check_database(db) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def run_pending_migrations(db):
-    """
-    Run any pending database migrations on startup.
-
-    Returns:
-        Tuple of (success, message)
-    """
-    try:
-        # v4.0.71: Migrate yt_match_pending=1 rows to queue
-        # Check if yt_match_pending column exists
-        with db._lock:
-            cursor = db._conn.execute("PRAGMA table_info(video_ratings)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-        if 'yt_match_pending' in columns:
-            # Count pending rows
-            with db._lock:
-                cursor = db._conn.execute("""
-                    SELECT COUNT(*) as count
-                    FROM video_ratings
-                    WHERE yt_match_pending = 1
-                """)
-                pending_count = cursor.fetchone()['count']
-
-            if pending_count > 0:
-                logger.info(f"Found {pending_count} unmatched songs, migrating to queue...")
-
-                # Migrate to queue
-                with db._lock:
-                    cursor = db._conn.execute("""
-                        SELECT
-                            ha_title,
-                            ha_artist,
-                            ha_app_name,
-                            ha_content_id,
-                            ha_duration
-                        FROM video_ratings
-                        WHERE yt_match_pending = 1
-                    """)
-                    pending_rows = cursor.fetchall()
-
-                queued_count = 0
-                for row in pending_rows:
-                    if row['ha_title'] and row['ha_duration']:
-                        media = {
-                            'title': row['ha_title'],
-                            'artist': row['ha_artist'],
-                            'album': None,
-                            'content_id': row['ha_content_id'],
-                            'duration': row['ha_duration'],
-                            'app_name': row['ha_app_name'] or 'YouTube'
-                        }
-                        try:
-                            # v4.2.5: enqueue_search() now returns None if recently failed
-                            search_id = db.enqueue_search(media)
-                            if search_id is not None:
-                                queued_count += 1
-                        except Exception as e:
-                            logger.debug(f"Failed to enqueue '{row['ha_title']}': {e}")
-
-                # Delete migrated rows
-                with db._lock:
-                    db._conn.execute("""
-                        DELETE FROM video_ratings
-                        WHERE yt_match_pending = 1
-                    """)
-                    db._conn.commit()
-
-                logger.info(f"✓ Migrated {queued_count} unmatched songs to queue")
-
-        # v4.0.74: Remove obsolete columns from video_ratings table
-        # SQLite 3.35.0+ supports DROP COLUMN - much simpler and safer!
-        obsolete_cols = [
-            'yt_match_pending', 'yt_match_requested_at', 'yt_match_attempts',
-            'yt_match_last_attempt', 'yt_match_last_error',
-            'rating_queue_pending', 'rating_queue_requested_at', 'rating_queue_attempts',
-            'rating_queue_last_attempt', 'rating_queue_last_error', 'pending_reason'
-        ]
-
-        with db._lock:
-            # Clean up any leftover video_ratings_new table from failed migration
-            cursor = db._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='video_ratings_new'")
-            if cursor.fetchone():
-                logger.info("Cleaning up leftover video_ratings_new table...")
-                db._conn.execute("DROP TABLE video_ratings_new")
-                db._conn.commit()
-
-            # Check which obsolete columns exist
-            cursor = db._conn.execute("PRAGMA table_info(video_ratings)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-        existing_obsolete = [col for col in obsolete_cols if col in columns]
-
-        if existing_obsolete:
-            logger.info(f"Found {len(existing_obsolete)} obsolete columns, removing...")
-
-            # Drop each column individually (SQLite 3.35.0+)
-            with db._lock:
-                for col in existing_obsolete:
-                    logger.debug(f"Dropping column: {col}")
-                    db._conn.execute(f"ALTER TABLE video_ratings DROP COLUMN {col}")
-                db._conn.commit()
-
-            logger.info(f"✓ Removed {len(existing_obsolete)} obsolete columns from video_ratings")
-            return True, f"Cleaned up schema: removed {len(existing_obsolete)} obsolete columns"
-
-        return True, "No pending migrations"
-
-    except Exception as e:
-        logger.error(f"Migration error: {e}")
-        return False, f"Migration failed: {str(e)}"
-
-
 def run_startup_checks(ha_api, yt_api, db):
     """
     Run all startup checks and report status.
@@ -515,11 +402,6 @@ def run_startup_checks(ha_api, yt_api, db):
         Tuple of (all_ok, check_results) where check_results is a dict with:
         {'ha': (success, data), 'yt': (success, data), 'db': (success, message)}
     """
-    # Run migrations first
-    migration_ok, migration_msg = run_pending_migrations(db)
-    if migration_ok and "Migrated" in migration_msg:
-        logger.info(f"✓ Migrations: {migration_msg}")
-
     all_ok = True
     results = []
 

@@ -15,7 +15,6 @@ from .search_cache_operations import SearchCacheOperations
 from .logs_operations import LogsOperations
 from .queue_operations import QueueOperations
 from helpers.video_helpers import get_content_hash
-from error_handler import validate_environment_variable
 
 
 class Database:
@@ -41,15 +40,6 @@ class Database:
         self._search_cache_ops = SearchCacheOperations(self._conn, self._lock)
         self._logs_ops = LogsOperations(self._conn, self._lock)
         self._queue_ops = QueueOperations(self._conn, self._lock)
-
-        # Not found cache configuration (previously in NotFoundOperations)
-        # Default to 7 days (168 hours) to prevent wasting quota on failed searches
-        self._not_found_cache_hours = validate_environment_variable(
-            'NOT_FOUND_CACHE_HOURS',
-            default=168,
-            converter=int,
-            validator=lambda x: 1 <= x <= 168  # 1 hour to 1 week
-        )
 
     # Connection methods
     @staticmethod
