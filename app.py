@@ -1,17 +1,14 @@
 import atexit
-from flask import Flask, jsonify, Response, render_template, request, send_from_directory, url_for, g
+from flask import Flask, jsonify, render_template, request, send_from_directory, url_for, g
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import os
-import re
 import traceback
 import secrets
-import json
-from datetime import datetime
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
-from logger import logger, user_action_logger, rating_logger
+from logger import logger
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
@@ -30,9 +27,8 @@ from routes.data_viewer_routes import bp as data_viewer_bp, init_data_viewer_rou
 from routes.stats_routes import bp as stats_bp, init_stats_routes
 from routes.rating_routes import bp as rating_bp, init_rating_routes
 from routes.system_routes import bp as system_bp, init_system_routes
-from helpers.response_helpers import error_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
-from helpers.time_helpers import format_duration, format_relative_time
+from helpers.time_helpers import format_duration
 
 # ============================================================================
 # SECURITY HELPER FUNCTIONS
