@@ -145,9 +145,8 @@ class TableCell:
             self.html = None
 
         # Sanitize style and title attributes
-        import html as html_module
-        self.style = html_module.escape(style) if style else None
-        self.title = html_module.escape(title) if title else None
+        self.style = html.escape(style) if style else None
+        self.title = html.escape(title) if title else None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
