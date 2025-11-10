@@ -530,3 +530,60 @@ def create_filter_option(value: str, label: str, selected: bool = False) -> Dict
         'label': label,
         'selected': selected
     }
+
+
+def format_song_display(title: str, artist: str) -> str:
+    """
+    Format song title and artist for consistent display across the app.
+
+    Creates a two-line display with the title in bold and the artist
+    in a smaller, subdued font below.
+
+    Args:
+        title: The song title
+        artist: The artist name
+
+    Returns:
+        HTML formatted song display
+
+    Example:
+        >>> format_song_display("Bohemian Rhapsody", "Queen")
+        '<strong>Bohemian Rhapsody</strong><br><span style="font-size: 0.85em; color: #64748b;">Queen</span>'
+    """
+    if not title:
+        title = 'Unknown'
+    if not artist:
+        artist = 'Unknown'
+
+    # Sanitize to prevent XSS
+    escaped_title = html.escape(str(title))
+    escaped_artist = html.escape(str(artist))
+
+    return f'<strong>{escaped_title}</strong><br><span style="font-size: 0.85em; color: #64748b;">{escaped_artist}</span>'
+
+
+def format_status_badge(success: bool, success_text: str = '✓ Success',
+                        failure_text: str = '✗ Failed') -> str:
+    """
+    Format a success/failure status badge.
+
+    This is a convenience wrapper around format_badge() for boolean success states.
+
+    Args:
+        success: Whether the operation was successful
+        success_text: Text to display for successful operations (default: '✓ Success')
+        failure_text: Text to display for failed operations (default: '✗ Failed')
+
+    Returns:
+        HTML formatted badge element
+
+    Example:
+        >>> format_status_badge(True)
+        '<span class="badge badge-success">✓ Success</span>'
+        >>> format_status_badge(False)
+        '<span class="badge badge-error">✗ Failed</span>'
+    """
+    if success:
+        return format_badge(success_text, 'success')
+    else:
+        return format_badge(failure_text, 'error')

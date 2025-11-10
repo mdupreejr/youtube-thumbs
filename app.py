@@ -1,5 +1,5 @@
 import atexit
-from flask import Flask, jsonify, Response, render_template, request, send_from_directory, url_for
+from flask import Flask, jsonify, Response, render_template, request, send_from_directory, url_for, g
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
@@ -129,7 +129,7 @@ def inject_static_url():
     """
     def static_url(filename):
         """Generate static URL with ingress path support."""
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         base_url = url_for('static', filename=filename)
         if ingress_path:
             return f"{ingress_path}{base_url}"
@@ -166,6 +166,14 @@ def log_request_info():
     logger.debug(f"  Query string: {request.query_string.decode('utf-8')}")
     logger.debug(f"  Headers: {_sanitize_headers(dict(request.headers))}")
     logger.debug("="*60)
+
+@app.before_request
+def inject_ingress_path():
+    """
+    Inject ingress_path into Flask's g object for all requests.
+    This centralizes the ingress path retrieval and eliminates duplication across routes.
+    """
+    g.ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
 
 @app.after_request
 def log_response_info(response):
@@ -512,7 +520,7 @@ def index() -> str:
             current_tab = 'tests'
 
         # Get ingress path for proper link generation
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         # Initialize template data
         # v4.0.23: Use cached health check results from startup instead of re-running on every page load

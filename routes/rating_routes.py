@@ -5,7 +5,7 @@ Extracted from app.py for better organization.
 import re
 import traceback
 from typing import Tuple, Optional, Dict, Any
-from flask import Blueprint, request, jsonify, Response, redirect
+from flask import Blueprint, request, jsonify, Response, redirect, g
 from flask_wtf.csrf import CSRFProtect
 from logger import logger, user_action_logger, rating_logger
 from helpers.response_helpers import error_response
@@ -34,7 +34,7 @@ def safe_redirect(tab='rating', page='1'):
         Flask redirect response
     """
     # SECURITY: Validate and sanitize ingress path
-    raw_ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    raw_ingress_path = g.ingress_path
     ingress_path = ''
     if raw_ingress_path:
         # Only allow alphanumeric, hyphens, underscores, and forward slashes
@@ -353,7 +353,7 @@ def rate_song_form() -> Response:
     """
     try:
         # Get ingress path for proper redirect
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         song_id = request.form.get('song_id')
         rating = request.form.get('rating')

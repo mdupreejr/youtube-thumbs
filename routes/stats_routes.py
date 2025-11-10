@@ -5,7 +5,7 @@ Extracted from app.py for better organization.
 import os
 import traceback
 from datetime import datetime
-from flask import Blueprint, render_template, request, jsonify, Response
+from flask import Blueprint, render_template, request, jsonify, Response, g
 from logger import logger
 from constants import YOUTUBE_CATEGORIES
 from helpers.video_helpers import get_video_title, get_video_artist, format_videos_for_display
@@ -42,7 +42,7 @@ def stats_page() -> str:
     """
     try:
         # Get ingress path for proper link generation
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
 
         # Check cache first (5 minute TTL)
         cached = _db.get_cached_stats('stats_overview')
@@ -160,7 +160,7 @@ def stats_page() -> str:
 def stats_analytics_page() -> str:
     """Analytics tab with listening patterns, play distributions, and retention analysis."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         
         # Check cache first (5 minute TTL)
         cached = _db.get_cached_stats('stats_analytics')
@@ -249,7 +249,7 @@ def stats_analytics_page() -> str:
 def stats_api_page() -> str:
     """API usage and queue health metrics tab."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         
         # Check cache first (5 minute TTL)
         cached = _db.get_cached_stats('stats_api')
@@ -291,7 +291,7 @@ def stats_api_page() -> str:
 def stats_categories_page() -> str:
     """Categories and duration analysis tab."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         
         # Check cache first (5 minute TTL)
         cached = _db.get_cached_stats('stats_categories')
@@ -332,7 +332,7 @@ def stats_categories_page() -> str:
 def stats_discovery_page() -> str:
     """Discovery trends and recommendations tab."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         
         # Check cache first (5 minute TTL)
         cached = _db.get_cached_stats('stats_discovery')
@@ -375,7 +375,7 @@ def stats_discovery_page() -> str:
 def stats_liked_page() -> str:
     """Show paginated list of liked videos."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         page, error = validate_page_param(request.args)
         if error:
             return error_response('Invalid page parameter', 400)
@@ -445,7 +445,7 @@ def stats_liked_page() -> str:
 def stats_disliked_page() -> str:
     """Show paginated list of disliked videos."""
     try:
-        ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+        ingress_path = g.ingress_path
         page, error = validate_page_param(request.args)
         if error:
             return error_response('Invalid page parameter', 400)
