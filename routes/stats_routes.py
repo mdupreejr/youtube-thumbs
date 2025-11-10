@@ -50,7 +50,7 @@ def stats_page() -> str:
             # Add ingress_path to cached data
             cached['ingress_path'] = ingress_path
             cached['current_tab'] = 'overview'
-            return render_template('stats_overview.html', **cached)
+            return render_template('stats.html', **cached)
 
         # Fetch fresh data
         summary = _db.get_stats_summary()
@@ -147,7 +147,7 @@ def stats_page() -> str:
         # Cache for 5 minutes
         _db.set_cached_stats('stats_overview', template_data, ttl_seconds=300)
 
-        return render_template('stats_overview.html', **template_data)
+        return render_template('stats.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering stats page: {e}")
@@ -167,7 +167,7 @@ def stats_analytics_page() -> str:
         if cached:
             cached['ingress_path'] = ingress_path
             cached['current_tab'] = 'analytics'
-            return render_template('stats_analytics.html', **cached)
+            return render_template('stats.html', **cached)
 
         # Fetch analytics data
         patterns = _db.get_listening_patterns()
@@ -237,7 +237,7 @@ def stats_analytics_page() -> str:
         }
 
         _db.set_cached_stats('stats_analytics', template_data, ttl_seconds=300)
-        return render_template('stats_analytics.html', **template_data)
+        return render_template('stats.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering analytics page: {e}")
@@ -256,7 +256,7 @@ def stats_api_page() -> str:
         if cached:
             cached['ingress_path'] = ingress_path
             cached['current_tab'] = 'api'
-            return render_template('stats_api.html', **cached)
+            return render_template('stats.html', **cached)
 
         # Fetch API and queue data
         api_summary = _db.get_api_usage_summary(days=30)
@@ -279,7 +279,7 @@ def stats_api_page() -> str:
         }
 
         _db.set_cached_stats('stats_api', template_data, ttl_seconds=300)
-        return render_template('stats_api.html', **template_data)
+        return render_template('stats.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering API stats page: {e}")
@@ -298,7 +298,7 @@ def stats_categories_page() -> str:
         if cached:
             cached['ingress_path'] = ingress_path
             cached['current_tab'] = 'categories'
-            return render_template('stats_categories.html', **cached)
+            return render_template('stats.html', **cached)
 
         # Fetch category and duration data
         category_breakdown = _db.get_category_breakdown()
@@ -320,7 +320,7 @@ def stats_categories_page() -> str:
         }
 
         _db.set_cached_stats('stats_categories', template_data, ttl_seconds=300)
-        return render_template('stats_categories.html', **template_data)
+        return render_template('stats.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering categories page: {e}")
@@ -339,7 +339,7 @@ def stats_discovery_page() -> str:
         if cached:
             cached['ingress_path'] = ingress_path
             cached['current_tab'] = 'discovery'
-            return render_template('stats_discovery.html', **cached)
+            return render_template('stats.html', **cached)
 
         # Fetch discovery data
         discovery_trends = _db.get_discovery_stats()
@@ -363,7 +363,7 @@ def stats_discovery_page() -> str:
         }
 
         _db.set_cached_stats('stats_discovery', template_data, ttl_seconds=300)
-        return render_template('stats_discovery.html', **template_data)
+        return render_template('stats.html', **template_data)
 
     except Exception as e:
         logger.error(f"Error rendering discovery page: {e}")
