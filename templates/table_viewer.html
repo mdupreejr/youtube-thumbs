@@ -173,18 +173,6 @@
                         {% endfor %}
                     </tbody>
                 </table>
-
-                <!-- Column Configuration Dropdown -->
-                <div class="column-config" style="margin-top: 10px;">
-                    <label>
-                        <strong>Columns:</strong>
-                        <select id="columnSelector" multiple>
-                            {% for column in table_data.columns %}
-                            <option value="{{ column.key }}" selected>{{ column.label }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                </div>
             </div>
             {% else %}
             <!-- Empty State -->

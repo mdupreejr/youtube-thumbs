@@ -383,7 +383,8 @@ table tr:hover {
     display: flex;
     gap: 15px;
     align-items: end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     margin: 20px 0;
     padding: 15px;
     background: #f8fafc;
@@ -395,6 +396,7 @@ table tr:hover {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex-shrink: 0;
 }
 
 .filter-group label {
@@ -422,6 +424,7 @@ table tr:hover {
     cursor: pointer;
     font-weight: 500;
     transition: background-color 0.2s;
+    flex-shrink: 0;
 }
 
 .apply-btn:hover {
