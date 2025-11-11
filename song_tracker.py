@@ -83,10 +83,12 @@ class SongTracker:
 
             if not media:
                 # Nothing playing or error
+                logger.debug("Song tracker poll: No media playing")
                 return
 
             # Only track YouTube content
             if media.get('app_name') != 'YouTube':
+                logger.debug(f"Song tracker poll: Non-YouTube app ({media.get('app_name')}), skipping")
                 return
 
             title = media.get('title')
@@ -106,6 +108,7 @@ class SongTracker:
 
             # Check if we should increment play count (max 1x per hour)
             if not self._should_increment_play_count(content_hash):
+                logger.debug(f"Song tracker poll: '{title}' already tracked recently (throttled)")
                 return
 
             # Use same cache lookup logic as rating endpoints
@@ -117,7 +120,8 @@ class SongTracker:
                 # Song found in cache - increment play count
                 yt_video_id = cached_video['yt_video_id']
                 self._increment_play_count(yt_video_id, content_hash)
-                logger.info(f"Tracked play: '{title}' (play_count +1, ID: {yt_video_id})")
+                artist = media.get('artist', 'Unknown')
+                logger.info(f"Tracked play: '{title}' by '{artist}' ({duration}s) | ID: {yt_video_id} | play_count +1")
             else:
                 # Not in cache - queue YouTube search (same as rating endpoints)
                 # This uses the established queue logic and caching strategy
@@ -126,7 +130,8 @@ class SongTracker:
                 if search_id is None:
                     logger.debug(f"Skipping search for '{title}' - recent failed search found (quota protection)")
                 else:
-                    logger.info(f"New song detected: '{title}' - queued for YouTube search (queue_id: {search_id})")
+                    artist = media.get('artist', 'Unknown')
+                    logger.info(f"New song detected: '{title}' by '{artist}' ({duration}s) - queued for YouTube search (queue_id: {search_id})")
 
         except Exception as e:
             logger.error(f"Error checking/tracking song: {e}", exc_info=True)
