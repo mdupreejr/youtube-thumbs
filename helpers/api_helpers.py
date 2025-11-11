@@ -59,9 +59,6 @@ def check_quota_recently_exceeded(db):
 
             # If quota error occurred AFTER last reset, quota is still exhausted
             if error_dt > last_reset:
-                hours_until, minutes_until = get_time_until_quota_reset()
-                logger.info(f"Quota exceeded since last reset - skipping API call")
-                logger.info(f"Quota will reset in {hours_until}h {minutes_until}m (midnight Pacific Time)")
                 return True
 
             return False
