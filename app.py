@@ -1,6 +1,6 @@
 import atexit
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for, g
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_wtf.csrf import CSRFProtect, CSRFError, generate_csrf
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import os
