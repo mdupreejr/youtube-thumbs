@@ -198,10 +198,13 @@ def search_and_match_video(
         # v4.0.11: No longer recording not-found - queue table tracks failed searches
         return (None, api_debug_data) if return_api_response else None
 
-    # Step 7: Log success
+    # Step 7: Log success with full comparison details for easy match verification
+    ha_artist = ha_media.get('artist', 'Unknown')
+    yt_channel = video.get('channel', 'Unknown')
     logger.info(
-        f"MATCHED: HA='{title}' ({duration}s) → YT='{video['title']}' ({video.get('duration', 0)}s) | "
-        f"Channel: {video.get('channel')} | ID: {video['yt_video_id']}"
+        f"MATCHED: HA='{title}' by '{ha_artist}' ({duration}s) → "
+        f"YT='{video['title']}' by '{yt_channel}' ({video.get('duration', 0)}s) | "
+        f"ID: {video['yt_video_id']}"
     )
 
     return (video, api_debug_data) if return_api_response else video

@@ -218,16 +218,13 @@ def process_next_item(db, yt_api):
 
             if video and video.get('yt_video_id'):
                 video_id = video['yt_video_id']
-                video_title = video.get('yt_title', title)
-                artist = payload.get('ha_artist', '')
-                logger.info(f"✓ Matched: '{video_title}' by {artist} | YouTube ID: {video_id}")
 
                 # v4.0.0: Add matched video to video_ratings table
                 try:
                     # Prepare full video data for insertion
                     video_data = prepare_video_upsert(video, ha_media, source='queue_search')
                     db.upsert_video(video_data)
-                    logger.info(f"  → Added video {video_id} to video_ratings table")
+                    logger.debug(f"  → Added video {video_id} to video_ratings table")
 
                     # v4.0.33: Record play for newly matched videos (they were playing when search was queued)
                     # This fixes issue #68 - newly added videos showing play_count=0
