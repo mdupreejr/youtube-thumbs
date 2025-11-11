@@ -59,9 +59,16 @@ def process_next_item(db, yt_api):
         'empty': Queue is empty
         'quota': Quota exceeded during processing
         'quota_recent': Quota exceeded recently (no attempt made)
+        'paused': Queue is paused
     """
     # v4.0.5: Enhanced DEBUG logging for complete queue visibility
     logger.debug("Checking queue for next item...")
+
+    # Check if queue is paused
+    pause_file = '/tmp/youtube_thumbs_queue_paused'
+    if os.path.exists(pause_file):
+        logger.debug("Queue is paused - skipping processing")
+        return 'paused'
 
     # Check if quota was exceeded since last reset (midnight Pacific)
     if check_quota_recently_exceeded(db):
@@ -326,8 +333,27 @@ def main():
     # Only the main app should authenticate during startup checks
     yt_api = None
 
+    # Track pause state to log only once when it changes
+    was_paused = False
+
     while running:
         try:
+            # Check if queue is paused FIRST - don't process anything if paused
+            pause_file = '/tmp/youtube_thumbs_queue_paused'
+            is_paused = os.path.exists(pause_file)
+
+            if is_paused:
+                if not was_paused:
+                    logger.info("Queue processing paused - new items can be added but won't be processed")
+                    was_paused = True
+                logger.debug("Queue paused - sleeping 60 seconds")
+                time.sleep(60)
+                continue
+            elif was_paused:
+                # Queue was paused but now resumed
+                logger.info("Queue processing resumed")
+                was_paused = False
+
             # v4.0.39: Check quota status FIRST - don't load YouTube API if quota exceeded
             if check_quota_recently_exceeded(db):
                 # Quota exceeded - sleep until midnight Pacific (quota reset time)
@@ -373,6 +399,12 @@ def main():
 
                 logger.info(f"Quota exceeded - sleeping until midnight Pacific ({hours}h {minutes}m)")
                 time.sleep(time_until_reset)
+                continue
+
+            elif result == 'paused':
+                # Queue is paused, sleep 60 seconds and check again
+                logger.debug("Queue paused, sleeping 60 seconds")
+                time.sleep(60)
                 continue
 
             elif result == 'success':

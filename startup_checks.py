@@ -299,6 +299,10 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                     'time_until_reset': next_reset_str
                 }
 
+                # Check queue pause state
+                pause_file = '/tmp/youtube_thumbs_queue_paused'
+                queue_paused = os.path.exists(pause_file)
+
                 details['queue'] = {
                     'total': queue_stats.get('total_items', 0),
                     'pending': queue_stats.get('pending', 0),
@@ -306,7 +310,8 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                     'completed': queue_stats.get('completed', 0),
                     'failed': queue_stats.get('failed', 0),
                     'pending_searches': queue_stats.get('pending_searches', 0),
-                    'pending_ratings': queue_stats.get('pending_ratings', 0)
+                    'pending_ratings': queue_stats.get('pending_ratings', 0),
+                    'paused': queue_paused
                 }
 
                 details['performance'] = {

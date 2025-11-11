@@ -251,6 +251,35 @@
                                 {{ yt_test.details.queue.pending_searches }} searches, {{ yt_test.details.queue.pending_ratings }} ratings
                             </div>
                             {% endif %}
+
+                            <!-- Queue Pause Control -->
+                            <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 4px; border: 1px solid #e5e7eb;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                    <div>
+                                        <div style="font-weight: 600; margin-bottom: 3px;">Queue Processing:</div>
+                                        <div id="queuePauseStatus" style="font-size: 0.85em; color: #666;">
+                                            {% if yt_test.details.queue.get('paused') %}
+                                            <span style="color: #f59e0b;">⏸️ Paused</span>
+                                            {% else %}
+                                            <span style="color: #10b981;">▶️ Running</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <button
+                                        id="toggleQueuePauseBtn"
+                                        onclick="toggleQueuePause()"
+                                        style="padding: 8px 16px; border: none; border-radius: 4px; font-weight: 600; font-size: 0.85em; cursor: pointer; transition: all 0.2s; {% if yt_test.details.queue.get('paused') %}background: #10b981; color: white;{% else %}background: #f59e0b; color: white;{% endif %}">
+                                        {% if yt_test.details.queue.get('paused') %}
+                                        ▶️ Resume
+                                        {% else %}
+                                        ⏸️ Pause
+                                        {% endif %}
+                                    </button>
+                                </div>
+                                <div style="margin-top: 8px; font-size: 0.8em; color: #666;">
+                                    When paused, queue items are added but not processed
+                                </div>
+                            </div>
                         </div>
                         {% endif %}
 
@@ -492,5 +521,52 @@
             <a href="{{ ingress_path }}/health" class="footer-link">❤️ Health Check</a>
         </div>
     </div>
+
+    <script>
+        async function toggleQueuePause() {
+            const btn = document.getElementById('toggleQueuePauseBtn');
+            const statusDiv = document.getElementById('queuePauseStatus');
+
+            // Disable button during request
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'wait';
+
+            try {
+                const response = await fetch('{{ ingress_path }}/api/queue/toggle-pause', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to toggle queue pause state');
+                }
+
+                const data = await response.json();
+
+                // Update UI based on new state
+                if (data.paused) {
+                    statusDiv.innerHTML = '<span style="color: #f59e0b;">⏸️ Paused</span>';
+                    btn.innerHTML = '▶️ Resume';
+                    btn.style.background = '#10b981';
+                } else {
+                    statusDiv.innerHTML = '<span style="color: #10b981;">▶️ Running</span>';
+                    btn.innerHTML = '⏸️ Pause';
+                    btn.style.background = '#f59e0b';
+                }
+            } catch (error) {
+                console.error('Error toggling queue pause:', error);
+                alert('Failed to toggle queue pause state. Please try again.');
+            } finally {
+                // Re-enable button
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+        }
+    </script>
 </body>
 </html>

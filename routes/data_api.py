@@ -265,3 +265,39 @@ def get_recommendations_api() -> Response:
     pass  # Decorator handles everything
 
 
+@bp.route('/queue/toggle-pause', methods=['POST'])
+def toggle_queue_pause() -> Response:
+    """
+    Toggle the queue pause state.
+    When paused, the queue worker will not process any items.
+    Items can still be added to the queue while paused.
+    """
+    import os
+
+    pause_file = '/tmp/youtube_thumbs_queue_paused'
+
+    try:
+        # Toggle the pause state
+        if os.path.exists(pause_file):
+            # Currently paused, resume
+            os.remove(pause_file)
+            paused = False
+            logger.info("Queue processing resumed")
+        else:
+            # Currently running, pause
+            with open(pause_file, 'w') as f:
+                f.write('paused')
+            paused = True
+            logger.info("Queue processing paused")
+
+        return jsonify({
+            'success': True,
+            'paused': paused,
+            'message': 'Queue paused' if paused else 'Queue resumed'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error toggling queue pause state: {e}")
+        return error_response('Failed to toggle queue pause state', 500)
+
+
