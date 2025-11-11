@@ -128,55 +128,13 @@ git push
 
 **IMPORTANT**: Use existing helper functions instead of writing duplicate code.
 
-#### Formatting Helpers (`helpers/template_helpers.py`)
+**Key helpers to use:**
+- `format_song_display()` - Song title and artist display formatting
+- `format_status_badge()` - Success/failure status badges
+- `format_badge()` - Generic badge formatting
+- `g.ingress_path` - Always use instead of retrieving from request
 
-**Always use these helpers for consistent formatting:**
-
-1. **Song Display Formatting**
-   ```python
-   from helpers.template_helpers import format_song_display
-
-   # ✅ DO THIS:
-   html = format_song_display(title, artist)
-
-   # ❌ DON'T DO THIS:
-   html = f'<strong>{title}</strong><br><span style="font-size: 0.85em; color: #64748b;">{artist}</span>'
-   ```
-
-2. **Status Badges**
-   ```python
-   from helpers.template_helpers import format_status_badge
-
-   # ✅ DO THIS:
-   status_html = format_status_badge(success_bool)
-
-   # ❌ DON'T DO THIS:
-   status_html = format_badge('✓ Success', 'success') if success else format_badge('✗ Failed', 'error')
-   ```
-
-3. **Other Badges**
-   ```python
-   from helpers.template_helpers import format_badge
-
-   badge = format_badge('⏳ Pending', 'warning')
-   badge = format_badge('🔍 search', 'info')
-   ```
-
-#### Ingress Path (v4.5.0+)
-
-**CRITICAL**: Always use `g.ingress_path` instead of retrieving from request.
-
-```python
-from flask import g
-
-# ✅ DO THIS:
-ingress_path = g.ingress_path
-
-# ❌ DON'T DO THIS:
-ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
-```
-
-**Why?** The `before_request` hook in `app.py` centralizes this. Using the old pattern creates duplication.
+**See `CODE_ORGANIZATION.md` for detailed documentation and examples of all helper functions.**
 
 ### Code Organization
 
