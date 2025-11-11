@@ -183,6 +183,8 @@ else
     bashio::log.info "No failed queue items to retry"
 fi
 
+# Note: sqlite_web is now integrated directly into Flask (no separate process needed)
+# See database_proxy.py for WSGI mounting implementation
 SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
 SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 
@@ -222,10 +224,6 @@ else
 fi
 
 cleanup() {
-    if [ -n "${SQLITE_WEB_PID}" ]; then
-        bashio::log.info "Stopping sqlite_web (PID ${SQLITE_WEB_PID})"
-        kill "${SQLITE_WEB_PID}" >/dev/null 2>&1 || true
-    fi
     if [ -n "${QUEUE_WORKER_PID}" ]; then
         bashio::log.info "Stopping queue worker (PID ${QUEUE_WORKER_PID})"
         kill "${QUEUE_WORKER_PID}" >/dev/null 2>&1 || true

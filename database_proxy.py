@@ -1,12 +1,9 @@
 """
-Database proxy module for forwarding requests to sqlite_web.
-Handles ingress path rewriting and custom CSS injection.
+Database viewer integration module - mounts sqlite_web directly into Flask.
+Replaces HTTP proxying with in-process WSGI mounting for better performance.
 """
 import os
 import re
-import traceback
-import requests
-from flask import request, Response, g
 from logger import logger
 
 
@@ -32,107 +29,90 @@ def sanitize_ingress_path(path):
     return path
 
 
-def create_database_proxy_handler(csrf=None):
+def create_sqlite_web_middleware(db_path):
     """
-    Create and return the database proxy handler function.
+    Create sqlite_web WSGI application for direct mounting into Flask.
+
+    This replaces the HTTP proxy approach with direct WSGI app mounting,
+    providing better performance and simpler architecture.
 
     Args:
-        csrf: Flask-WTF CSRFProtect instance (optional, for exemption)
+        db_path: Path to the SQLite database file
 
     Returns:
-        Function that handles database proxy requests (CSRF-exempt)
+        WSGI application callable that serves sqlite_web
     """
-    def database_proxy(path):
-        """
-        Proxy requests to sqlite_web running on port 8080.
+    try:
+        from sqlite_web import app as sqlite_web_module
 
-        v4.0.6: CSRF-exempt - sqlite_web doesn't provide CSRF tokens.
-        Safe because:
-        1. Proxies only to localhost (SSRF protected)
-        2. Read-only operations (exports, queries)
-        3. No state-changing operations on our app
-        """
-        # SECURITY: Hardcode localhost to prevent SSRF - only proxy to local sqlite_web
-        # Environment variables are validated to ensure they're localhost
-        sqlite_web_host = os.getenv('SQLITE_WEB_HOST', '127.0.0.1')
-        sqlite_web_port = os.getenv('SQLITE_WEB_PORT', '8080')
+        # Configure sqlite_web
+        # Note: sqlite_web uses global config, so we set environment variables
+        os.environ['SQLITE_WEB_DATABASE'] = db_path
+        os.environ['SQLITE_WEB_PASSWORD'] = ''  # No password (protected by Home Assistant)
 
-        # SECURITY: Validate that host is localhost only (prevent SSRF)
-        if sqlite_web_host not in ('127.0.0.1', 'localhost', '::1'):
-            logger.error(f"Invalid SQLITE_WEB_HOST rejected: {sqlite_web_host}")
-            return Response("Invalid database configuration", status=500)
+        # Get the WSGI app from sqlite_web
+        # sqlite_web creates its Flask app on import
+        sqlite_web_app = sqlite_web_module.app
 
-        # SECURITY: Validate port is numeric and in valid range
-        try:
-            port_num = int(sqlite_web_port)
-            if not (1 <= port_num <= 65535):
-                raise ValueError("Port out of range")
-        except (ValueError, TypeError):
-            logger.error(f"Invalid SQLITE_WEB_PORT rejected: {sqlite_web_port}")
-            return Response("Invalid database configuration", status=500)
+        # Wrap sqlite_web app to inject custom CSS and handle ingress paths
+        def wrapped_sqlite_web(environ, start_response):
+            """
+            WSGI wrapper that injects custom styling and handles ingress paths.
+            """
+            # Fix PATH_INFO for sqlite_web (remove /database prefix)
+            original_path = environ.get('PATH_INFO', '/')
+            if original_path.startswith('/database'):
+                environ['PATH_INFO'] = original_path[len('/database'):]
+            if not environ['PATH_INFO']:
+                environ['PATH_INFO'] = '/'
 
-        sqlite_web_url = f"http://{sqlite_web_host}:{sqlite_web_port}"
+            # Store original start_response to intercept response
+            responses = []
+            def custom_start_response(status, headers, exc_info=None):
+                responses.append((status, headers))
+                return start_response(status, headers, exc_info)
 
-        # SECURITY: Sanitize path to prevent path traversal
-        if path:
-            # Remove any ../ or ./ patterns
-            clean_path = path.replace('../', '').replace('./', '')
-            target_url = f"{sqlite_web_url}/{clean_path}"
-        else:
-            target_url = sqlite_web_url
+            # Call sqlite_web app
+            app_iter = sqlite_web_app(environ, custom_start_response)
 
-        # Forward query parameters
-        query_string = request.query_string.decode('utf-8')
-        if query_string:
-            target_url += f"?{query_string}"
+            # If HTML response, inject custom CSS
+            if responses and len(responses) > 0:
+                status, headers = responses[0]
+                content_type = dict(headers).get('Content-Type', '')
 
-        try:
-            # SECURITY: Forward the request to localhost-only sqlite_web (SSRF protected)
-            resp = requests.request(
-                method=request.method,
-                url=target_url,
-                headers={key: value for (key, value) in request.headers if key != 'Host'},
-                data=request.get_data(),
-                cookies=request.cookies,
-                allow_redirects=False,
-                timeout=30
-            )
+                if 'text/html' in content_type:
+                    # Collect response body
+                    body_parts = []
+                    for data in app_iter:
+                        body_parts.append(data)
 
-            # Build response
-            excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-            headers = [(name, value) for (name, value) in resp.raw.headers.items()
-                       if name.lower() not in excluded_headers]
+                    body = b''.join(body_parts)
 
-            # Inject custom CSS and fix links for Home Assistant ingress if this is HTML
-            content = resp.content
-            content_type = resp.headers.get('Content-Type', '')
-            if 'text/html' in content_type and b'</head>' in content:
-                # Rewrite links for ingress compatibility
-                # sqlite_web generates links like href="/ratings.db/table"
-                # We need to rewrite them to include the ingress prefix
-                raw_ingress_path = g.ingress_path
-                if raw_ingress_path:
-                    # SECURITY: Sanitize ingress path to prevent XSS/HTML injection
-                    ingress_path = sanitize_ingress_path(raw_ingress_path)
-                    if ingress_path:  # Only rewrite if we have a valid sanitized path
-                        # Rewrite hrefs to include /database prefix and ingress path
-                        content = content.replace(b'href="/', f'href="{ingress_path}/database/'.encode())
-                        content = content.replace(b"href='/", f"href='{ingress_path}/database/".encode())
-                        content = content.replace(b'action="/', f'action="{ingress_path}/database/'.encode())
-                        content = content.replace(b"action='/", f"action='{ingress_path}/database/".encode())
-                    else:
-                        # Invalid ingress path, use fallback
-                        content = content.replace(b'href="/', b'href="/database/')
-                        content = content.replace(b"href='/", b"href='/database/")
-                        content = content.replace(b'action="/', b'action="/database/')
-                        content = content.replace(b"action='/", b"action='/database/")
-                else:
-                    # Not through ingress, just add /database prefix
-                    content = content.replace(b'href="/', b'href="/database/')
-                    content = content.replace(b"href='/", b"href='/database/")
-                    content = content.replace(b'action="/', b'action="/database/')
-                    content = content.replace(b"action='/", b"action='/database/")
-                custom_css = b'''
+                    # Inject custom CSS if we find </head>
+                    if b'</head>' in body:
+                        # Get ingress path from environ
+                        ingress_path = environ.get('HTTP_X_INGRESS_PATH', '')
+
+                        # Rewrite links for ingress compatibility
+                        if ingress_path:
+                            sanitized_path = sanitize_ingress_path(ingress_path)
+                            if sanitized_path:
+                                body = body.replace(b'href="/', f'href="{sanitized_path}/database/'.encode())
+                                body = body.replace(b"href='/", f"href='{sanitized_path}/database/".encode())
+                                body = body.replace(b'action="/', f'action="{sanitized_path}/database/'.encode())
+                                body = body.replace(b"action='/", f"action='{sanitized_path}/database/".encode())
+                            else:
+                                body = body.replace(b'href="/', b'href="/database/')
+                                body = body.replace(b"href='/", b"href='/database/")
+                                body = body.replace(b'action="/', b'action="/database/')
+                                body = body.replace(b"action='/", b"action='/database/")
+                        else:
+                            body = body.replace(b'href="/', b'href="/database/')
+                            body = body.replace(b"href='/", b"href='/database/")
+                            body = body.replace(b'action="/', b'action="/database/')
+                            body = body.replace(b"action='/", b"action='/database/")
+
+                        custom_css = b'''
 <style>
 /* Custom CSS to make sqlite_web sidebar narrower and fix theme compatibility */
 #sidebar, .col-3 {
@@ -230,10 +210,10 @@ header, .header {
 }
 </style>
 '''
-                # Auto-sort video_ratings table by date_last_played using JavaScript
-                auto_sort_js = b''
-                if 'video_ratings' in path.lower() and 'content' in path.lower():
-                    auto_sort_js = b'''
+                        # Auto-sort video_ratings table by date_last_played
+                        auto_sort_js = b''
+                        if b'video_ratings' in original_path.lower().encode() and b'content' in original_path.lower().encode():
+                            auto_sort_js = b'''
 <script>
 // Auto-sort video_ratings table by date_last_played (descending, NULLs last)
 document.addEventListener('DOMContentLoaded', function() {
@@ -248,48 +228,38 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 '''
-                content = content.replace(b'</head>', custom_css + auto_sort_js + b'</head>')
 
-            # SECURITY: Create response from proxied content
-            # Mitigations in place:
-            # 1. Content from localhost-only sqlite_web (trusted source)
-            # 2. Ingress path is sanitized via sanitize_ingress_path() (line 86)
-            # 3. CSP headers restrict script execution
-            # 4. X-Content-Type-Options prevents MIME sniffing
-            # nosec B201 - Multiple layers of XSS protection applied
-            response = Response(content, resp.status_code, headers)
+                        body = body.replace(b'</head>', custom_css + auto_sort_js + b'</head>')
 
-            # SECURITY: Add comprehensive security headers to prevent XSS
-            # Strict CSP: only allow scripts/styles from self
-            # Allow frame-ancestors 'self' to enable embedding in our own wrapper page
-            response.headers['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data:; "
-                "connect-src 'self'; "
-                "frame-ancestors 'self'"
-            )
-            response.headers['X-Content-Type-Options'] = 'nosniff'
-            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-            response.headers['X-XSS-Protection'] = '1; mode=block'
+                        # Update Content-Length header
+                        new_headers = []
+                        for name, value in headers:
+                            if name.lower() not in ['content-length', 'content-encoding', 'transfer-encoding']:
+                                new_headers.append((name, value))
+                        new_headers.append(('Content-Length', str(len(body))))
 
-            return response
+                        # Add security headers
+                        new_headers.append(('Content-Security-Policy',
+                            "default-src 'self'; "
+                            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                            "style-src 'self' 'unsafe-inline'; "
+                            "img-src 'self' data:; "
+                            "connect-src 'self'; "
+                            "frame-ancestors 'self'"))
+                        new_headers.append(('X-Content-Type-Options', 'nosniff'))
+                        new_headers.append(('X-Frame-Options', 'SAMEORIGIN'))
+                        new_headers.append(('X-XSS-Protection', '1; mode=block'))
 
-        except requests.exceptions.ConnectionError:
-            logger.error("Failed to connect to sqlite_web - is it running?")
-            return Response("Database viewer not available. sqlite_web may not be running.", status=503)
-        except Exception as e:
-            logger.error(f"Error proxying to sqlite_web: {e}")
-            logger.error(traceback.format_exc())
-            return Response("Error accessing database viewer", status=500)
+                        # Start response with modified headers
+                        start_response(status, new_headers)
+                        return [body]
 
-    # v4.0.6: Exempt from CSRF protection
-    # sqlite_web doesn't provide CSRF tokens, and this is safe because:
-    # - Only proxies to localhost (SSRF protected)
-    # - Read-only database operations
-    # - No state changes to our Flask app
-    if csrf:
-        database_proxy = csrf.exempt(database_proxy)
+            # Not HTML or no modification needed, return as-is
+            return app_iter
 
-    return database_proxy
+        logger.info(f"sqlite_web WSGI app created successfully for {db_path}")
+        return wrapped_sqlite_web
+
+    except Exception as e:
+        logger.error(f"Failed to create sqlite_web WSGI app: {e}")
+        raise

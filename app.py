@@ -7,6 +7,7 @@ import os
 import traceback
 import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.security import safe_join
 from logger import logger
 from homeassistant_api import ha_api
@@ -20,7 +21,7 @@ from helpers.video_helpers import is_youtube_content, get_video_title, get_video
 from metrics_tracker import metrics
 from helpers.search_helpers import search_and_match_video
 from helpers.cache_helpers import find_cached_video
-from database_proxy import create_database_proxy_handler
+from database_proxy import create_sqlite_web_middleware
 from routes.data_api import bp as data_api_bp, init_data_api_routes
 from routes.logs_routes import bp as logs_bp, init_logs_routes
 from routes.data_viewer_routes import bp as data_viewer_bp, init_data_viewer_routes
@@ -110,8 +111,7 @@ def handle_csrf_error(e):
     logger.warning(f"CSRF validation failed: {e.description}")
     return jsonify({'error': 'CSRF validation failed', 'message': e.description}), 400
 
-# Configure Flask to work behind Home Assistant ingress proxy
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+# Note: ProxyFix middleware is applied after sqlite_web mounting (see DATABASE INITIALIZATION section)
 
 # ============================================================================
 # TEMPLATE CONTEXT PROCESSORS
@@ -349,6 +349,33 @@ except Exception as e:
 
 # Inject database into youtube_api module for API usage tracking
 set_youtube_api_database(db)
+
+# ============================================================================
+# SQLITE_WEB INTEGRATION
+# ============================================================================
+
+# Mount sqlite_web directly into Flask using DispatcherMiddleware
+# This replaces the HTTP proxy approach for better performance
+try:
+    db_path = os.environ.get('YTT_DB_PATH', '/config/youtube_thumbs/ratings.db')
+    sqlite_web_wsgi = create_sqlite_web_middleware(db_path)
+
+    # Mount sqlite_web at /database using DispatcherMiddleware
+    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+        '/database': sqlite_web_wsgi
+    })
+    logger.info("sqlite_web mounted at /database (direct WSGI integration)")
+except Exception as e:
+    logger.warning(f"Failed to mount sqlite_web: {e}")
+    logger.warning("Database admin interface will not be available")
+
+# Configure Flask to work behind Home Assistant ingress proxy
+# IMPORTANT: ProxyFix must be applied AFTER DispatcherMiddleware
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# ============================================================================
+# BLUEPRINT REGISTRATION
+# ============================================================================
 
 # Initialize and register data API blueprint
 init_data_api_routes(db)
@@ -644,11 +671,8 @@ def index() -> str:
         return "<h1>Error loading page</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
-# Database proxy routes - delegates to database_proxy module
-# Allow all HTTP methods (GET, POST, etc.) for sqlite_web functionality like exports
-# v4.0.6: Pass csrf instance to enable CSRF exemption for sqlite_web proxy
-app.add_url_rule('/database', 'database_proxy_root', create_database_proxy_handler(csrf), defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
-app.add_url_rule('/database/<path:path>', 'database_proxy_path', create_database_proxy_handler(csrf), methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'])
+# Note: Database viewer routes (/database) are now handled by DispatcherMiddleware
+# See SQLITE_WEB INTEGRATION section for direct WSGI mounting
 
 # ============================================================================
 # APPLICATION INITIALIZATION
