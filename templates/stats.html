@@ -33,10 +33,10 @@
         <!-- Tab Navigation -->
         <div class="stats-tabs">
             <a href="{{ ingress_path }}/stats" class="{{ 'active' if current_tab == 'overview' }}">📊 Overview</a>
-            <a href="{{ ingress_path }}/stats/analytics" class="{{ 'active' if current_tab == 'analytics' }}">📈 Analytics</a>
-            <a href="{{ ingress_path }}/stats/api" class="{{ 'active' if current_tab == 'api' }}">🔧 API & Queue</a>
-            <a href="{{ ingress_path }}/stats/categories" class="{{ 'active' if current_tab == 'categories' }}">📁 Categories</a>
-            <a href="{{ ingress_path }}/stats/discovery" class="{{ 'active' if current_tab == 'discovery' }}">🔍 Discovery</a>
+            <a href="{{ ingress_path }}/stats?tab=analytics" class="{{ 'active' if current_tab == 'analytics' }}">📈 Analytics</a>
+            <a href="{{ ingress_path }}/stats?tab=api" class="{{ 'active' if current_tab == 'api' }}">🔧 API & Queue</a>
+            <a href="{{ ingress_path }}/stats?tab=categories" class="{{ 'active' if current_tab == 'categories' }}">📁 Categories</a>
+            <a href="{{ ingress_path }}/stats?tab=discovery" class="{{ 'active' if current_tab == 'discovery' }}">🔍 Discovery</a>
         </div>
 
         {% if current_tab == 'overview' %}
