@@ -284,10 +284,13 @@ def rate_song_form() -> Response:
         return safe_redirect('rating', page)
 
     except Exception as e:
-        logger.error(f"Error processing rating form: {e}")
+        logger.error("Error processing rating form")
         logger.error(traceback.format_exc())
         # Redirect back even on error
-        page = request.form.get('page', '1')
+        try:
+            page = request.form.get('page', '1')
+        except:
+            page = '1'
         return safe_redirect('rating', page)
 
 
