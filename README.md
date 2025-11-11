@@ -38,6 +38,32 @@ See **[INSTALL.md](INSTALL.md)** for complete installation and OAuth setup instr
 | `search_max_candidates` | 10 | Max duration-matched candidates to check |
 | `debug_endpoints_enabled` | false | Enable debug API endpoints |
 
+## Security Architecture
+
+### Network Binding
+
+As of **v5.5.0**, the addon binds to `127.0.0.1:21812` (localhost only) instead of `0.0.0.0:21812`. This prevents direct network access while maintaining full functionality:
+
+- **Home Assistant automations** continue to work via `http://localhost:21812`
+- **Web UI** remains accessible through Home Assistant's ingress proxy
+- **Network attacks** are blocked since the port is not exposed to the network
+
+This change improves security without breaking existing automations.
+
+### Authentication Layers
+
+1. **Network isolation**: Server only accepts localhost connections
+2. **Supervisor authentication**: Automatic token-based authentication from Home Assistant
+3. **OAuth credentials**: YouTube API access secured by OAuth 2.0 tokens
+
+### Current Security Model
+
+The addon currently relies on network binding for access control. Home Assistant automations use `rest_command` services that call `http://localhost:21812` endpoints. The localhost binding ensures only the Home Assistant host can access the API.
+
+### Planned Enhancement (v6.0.0)
+
+Future versions will transition to ingress-only access, removing the direct port binding entirely. This will require updating automations to use ingress URLs, providing an additional authentication layer through Home Assistant's ingress proxy system.
+
 ### Home Assistant Integration
 
 Add REST commands to your `configuration.yaml`:
@@ -193,7 +219,7 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 - OAuth credentials stored in `/addon_configs/` (persistent across updates)
 - Authentication via Home Assistant Supervisor token (automatic)
 - Uses host networking (`host_network: true`) for seamless HA integration
-- API bound to `0.0.0.0:21812` (accessible via `localhost:21812` from Home Assistant)
+- API bound to `127.0.0.1:21812` (localhost only - network access blocked)
 - Web UI accessible through Home Assistant ingress proxy
 - Database viewer bound to `127.0.0.1` by default (localhost only)
 - ⚠️ **Never share your `credentials.json` or `token.json` files**

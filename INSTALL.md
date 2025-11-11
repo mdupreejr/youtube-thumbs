@@ -93,6 +93,8 @@ the database admin UI or the ratings logs.
    ```
 3. If you see OAuth credential warnings, verify you copied the files to the correct location
 
+**Security note**: As of v5.5.0, the addon binds to `127.0.0.1:21812` (localhost only) for improved security. This prevents network-based attacks while maintaining full functionality with Home Assistant automations.
+
 ### 6b. Access the Database Admin UI (optional)
 
 - Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**
@@ -203,5 +205,7 @@ See [README.md](README.md#api-endpoints) for complete API endpoint documentation
 
 - OAuth credentials are stored in `/addon_configs/` (persistent storage)
 - The add-on uses the Supervisor token automatically (no manual token needed)
-- Service only accessible from localhost (not exposed to network)
+- **Service binds to localhost only** (`127.0.0.1:21812`) - not exposed to network
+- Network binding prevents unauthorized access from other devices on your network
+- Home Assistant automations continue to work via `http://localhost:21812`
 - Never share your `credentials.json` file with others

@@ -23,8 +23,8 @@ fi
 # Port is fixed for ingress compatibility
 export PORT=21812
 
-# Bind to all interfaces so ingress and direct access work
-export HOST="0.0.0.0"
+# Bind to localhost only for security (ingress still works)
+export HOST="127.0.0.1"
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 
 export LOG_LEVEL=$(bashio::config 'log_level')
