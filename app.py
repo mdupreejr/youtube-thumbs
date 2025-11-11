@@ -718,9 +718,13 @@ logger.info("YouTube Thumbs application initialized and ready")
 
 # Only run the development server if executed directly (not via WSGI)
 if __name__ == '__main__':
-    # nosec B104 - Binding to 0.0.0.0 is intentional for Docker container deployment
-    host = os.getenv('HOST', '0.0.0.0')
+    # Bind to localhost by default for security (only accessible via localhost or ingress proxy)
+    host = os.getenv('HOST', '127.0.0.1')
     port = int(os.getenv('PORT', '21812'))
+
+    # Security warning if binding to all interfaces
+    if host == '0.0.0.0':
+        logger.warning("Binding to 0.0.0.0 exposes API to network. Use 127.0.0.1 for production security.")
 
     logger.info(f"Starting Flask development server on {host}:{port}")
     logger.warning("Using Flask development server. For production, use a WSGI server like Gunicorn.")
