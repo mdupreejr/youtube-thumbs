@@ -389,7 +389,7 @@ def get_queue_item_details(queue_id: int):
         logger.error(f"Error getting queue item details ({queue_id}): {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': f'Internal server error: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': 'Internal server error occurred'}), 500
 
 
 @bp.route('/logs/pending-ratings/item/<int:item_id>')

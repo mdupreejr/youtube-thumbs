@@ -317,12 +317,11 @@ class YouTubeAPI:
             if duration_diff > 2:
                 return None  # Skip videos that don't match duration (±2s tolerance)
             logger.debug(
-                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | Diff: {duration_diff}s | '{video_info['title']}'"
+                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | Diff: {duration_diff}s | ID: {video_info['yt_video_id']}"
             )
         elif duration is None and expected_duration is not None:
             logger.warning(
-                f"Duration missing for '{video_info['title']}' "
-                f"(ID: {video_info['yt_video_id']}); falling back to title match only"
+                f"Duration missing for video ID: {video_info['yt_video_id']}; falling back to title match only"
             )
 
         return video_info

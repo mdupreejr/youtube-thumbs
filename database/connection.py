@@ -161,7 +161,31 @@ class DatabaseConnection:
 
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
-        self.db_path = db_path
+        # SECURITY: Validate and normalize the database path to prevent path injection
+        # Only allow database files in specific safe directories
+        allowed_base_paths = [
+            Path('/config/youtube_thumbs'),
+            Path('/data'),
+            Path('/share/youtube_thumbs'),
+        ]
+
+        # Resolve to absolute path and normalize to prevent directory traversal
+        resolved_path = Path(os.path.abspath(db_path)).resolve()
+
+        # Check if the resolved path is within one of the allowed directories
+        is_safe_path = any(
+            str(resolved_path).startswith(str(base_path.resolve()))
+            for base_path in allowed_base_paths
+        )
+
+        if not is_safe_path:
+            logger.warning(
+                f"Database path {resolved_path} is not in allowed directories. "
+                f"Using default path {DEFAULT_DB_PATH}"
+            )
+            resolved_path = DEFAULT_DB_PATH.resolve()
+
+        self.db_path = resolved_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # v4.0.9: Timestamp warnings now suppressed globally at module level (line 17)
