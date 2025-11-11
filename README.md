@@ -110,10 +110,10 @@ Access via **OPEN WEB UI** button in the add-on page:
 
 **All YouTube API calls go through a single background queue worker:**
 
-- **Queue worker** - Separate process that processes 1 item per minute
+- **Queue worker** - Separate process that sleeps 60 seconds after processing each item
 - **Priority system** - Ratings (priority 1) processed before searches (priority 2)
 - **Quota protection** - Automatically pauses until midnight PT when quota exceeded
-- **Crash recovery** - Resets stuck items on restart
+- **Crash recovery** - Moves stuck items to back of queue on restart
 - **No threading** - Simple, reliable processing
 
 **Why this matters:** The queue prevents quota exhaustion by rate-limiting API calls and provides a central point for logging, monitoring, and quota management.

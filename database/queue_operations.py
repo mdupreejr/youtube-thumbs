@@ -170,6 +170,7 @@ class QueueOperations:
         This recovers from worker crashes/restarts.
 
         v4.0.9: Added crash recovery - items stuck in 'processing' will be retried.
+        v5.0.7: Moved stuck items to back of queue by updating requested_at timestamp.
         This is safe because all queue operations are idempotent:
         - Ratings: get_video_rating checks current state before changing
         - Searches: duplicate searches just update existing video_ratings entry
@@ -182,7 +183,8 @@ class QueueOperations:
                 """
                 UPDATE queue
                 SET status = 'pending',
-                    last_error = 'Reset from processing (worker crash recovery)'
+                    last_error = 'Reset from processing (worker crash recovery)',
+                    requested_at = CURRENT_TIMESTAMP
                 WHERE status = 'processing'
                 """
             )
