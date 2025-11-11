@@ -65,28 +65,15 @@ log_level: INFO
 
 **Note:** The add-on automatically uses the Supervisor token for authentication, and connects to Home Assistant via `http://supervisor/core` (no configuration needed).
 
-Need sqlite_web outside of Home Assistant ingress? Add
-
-```yaml
-sqlite_web_host: 0.0.0.0  # exposes the DB UI to your LAN
-sqlite_web_port: 8080     # optional, defaults to 8080
-```
-
-Only open the DB UI to networks you trust.
-
-Leaving `sqlite_web_host` at the default (`127.0.0.1`) means the **OPEN WEB UI**
-button will route through Home Assistant ingress automatically. If you override the
-host, skip the button and browse directly to `http://<home-assistant-host>:<sqlite_web_port>`.
-
 If Google reports `quotaExceeded`, the queue worker pauses all YouTube API traffic until
 midnight Pacific Time when quotas reset. During that pause new rating/search requests are
 queued and will be processed after quota recovery.
 
 Every time a video is matched we store both the Home Assistant artist/channel
 metadata and the YouTube channel so you can inspect mismatches later via
-sqlite_web or the ratings logs.
+the database admin UI or the ratings logs.
 
-**Security note:** The rating API always listens on `127.0.0.1` and cannot be exposed. The sqlite_web helper also defaults to `127.0.0.1`, but you can set `sqlite_web_host: 0.0.0.0` (and optionally adjust `sqlite_web_port`) if you intentionally want the DB UI reachable from your LAN.
+**Security note:** The addon runs in an isolated Docker network and is only accessible through Home Assistant's ingress proxy for maximum security.
 
 #### Finding your media player entity:
 1. Go to **Developer Tools** → **States**
