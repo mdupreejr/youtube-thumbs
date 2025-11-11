@@ -206,8 +206,7 @@ def process_next_item(db, yt_api):
                 logger.info(f"✓ Cache hit: '{title}' | YouTube ID: {video['yt_video_id']}")
                 logger.debug("  → Skipped YouTube search due to cache hit")
             else:
-                # Cache miss - search YouTube
-                logger.debug(f"Cache miss for '{title}' - searching YouTube")
+                # Cache miss - search YouTube (cache_helpers.py will log this)
 
                 # v4.0.64: Request API response data for debugging failed searches
                 result = search_and_match_video(ha_media, yt_api, db, return_api_response=True)
