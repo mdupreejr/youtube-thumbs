@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, jsonify, g
 import json
 from logging_helper import LoggingHelper, LogType
 from helpers.pagination_helpers import generate_page_numbers
-from helpers.time_helpers import format_time_ago, format_absolute_timestamp
+from helpers.time_helpers import format_relative_time, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
 from helpers.static_helpers import static_url
 from helpers.template_helpers import (
@@ -139,7 +139,7 @@ def api_calls_log():
 
             formatted_timestamp = format_absolute_timestamp(log.get('timestamp'))
             cells = [
-                TableCell(formatted_timestamp, format_time_ago(formatted_timestamp)),
+                TableCell(formatted_timestamp, format_relative_time(formatted_timestamp)),
                 TableCell(log.get('api_method', ''), method_html),
                 TableCell(log.get('operation_type') or '-'),
                 TableCell(query_text if query_text else '-'),
