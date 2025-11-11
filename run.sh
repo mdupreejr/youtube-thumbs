@@ -27,6 +27,17 @@ export PORT=21812
 export HOST="0.0.0.0"
 bashio::log.info "API binding to all interfaces (${HOST}:${PORT})"
 
+SQLITE_WEB_HOST_CONFIG=$(bashio::config 'sqlite_web_host')
+SQLITE_WEB_HOST_ENV="${SQLITE_WEB_HOST:-}"
+if bashio::var.has_value "${SQLITE_WEB_HOST_ENV}"; then
+    export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_ENV}"
+elif bashio::var.has_value "${SQLITE_WEB_HOST_CONFIG}" && [ "${SQLITE_WEB_HOST_CONFIG}" != "null" ]; then
+    export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_CONFIG}"
+else
+    export SQLITE_WEB_HOST="127.0.0.1"
+fi
+bashio::log.info "sqlite_web binding: ${SQLITE_WEB_HOST}"
+
 export LOG_LEVEL=$(bashio::config 'log_level')
 
 # Not-found cache configuration (hours to cache failed video searches)
@@ -174,6 +185,43 @@ fi
 
 # Note: sqlite_web is now integrated directly into Flask (no separate process needed)
 # See database_proxy.py for WSGI mounting implementation
+SQLITE_WEB_PORT_CONFIG=$(bashio::config 'sqlite_web_port')
+SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
+
+# sqlite_web always uses port 8080 or configured port, NOT the ingress port
+# (ingress port is now used by Flask app for bulk rating interface)
+if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
+    export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
+    bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
+elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}" && [ "${SQLITE_WEB_PORT_CONFIG}" != "null" ]; then
+    export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_CONFIG}"
+else
+    export SQLITE_WEB_PORT=8080
+fi
+
+bashio::log.info "sqlite_web will run on port ${SQLITE_WEB_PORT}"
+bashio::log.info "Note: Ingress 'Open Web UI' button opens Flask app on port ${PORT}, not sqlite_web"
+
+SQLITE_WEB_LOG="/config/youtube_thumbs/sqlite_web.log"
+SQLITE_WEB_PID=""
+
+if command -v sqlite_web >/dev/null 2>&1; then
+    bashio::log.info "Starting sqlite_web UI on port ${SQLITE_WEB_PORT}"
+    sqlite_web "${DB_PATH}" \
+        --no-browser \
+        --host "${SQLITE_WEB_HOST}" \
+        --port "${SQLITE_WEB_PORT}" \
+        >> "${SQLITE_WEB_LOG}" 2>&1 &
+    SQLITE_WEB_PID=$!
+    bashio::log.info "sqlite_web UI log: ${SQLITE_WEB_LOG}"
+    if [ "${SQLITE_WEB_HOST}" = "127.0.0.1" ] || [ "${SQLITE_WEB_HOST}" = "localhost" ] || [ "${SQLITE_WEB_HOST}" = "::1" ]; then
+        bashio::log.info "sqlite_web bound to ${SQLITE_WEB_HOST}; use the Home Assistant Web UI button or an SSH tunnel to access it."
+    else
+        bashio::log.info "Access sqlite_web at http://${SQLITE_WEB_HOST}:${SQLITE_WEB_PORT}"
+    fi
+else
+    bashio::log.warning "sqlite_web not found; database UI will be unavailable"
+fi
 
 cleanup() {
     if [ -n "${QUEUE_WORKER_PID}" ]; then
