@@ -43,16 +43,20 @@ def create_sqlite_web_middleware(db_path):
         WSGI application callable that serves sqlite_web
     """
     try:
-        from sqlite_web import app as sqlite_web_module
+        from sqlite_web import app, initialize_app
 
-        # Configure sqlite_web
-        # Note: sqlite_web uses global config, so we set environment variables
-        os.environ['SQLITE_WEB_DATABASE'] = db_path
-        os.environ['SQLITE_WEB_PASSWORD'] = ''  # No password (protected by Home Assistant)
+        # Initialize sqlite_web with database path
+        # This must be called before using the app
+        initialize_app(
+            database=db_path,
+            read_only=False,  # Allow writes for testing queries
+            password=None,  # No password (protected by Home Assistant)
+            url_prefix='',  # No prefix (handled by our mounting)
+            extensions=None,  # No additional extensions
+            foreign_keys=True  # Enable foreign key constraints
+        )
 
-        # Get the WSGI app from sqlite_web
-        # sqlite_web creates its Flask app on import
-        sqlite_web_app = sqlite_web_module.app
+        sqlite_web_app = app
 
         # Wrap sqlite_web app to inject custom CSS and handle ingress paths
         def wrapped_sqlite_web(environ, start_response):
