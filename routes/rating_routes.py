@@ -229,7 +229,7 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         })
 
     except Exception as e:
-        logger.error(f"Error rating video {video_id}: {e}")
+        logger.error(f"Error rating video {video_id}")
         logger.error(traceback.format_exc())
         return error_response('Failed to rate video', 500)
 
