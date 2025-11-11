@@ -102,7 +102,30 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     pending_items = db.list_pending_queue_items(limit=1000)
     formatted_items = [format_queue_item(item, db) for item in pending_items]
     formatted_items = [item for item in formatted_items if item]
-    formatted_items.sort(key=lambda x: x.get('requested_at') or '', reverse=True)
+
+    # Server-side sorting support
+    from flask import request
+    sort_by = request.args.get('sort_by', 'queued')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
+    # Map column keys to item keys
+    sort_key_map = {
+        'title': 'ha_title',
+        'artist': 'ha_artist',
+        'operation': 'operation',
+        'queued': 'requested_at',
+        'attempts': 'attempts',
+        'status': 'last_error'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'requested_at')
+    reverse = (sort_dir == 'desc')
+
+    # Sort items
+    if sort_key == 'attempts':
+        formatted_items.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+    else:
+        formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
 
     # Create table columns
     columns = [

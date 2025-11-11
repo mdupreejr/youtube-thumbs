@@ -59,21 +59,33 @@ class ConsistentTable {
 
     initSorting() {
         this.sortState = { column: null, direction: 'asc' };
-        
+
+        // Check if we're using server-side sorting (based on URL params)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sortBy = urlParams.get('sort_by');
+        const sortDir = urlParams.get('sort_dir') || 'asc';
+
         this.headers.forEach((header, index) => {
             const column = this.columns[index];
             if (!column.sortable) return;
 
             header.style.cursor = 'pointer';
             header.classList.add('sortable');
-            
+
             // Add sort indicator
             const indicator = document.createElement('span');
             indicator.className = 'sort-indicator';
             indicator.innerHTML = '↕';
             header.appendChild(indicator);
-            
-            header.addEventListener('click', () => this.sortTable(index));
+
+            // Use server-side sorting via URL navigation
+            header.addEventListener('click', () => this.sortTableServerSide(column.key, index));
+
+            // Update indicator if this is the current sort column
+            if (sortBy === column.key) {
+                indicator.innerHTML = sortDir === 'asc' ? '↑' : '↓';
+                indicator.style.color = '#0066cc';
+            }
         });
     }
 
@@ -164,42 +176,63 @@ class ConsistentTable {
         this.table.parentNode.insertBefore(dropdown, this.table);
     }
 
+    sortTableServerSide(columnKey, columnIndex) {
+        // Get current URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSortBy = urlParams.get('sort_by');
+        const currentSortDir = urlParams.get('sort_dir') || 'asc';
+
+        // Determine new sort direction
+        let newDirection = 'asc';
+        if (currentSortBy === columnKey && currentSortDir === 'asc') {
+            newDirection = 'desc';
+        }
+
+        // Update URL parameters
+        urlParams.set('sort_by', columnKey);
+        urlParams.set('sort_dir', newDirection);
+
+        // Navigate to new URL with sort parameters
+        window.location.search = urlParams.toString();
+    }
+
     sortTable(columnIndex) {
+        // Keep client-side sorting as fallback for legacy pages
         const column = this.columns[columnIndex];
         const tbody = this.table.querySelector('tbody');
         const rows = Array.from(tbody.querySelectorAll('tr'));
-        
+
         // Determine sort direction
         let direction = 'asc';
         if (this.sortState.column === columnIndex && this.sortState.direction === 'asc') {
             direction = 'desc';
         }
-        
+
         // Sort rows
         rows.sort((a, b) => {
             const aText = a.children[columnIndex]?.textContent.trim() || '';
             const bText = b.children[columnIndex]?.textContent.trim() || '';
-            
+
             // Try numeric comparison first
             const aNum = parseFloat(aText.replace(/[^\d.-]/g, ''));
             const bNum = parseFloat(bText.replace(/[^\d.-]/g, ''));
-            
+
             let comparison = 0;
             if (!isNaN(aNum) && !isNaN(bNum)) {
                 comparison = aNum - bNum;
             } else {
                 comparison = aText.localeCompare(bText);
             }
-            
+
             return direction === 'asc' ? comparison : -comparison;
         });
-        
+
         // Update DOM
         rows.forEach(row => tbody.appendChild(row));
-        
+
         // Update sort indicators
         this.updateSortIndicators(columnIndex, direction);
-        
+
         // Save sort state
         this.sortState = { column: columnIndex, direction };
         this.saveSettings();
