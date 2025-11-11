@@ -34,8 +34,6 @@ See **[INSTALL.md](INSTALL.md)** for complete installation and OAuth setup instr
 |--------|---------|-------------|
 | `media_player_entity` | (required) | Your AppleTV media player entity ID |
 | `log_level` | INFO | Logging verbosity (DEBUG, INFO, WARNING, ERROR) |
-| `sqlite_web_host` | 127.0.0.1 | Database viewer bind address |
-| `sqlite_web_port` | 8080 | Database viewer port |
 | `search_max_results` | 25 | Max YouTube search results to fetch |
 | `search_max_candidates` | 10 | Max duration-matched candidates to check |
 | `debug_endpoints_enabled` | false | Enable debug API endpoints |

@@ -4,7 +4,6 @@ Replaces HTTP proxying with in-process WSGI mounting for better performance.
 """
 import os
 import re
-from flask import g
 from logger import logger
 
 
@@ -264,30 +263,3 @@ document.addEventListener('DOMContentLoaded', function() {
     except Exception as e:
         logger.error(f"Failed to create sqlite_web WSGI app: {e}")
         raise
-
-
-def create_database_proxy_handler(csrf=None):
-    """
-    Legacy compatibility function (deprecated).
-
-    This function is kept for backward compatibility but should not be used.
-    The new approach uses create_sqlite_web_middleware() to mount sqlite_web
-    directly via DispatcherMiddleware in app.py.
-
-    Args:
-        csrf: Flask-WTF CSRFProtect instance (ignored)
-
-    Returns:
-        Stub function that returns 410 Gone
-    """
-    def database_proxy_stub(path):
-        from flask import Response
-        return Response(
-            "Database proxy endpoint deprecated. Use direct WSGI mounting instead.",
-            status=410
-        )
-
-    if csrf:
-        database_proxy_stub = csrf.exempt(database_proxy_stub)
-
-    return database_proxy_stub

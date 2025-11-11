@@ -106,11 +106,11 @@ sqlite_web or the ratings logs.
    ```
 3. If you see OAuth credential warnings, verify you copied the files to the correct location
 
-### 6b. Access the sqlite_web UI (optional)
+### 6b. Access the Database Admin UI (optional)
 
-- Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**; it will launch sqlite_web in a new browser tab.
-- Logs for the UI are stored in `/config/youtube_thumbs/sqlite_web.log`.
-- Need a different binding? Set `sqlite_web_host` (defaults to `127.0.0.1`) and `sqlite_web_port` or export the `SQLITE_WEB_HOST` / `SQLITE_WEB_PORT` env vars. Only expose the DB UI to networks you trust, and use a direct browser tab (`http://<home-assistant-host>:<sqlite_web_port>`) when you override the host.
+- Open the **YouTube Thumbs Rating** add-on page in Home Assistant and click **OPEN WEB UI**
+- Navigate to the **DB Admin** tab to access the sqlite_web database viewer
+- The database viewer is integrated directly into the web UI (no separate process or configuration needed)
 
 ### 7. Configure Home Assistant
 
