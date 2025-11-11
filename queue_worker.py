@@ -75,9 +75,18 @@ def process_next_item(db, yt_api):
         logger.debug("Skipping queue processing - quota exceeded since last reset")
         return 'quota_recent'
 
+    # Diagnostic: Check how many pending items exist before claiming
+    with db._lock:
+        cursor = db._conn.execute("SELECT COUNT(*) FROM queue WHERE status = 'pending'")
+        pending_count = cursor.fetchone()[0]
+        logger.debug(f"Queue stats before claim: {pending_count} pending items")
+
     # Claim next item from unified queue
     item = db.claim_next_queue_item()
     if not item:
+        # This should never happen if pending_count > 0
+        if pending_count > 0:
+            logger.error(f"BUG: claim_next_queue_item() returned None but {pending_count} pending items exist!")
         logger.debug("Queue is empty - no items to process")
         return 'empty'
 
