@@ -514,6 +514,15 @@ class YouTubeAPI:
         artist_clean = ' '.join(artist_clean.split())  # Remove extra whitespace
 
         if artist_clean:
+            # v5.0.10: Check if artist is already in query (Issue #123)
+            # Prevents duplicates like "The Verve - Bittersweet Symphony The Verve"
+            query_lower = query.lower()
+            artist_lower = artist_clean.lower()
+
+            if artist_lower in query_lower:
+                logger.debug(f"Artist '{artist_clean}' already in query, not adding")
+                return query
+
             enhanced_query = f"{query} {artist_clean}"
             logger.debug(f"Enhanced search query with artist: '{enhanced_query}'")
             return enhanced_query
