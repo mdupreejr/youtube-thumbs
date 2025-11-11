@@ -437,6 +437,11 @@ table tr:hover {
     flex-wrap: wrap;
 }
 
+.pagination a {
+    text-decoration: none;
+    color: inherit;
+}
+
 .pagination button {
     padding: 6px 12px;
     background: white;

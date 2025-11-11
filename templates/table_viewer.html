@@ -205,23 +205,29 @@
             {% if pagination and pagination.total_pages > 1 %}
             <div class="pagination">
                 {% if pagination.current_page > 1 %}
-                    <a href="{{ ingress_path }}{{ pagination.prev_url }}">← Prev</a>
+                    <a href="{{ ingress_path }}{{ pagination.prev_url }}" style="text-decoration: none;">
+                        <button>← Prev</button>
+                    </a>
                 {% else %}
                     <button disabled>← Prev</button>
                 {% endif %}
 
                 {% for page_num in pagination.page_numbers %}
                     {% if page_num == '...' %}
-                        <span class="ellipsis">...</span>
+                        <span class="ellipsis" style="padding: 6px 12px; color: #64748b;">...</span>
                     {% elif page_num == pagination.current_page %}
-                        <span class="current-page">{{ page_num }}</span>
+                        <button class="active">{{ page_num }}</button>
                     {% else %}
-                        <a href="{{ ingress_path }}{{ pagination.page_url_template.replace('PAGE_NUM', page_num|string) }}">{{ page_num }}</a>
+                        <a href="{{ ingress_path }}{{ pagination.page_url_template.replace('PAGE_NUM', page_num|string) }}" style="text-decoration: none;">
+                            <button>{{ page_num }}</button>
+                        </a>
                     {% endif %}
                 {% endfor %}
 
                 {% if pagination.current_page < pagination.total_pages %}
-                    <a href="{{ ingress_path }}{{ pagination.next_url }}">Next →</a>
+                    <a href="{{ ingress_path }}{{ pagination.next_url }}" style="text-decoration: none;">
+                        <button>Next →</button>
+                    </a>
                 {% else %}
                     <button disabled>Next →</button>
                 {% endif %}
