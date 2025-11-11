@@ -223,6 +223,5 @@ def test_endpoint(endpoint_name: str, test_function: Callable, *test_args):
         return response
     except Exception as e:
         logger.error(f"=== ERROR in /test/{endpoint_name} endpoint ===")
-        logger.error(f"Exception: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({"success": False, "message": f"Error testing {endpoint_name} connection"})
