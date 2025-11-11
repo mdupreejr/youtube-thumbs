@@ -23,8 +23,9 @@ fi
 # Port is fixed for ingress compatibility
 export PORT=21812
 
-# Bind to localhost only for security (ingress still works)
-export HOST="127.0.0.1"
+# TEMPORARY: Bind to 0.0.0.0 for Cloudflare tunnel compatibility
+# TODO: Implement application-layer ingress enforcement instead of network-layer
+export HOST="0.0.0.0"
 bashio::log.info "API server binding: ${HOST}:${PORT}"
 
 export LOG_LEVEL=$(bashio::config 'log_level')
