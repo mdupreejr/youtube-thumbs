@@ -4,7 +4,10 @@ Standardized error handling utilities for consistent error management.
 
 from typing import Optional, Any, Callable
 from functools import wraps
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class YouTubeThumbsError(Exception):

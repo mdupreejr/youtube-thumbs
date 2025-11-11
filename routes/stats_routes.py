@@ -6,7 +6,10 @@ import os
 import traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, Response, g
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from constants import YOUTUBE_CATEGORIES
 from helpers.video_helpers import get_video_title, get_video_artist, format_videos_for_display
 from helpers.time_helpers import format_relative_time

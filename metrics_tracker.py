@@ -7,7 +7,10 @@ import threading
 from datetime import datetime, timedelta
 from collections import deque, defaultdict, Counter
 from typing import Dict, Any, Optional, List, Tuple
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class MetricsTracker:

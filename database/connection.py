@@ -10,7 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 # v4.0.9: Suppress Python 3.12 timestamp converter deprecation warning globally
 # This affects all timestamp operations, not just connection creation

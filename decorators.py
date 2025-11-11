@@ -4,7 +4,10 @@ Decorators for simplifying repetitive patterns in the codebase.
 from functools import wraps
 from typing import Any, Callable
 from googleapiclient.errors import HttpError
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from quota_error import (
     QuotaExceededError,
     VideoNotFoundError,

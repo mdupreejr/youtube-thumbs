@@ -9,7 +9,10 @@ import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.security import safe_join
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instances
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from homeassistant_api import ha_api
 from youtube_api import get_youtube_api, set_database as set_youtube_api_database
 from database import get_database
@@ -229,8 +232,7 @@ def handle_exception(e):
     """Catch-all error handler - returns JSON for API routes, HTML for pages."""
     from flask import request
 
-    logger.error(f"Unhandled exception on {request.path}: {e}")
-    logger.error(traceback.format_exc())
+    LoggingHelper.log_error_with_trace(f"Unhandled exception on {request.path}", e)
 
     # SECURITY: Check if debug mode is enabled (set via environment variable)
     # But forcibly disable in production environments
@@ -406,23 +408,20 @@ def _cache_wrapper(ha_media: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 # Start stats refresher background task (refreshes every hour)
-logger.debug("Initializing stats refresher...")
 stats_refresher = StatsRefresher(db=db, interval_seconds=3600)
-logger.debug("Starting stats refresher...")
 stats_refresher.start()
 atexit.register(stats_refresher.stop)
-logger.debug("Stats refresher started successfully")
+LoggingHelper.log_operation("stats refresher", "started")
 
 # Start song tracker background task (polls HA every 30 seconds)
 song_tracking_enabled = os.environ.get('SONG_TRACKING_ENABLED', 'true').lower() not in FALSE_VALUES
 song_tracking_interval = int(os.environ.get('SONG_TRACKING_POLL_INTERVAL', '30'))
 
 if song_tracking_enabled:
-    logger.debug(f"Initializing song tracker (poll interval: {song_tracking_interval}s)...")
     song_tracker = SongTracker(ha_api=ha_api, db=db, poll_interval=song_tracking_interval)
-    logger.debug("Starting song tracker...")
     song_tracker.start()
     atexit.register(song_tracker.stop)
+    LoggingHelper.log_operation(f"song tracker (poll interval: {song_tracking_interval}s)", "started")
 else:
     logger.info("Song tracker disabled (song_tracking_enabled=false)")
 
@@ -518,12 +517,8 @@ def serve_static(filename):
         # Add cache headers for static files
         response.headers['Cache-Control'] = 'public, max-age=300'  # 5 minutes
         return response
-    except FileNotFoundError:
-        logger.error(f"Static file not found: {filename} in {static_dir}")
-        return "File not found", 404
     except Exception as e:
-        logger.error(f"Error serving static file {filename}: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace(f"Error serving static file {filename}", e)
         return "Error serving file", 500
 
 # ============================================================================
@@ -665,8 +660,7 @@ def index() -> str:
             )
 
     except Exception as e:
-        logger.error(f"Error rendering index page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering index page", e)
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading page</h1><p>An internal error occurred. Please try again later.</p>", 500
 
@@ -709,8 +703,7 @@ try:
     _cached_health_checks['db_test'] = {'success': db_success, 'message': db_message}
 
 except Exception as e:
-    logger.error(f"Startup health checks failed: {str(e)}")
-    logger.error(traceback.format_exc())
+    LoggingHelper.log_error_with_trace("Startup health checks failed", e)
     logger.warning("App starting despite health check failures - some features may not work")
 
 # v4.0.22: Removed redundant cache clear - stats refresher already does initial refresh
@@ -731,6 +724,5 @@ if __name__ == '__main__':
     try:
         app.run(host=host, port=port, debug=False, threaded=True)
     except Exception as e:
-        logger.error(f"Flask failed to start: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Flask failed to start", e)
         raise

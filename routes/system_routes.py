@@ -6,7 +6,10 @@ import json
 import time
 import traceback
 from flask import Blueprint, request, jsonify, Response
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.request_helpers import get_real_ip
 from helpers.api_helpers import test_endpoint
 

@@ -7,7 +7,12 @@ import traceback
 from typing import Tuple, Optional, Dict, Any
 from flask import Blueprint, request, jsonify, Response, redirect, g
 from flask_wtf.csrf import CSRFProtect
-from logger import logger, user_action_logger, rating_logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instances
+logger = LoggingHelper.get_logger(LogType.MAIN)
+user_action_logger = LoggingHelper.get_logger(LogType.USER_ACTION)
+rating_logger = LoggingHelper.get_logger(LogType.RATING)
 from helpers.response_helpers import error_response
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 from helpers.video_helpers import get_video_title, get_video_artist

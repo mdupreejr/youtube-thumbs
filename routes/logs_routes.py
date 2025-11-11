@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import os
 import re
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, parse_timestamp, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param

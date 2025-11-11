@@ -25,9 +25,10 @@ export PORT=21812
 
 # Bind to all interfaces so ingress and direct access work
 export HOST="0.0.0.0"
-bashio::log.info "API binding to all interfaces (${HOST}:${PORT})"
+bashio::log.info "API server binding: ${HOST}:${PORT}"
 
 export LOG_LEVEL=$(bashio::config 'log_level')
+bashio::log.info "Log level: ${LOG_LEVEL}"
 
 # Not-found cache configuration (hours to cache failed video searches)
 NOT_FOUND_CACHE_HOURS_CONFIG=$(bashio::config 'not_found_cache_hours')
@@ -63,9 +64,6 @@ if bashio::config.true 'force_quota_unlock'; then
 else
     unset YTT_FORCE_QUOTA_UNLOCK
 fi
-
-bashio::log.info "API server binding: ${HOST}:${PORT}"
-bashio::log.info "Log level: ${LOG_LEVEL}"
 
 # Check what files exist and where
 bashio::log.info "Checking for OAuth credentials in /config/youtube_thumbs (add-on config directory)..."

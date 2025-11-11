@@ -5,7 +5,10 @@ Ensures stats_cache table is populated with fresh data.
 import threading
 import time
 from datetime import datetime
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class StatsRefresher:

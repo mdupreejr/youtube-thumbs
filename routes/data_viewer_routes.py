@@ -6,7 +6,10 @@ import re
 import types
 import traceback
 from flask import Blueprint, render_template, request, g
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import parse_timestamp
 from helpers.validation_helpers import validate_page_param

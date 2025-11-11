@@ -4,7 +4,12 @@ Extracted from app.py to improve code organization and reduce function complexit
 """
 from typing import Tuple, Optional, Dict, Any
 from flask import jsonify, Response
-from logger import logger, user_action_logger, rating_logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instances
+logger = LoggingHelper.get_logger(LogType.MAIN)
+user_action_logger = LoggingHelper.get_logger(LogType.USER_ACTION)
+rating_logger = LoggingHelper.get_logger(LogType.RATING)
 from metrics_tracker import metrics
 from .video_helpers import prepare_video_upsert
 from .response_helpers import error_response, success_response

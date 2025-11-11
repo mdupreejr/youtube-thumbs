@@ -1,7 +1,10 @@
 import requests
 from typing import Optional, Dict, Any
 import os
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 class HomeAssistantAPI:
     """Interface to Home Assistant API."""

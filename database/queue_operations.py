@@ -7,7 +7,10 @@ from typing import Dict, List, Any, Optional
 import sqlite3
 import threading
 import json
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class QueueOperations:

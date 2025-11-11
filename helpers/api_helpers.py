@@ -4,7 +4,10 @@ API utility functions for YouTube Thumbs Rating.
 Handles quota checking and other API-related helpers.
 """
 from datetime import datetime, timezone
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.time_helpers import get_last_quota_reset_time, get_next_quota_reset_time, get_time_until_quota_reset
 
 

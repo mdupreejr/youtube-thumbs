@@ -4,7 +4,10 @@ Replaces HTTP proxying with in-process WSGI mounting for better performance.
 """
 import os
 import re
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 def sanitize_ingress_path(path):

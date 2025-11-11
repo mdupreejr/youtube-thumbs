@@ -3,7 +3,10 @@ Startup checks to verify all components are working properly
 """
 
 from typing import Tuple, Optional
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 def check_home_assistant_api(ha_api) -> Tuple[bool, dict]:

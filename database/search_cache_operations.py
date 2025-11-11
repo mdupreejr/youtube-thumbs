@@ -6,7 +6,10 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class SearchCacheOperations:

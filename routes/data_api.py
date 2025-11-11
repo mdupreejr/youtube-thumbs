@@ -3,7 +3,10 @@ Data API routes blueprint for statistics, analytics, history, insights, and reco
 Extracted from app.py to improve code organization.
 """
 from flask import Blueprint, request, jsonify, Response
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.validation_helpers import validate_limit_param
 from helpers.response_helpers import error_response, success_response
 from helpers.api_helpers import stats_endpoint, simple_stats_endpoint, api_endpoint

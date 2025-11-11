@@ -2,7 +2,10 @@
 Simplified cache helper functions for video lookup operations.
 """
 from typing import Dict, Any, Optional
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from metrics_tracker import metrics
 
 

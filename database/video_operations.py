@@ -4,7 +4,10 @@ Video-related database operations.
 import sqlite3
 from typing import Dict, Any, Optional, List
 
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from helpers.video_helpers import get_content_hash
 from error_handler import log_and_suppress
 

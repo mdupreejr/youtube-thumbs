@@ -6,7 +6,10 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 
 
 class SongTracker:

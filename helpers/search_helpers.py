@@ -3,7 +3,10 @@ Helper functions for video search operations.
 Extracted from app.py to improve code organization and reduce function complexity.
 """
 from typing import Optional, Dict, Any, List
-from logger import logger
+from logging_helper import LoggingHelper, LogType
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 from metrics_tracker import metrics
 
 
