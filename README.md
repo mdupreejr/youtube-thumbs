@@ -82,12 +82,17 @@ automation:
 
 Access via **OPEN WEB UI** button in the add-on page:
 
-- **System Tests** - Health check with live status of Home Assistant, YouTube API, and database
-- **Bulk Rating** - Rate unrated songs with pagination
-- **Statistics** - Playback stats, rating distribution, most played videos, top channels
-- **Logs** - Browse activity logs, API calls, matches, and recent activity
-- **Data Viewer** - Browse database tables with sorting and filtering
-- **Database Admin** - Full sqlite_web interface for advanced queries
+- **Tests** - System status with live health checks, queue worker status, quota usage, cache performance, and detailed metrics
+- **Bulk Rating** - Rate multiple unrated songs at once with pagination
+- **Stats** - Playback statistics, rating distribution, most played videos, and top channels
+- **Database** - Browse and filter database tables (video ratings, queue, search cache)
+- **Rated Songs** - View history of all rated videos with timestamps and ratings
+- **Matches** - Browse matched videos showing search results and duration matching
+- **Recent** - Recent activity log across all operations
+- **Errors** - Error log for troubleshooting failed operations
+- **API Calls** - Detailed YouTube API call history with quota tracking and costs
+- **Queue** - View pending and processing queue items (searches and ratings)
+- **DB Admin** - Full sqlite_web interface for advanced database queries and management
 
 ## How It Works
 
@@ -192,7 +197,7 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 **Check queue worker:**
 - Open add-on **Log** tab
 - Look for `[QUEUE]` prefixed messages
-- Worker should process 1 item per minute
+- Worker processes one item from queue then waits 1 minute before starting the next item from the queue
 
 ### "No media currently playing"
 
@@ -211,12 +216,6 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 - **Wait**: Quota automatically resets at midnight Pacific Time
 - **Check usage**: View API Calls page in web UI
 - **Optimize**: Reduce `search_max_results` in configuration
-
-### Web UI shows errors
-
-- Check add-on logs for stack traces
-- Try clearing browser cache
-- Rebuild add-on: Settings → Add-ons → YouTube Thumbs → ⋮ → Rebuild
 
 **Always check logs first**: Settings → Add-ons → YouTube Thumbs Rating → Log
 
