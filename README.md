@@ -96,54 +96,29 @@ Access via **OPEN WEB UI** button in the add-on page:
 
 ## How It Works
 
-### Rating Flow
+When you trigger a rating (via REST API or Web UI), the addon:
+1. Fetches current media from Home Assistant
+2. Checks database cache for exact match (content hash or title+duration)
+3. If no cache hit: Queues search operation for background processing
+4. Queue worker searches YouTube, filters by duration, and caches the match
+5. Queues and processes the rating operation via YouTube API
+6. Updates database with rating and metadata
 
-1. **User triggers rating** (via REST API or Web UI)
-2. **Fetch current media** from Home Assistant
-3. **Check database cache** for exact match (content hash or title+duration)
-4. **If no cache hit**: Enqueue search operation
-5. **Queue worker processes**:
-   - Searches YouTube with cleaned title + artist/album metadata
-   - Filters by duration match (YouTube always reports +1s longer than HA)
-   - Uses ±2s tolerance to handle variations
-   - Caches match for future lookups
-6. **Enqueue rating operation**
-7. **Queue worker rates** the video on YouTube
-8. **Update database** with rating and metadata
+**See [ARCHITECTURE.md](ARCHITECTURE.md#video-matching-system) for detailed matching algorithm and caching logic.**
 
 ### Queue Architecture
 
-**All YouTube API calls go through a single background queue worker:**
+All YouTube API calls are processed through a unified queue system with automatic rate limiting and quota protection. The queue worker processes operations sequentially with 1-minute delays between API calls. Ratings are prioritized over searches.
 
-- **Queue worker** - Separate process that sleeps 60 seconds after processing each item
-- **Priority system** - Ratings (priority 1) processed before searches (priority 2)
-- **Quota protection** - Automatically pauses until midnight PT when quota exceeded
-- **Crash recovery** - Moves stuck items to back of queue on restart
-- **No threading** - Simple, reliable processing
-
-**Why this matters:** The queue prevents quota exhaustion by rate-limiting API calls and provides a central point for logging, monitoring, and quota management.
+**See [ARCHITECTURE.md](ARCHITECTURE.md#queue-system) for detailed queue architecture and implementation.**
 
 ## Quota Management
 
-YouTube Data API v3 has a daily quota of **10,000 units** that resets at **midnight Pacific Time**.
+YouTube Data API v3 has a daily quota of **10,000 units** that resets at **midnight Pacific Time**. Common operations cost: Search (100 units), Rate video (50 units), Get details (1 unit).
 
-### Quota Costs
+When quota is exceeded, the queue worker automatically pauses until midnight Pacific. New requests continue to queue and will be processed after quota resets.
 
-- Search: **100 units**
-- Get video details: **1 unit**
-- Rate video: **50 units**
-- Get rating: **1 unit**
-- Channel info (startup check): **1 unit**
-
-### When Quota is Exceeded
-
-1. Queue worker detects quota error
-2. Worker pauses until midnight Pacific Time
-3. New requests continue to queue but aren't processed
-4. Web UI shows quota exceeded status
-5. Automatic resume after quota resets
-
-**Check quota usage**: View API Calls page in web UI for detailed quota tracking.
+**See [ARCHITECTURE.md](ARCHITECTURE.md#quota-management) for detailed quota costs, monitoring, and management strategies.**
 
 ## API Endpoints
 
@@ -169,19 +144,13 @@ YouTube Data API v3 has a daily quota of **10,000 units** that resets at **midni
 
 For complete API documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Database Schema
+## Database
 
-All data stored in `/config/youtube_thumbs/ratings.db`:
-
-| Table | Purpose |
-|-------|---------|
-| `video_ratings` | All matched videos with metadata, ratings, and play counts |
-| `queue` | Unified queue for search and rating operations |
-| `api_call_log` | Detailed log of every YouTube API call with timestamps and quota costs |
-| `search_results_cache` | Cached YouTube search results (30 day TTL) |
-| `stats_cache` | Cached statistics for web UI performance |
+All data is stored in SQLite database at `/config/youtube_thumbs/ratings.db`. The database includes tables for video ratings, queue operations, API call logs, and caching.
 
 Access via **Database Admin** in the web interface or explore using the **Data Viewer** page.
+
+**See [ARCHITECTURE.md](ARCHITECTURE.md#database-schema) for complete database schema and field documentation.**
 
 ## Troubleshooting
 
