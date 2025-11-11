@@ -10,7 +10,6 @@ from logging_helper import LoggingHelper, LogType
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
-from helpers.static_helpers import static_url
 from helpers.template_helpers import (
     TableColumn, TableRow, TableCell,
     format_badge, truncate_text, format_status_badge
@@ -318,8 +317,7 @@ def queue_item_detail_page(item_id: int):
             logger.error(f"Queue item not found: {item_id}")
             return render_template('error.html',
                                  error=f'Queue item not found: {item_id}',
-                                 ingress_path=ingress_path,
-                                 static_url=static_url), 404
+                                 ingress_path=ingress_path), 404
 
         # Extract details using shared helper
         details = extract_queue_item_details(queue_item, _db)
@@ -328,8 +326,7 @@ def queue_item_detail_page(item_id: int):
             logger.error(f"Invalid queue item type: {queue_item.get('type')}")
             return render_template('error.html',
                                  error=f'Invalid item type: {queue_item.get("type")}',
-                                 ingress_path=ingress_path,
-                                 static_url=static_url), 400
+                                 ingress_path=ingress_path), 400
 
         # Parse API response data for template
         api_debug = {}
@@ -380,15 +377,13 @@ def queue_item_detail_page(item_id: int):
                              data=details,
                              api_debug=api_debug,
                              ingress_path=ingress_path,
-                             back_url=back_url,
-                             static_url=static_url)
+                             back_url=back_url)
 
     except Exception as e:
         LoggingHelper.log_error_with_trace(f"Error rendering queue item detail page ({item_id})", e)
         return render_template('error.html',
                              error=f'Internal server error: {str(e)}',
-                             ingress_path=ingress_path,
-                             static_url=static_url), 500
+                             ingress_path=ingress_path), 500
 
 
 @bp.route('/logs')
