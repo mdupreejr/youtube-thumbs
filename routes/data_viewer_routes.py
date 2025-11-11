@@ -21,11 +21,13 @@ bp = Blueprint('data_viewer', __name__)
 
 # Global database reference (set by init function)
 _db = None
+_sqlite_web_available = False
 
-def init_data_viewer_routes(database):
+def init_data_viewer_routes(database, sqlite_web_available=False):
     """Initialize data viewer routes with dependencies."""
-    global _db
+    global _db, _sqlite_web_available
     _db = database
+    _sqlite_web_available = sqlite_web_available
 
 
 # ============================================================================
@@ -403,6 +405,61 @@ def database_admin_wrapper():
     try:
         # Get ingress path from Home Assistant proxy
         ingress_path = g.ingress_path
+
+        # Check if sqlite_web was successfully mounted
+        if not _sqlite_web_available:
+            error_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Database Admin - Not Available</title>
+                <link rel="stylesheet" href="{ingress_path}/static/css/common.css">
+            </head>
+            <body>
+                <div class="container">
+                    <header>
+                        <div class="header-left">
+                            <h1>YouTube Thumbs Rating</h1>
+                            <div class="nav-links">
+                                <a href="{ingress_path}/?tab=tests">Tests</a>
+                                <a href="{ingress_path}/?tab=rating">Bulk Rating</a>
+                                <a href="{ingress_path}/stats">Stats</a>
+                                <a href="{ingress_path}/data">Database</a>
+                                <a href="{ingress_path}/logs?tab=rated">Rated Songs</a>
+                                <a href="{ingress_path}/logs?tab=matches">Matches</a>
+                                <a href="{ingress_path}/logs?tab=recent">Recent</a>
+                                <a href="{ingress_path}/logs?tab=errors">Errors</a>
+                                <a href="{ingress_path}/logs/api-calls">API Calls</a>
+                                <a href="{ingress_path}/logs/pending-ratings">Queue</a>
+                                <a href="{ingress_path}/db-admin" class="active">DB Admin</a>
+                            </div>
+                        </div>
+                    </header>
+                    <div class="error-container" style="margin-top: 2rem; padding: 2rem; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                        <h2 style="color: #856404; margin-top: 0;">Database Admin Not Available</h2>
+                        <p style="color: #856404;">
+                            The database admin interface could not be loaded because the <code>sqlite-web</code> package is not properly installed or initialized.
+                        </p>
+                        <p style="color: #856404;">
+                            This typically happens when:
+                        </p>
+                        <ul style="color: #856404;">
+                            <li>The addon was not built with the required dependencies</li>
+                            <li>The sqlite-web package failed to install</li>
+                            <li>There was an error during database initialization</li>
+                        </ul>
+                        <p style="color: #856404;">
+                            <strong>Solution:</strong> Rebuild the addon to ensure all dependencies are installed correctly.
+                        </p>
+                        <p style="color: #856404;">
+                            You can still view database records using the <a href="{ingress_path}/data">Database</a> tab.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            return error_html, 503
 
         return render_template(
             'database_admin.html',

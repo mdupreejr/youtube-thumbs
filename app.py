@@ -355,6 +355,9 @@ set_youtube_api_database(db)
 # SQLITE_WEB INTEGRATION
 # ============================================================================
 
+# Track if sqlite_web was successfully mounted
+sqlite_web_available = False
+
 # Mount sqlite_web directly into Flask using DispatcherMiddleware
 # This replaces the HTTP proxy approach for better performance
 try:
@@ -365,10 +368,12 @@ try:
     app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
         '/database': sqlite_web_wsgi
     })
+    sqlite_web_available = True
     logger.info("sqlite_web mounted at /database (direct WSGI integration)")
 except Exception as e:
     logger.warning(f"Failed to mount sqlite_web: {e}")
     logger.warning("Database admin interface will not be available")
+    sqlite_web_available = False
 
 # Configure Flask to work behind Home Assistant ingress proxy
 # IMPORTANT: ProxyFix must be applied AFTER DispatcherMiddleware
@@ -433,7 +438,7 @@ logger.debug("Queue worker runs as separate background process (started by run.s
 # ============================================================================
 
 # Initialize and register data viewer blueprint
-init_data_viewer_routes(db)
+init_data_viewer_routes(db, sqlite_web_available)
 app.register_blueprint(data_viewer_bp)
 
 # Initialize and register stats blueprint
