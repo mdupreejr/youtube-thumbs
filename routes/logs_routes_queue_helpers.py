@@ -9,7 +9,10 @@ These functions create page configurations for the Queue Monitor tabs:
 """
 
 from typing import Tuple, Dict, Any
-from helpers.template_helpers import PageConfig, TableData, TableColumn, TableRow, TableCell, format_badge
+from helpers.template_helpers import (
+    PageConfig, TableData, TableColumn, TableRow, TableCell, format_badge,
+    add_queue_tabs, format_count_message
+)
 from helpers.time_helpers import format_absolute_timestamp
 
 
@@ -78,11 +81,8 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         storage_key='queue-pending'
     )
 
-    # Add sub-tabs
-    page_config.add_sub_tab('Pending', '/logs/pending-ratings?tab=pending', current_tab == 'pending')
-    page_config.add_sub_tab('History', '/logs/pending-ratings?tab=history', current_tab == 'history')
-    page_config.add_sub_tab('Errors', '/logs/pending-ratings?tab=errors', current_tab == 'errors')
-    page_config.add_sub_tab('Statistics', '/logs/pending-ratings?tab=statistics', current_tab == 'statistics')
+    # Add sub-tabs (using helper to consolidate repeated pattern)
+    add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
     page_config.set_empty_state('✓', 'Queue is empty', 'No operations waiting to be processed.')
@@ -165,7 +165,9 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
 
     table_data = TableData(columns, rows)
 
-    status_message = f"Operations waiting to be processed by the background worker. The worker processes one item per minute to respect API quotas and rate limits. <strong>{len(formatted_items)} operation{'s' if len(formatted_items) != 1 else ''} in queue</strong>"
+    # Use helper for consistent count message formatting
+    count_msg = format_count_message(len(formatted_items), 'operation', 'in queue')
+    status_message = f"Operations waiting to be processed by the background worker. The worker processes one item per minute to respect API quotas and rate limits. {count_msg}"
 
     return page_config, table_data, status_message
 
@@ -179,11 +181,8 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         storage_key='queue-history'
     )
 
-    # Add sub-tabs
-    page_config.add_sub_tab('Pending', '/logs/pending-ratings?tab=pending', current_tab == 'pending')
-    page_config.add_sub_tab('History', '/logs/pending-ratings?tab=history', current_tab == 'history')
-    page_config.add_sub_tab('Errors', '/logs/pending-ratings?tab=errors', current_tab == 'errors')
-    page_config.add_sub_tab('Statistics', '/logs/pending-ratings?tab=statistics', current_tab == 'statistics')
+    # Add sub-tabs (using helper to consolidate repeated pattern)
+    add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
     page_config.set_empty_state('📭', 'No history available', 'No recently completed operations.')
@@ -245,7 +244,9 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
 
     table_data = TableData(columns, rows)
 
-    status_message = f"Recently completed and failed operations. Shows the last 200 processed items. <strong>{len(formatted_items)} recent operation{'s' if len(formatted_items) != 1 else ''}</strong>"
+    # Use helper for consistent count message formatting
+    count_msg = format_count_message(len(formatted_items), 'recent operation')
+    status_message = f"Recently completed and failed operations. Shows the last 200 processed items. {count_msg}"
 
     return page_config, table_data, status_message
 
@@ -259,11 +260,8 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
         storage_key='queue-errors'
     )
 
-    # Add sub-tabs
-    page_config.add_sub_tab('Pending', '/logs/pending-ratings?tab=pending', current_tab == 'pending')
-    page_config.add_sub_tab('History', '/logs/pending-ratings?tab=history', current_tab == 'history')
-    page_config.add_sub_tab('Errors', '/logs/pending-ratings?tab=errors', current_tab == 'errors')
-    page_config.add_sub_tab('Statistics', '/logs/pending-ratings?tab=statistics', current_tab == 'statistics')
+    # Add sub-tabs (using helper to consolidate repeated pattern)
+    add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
     page_config.set_empty_state('✓', 'No errors', 'All operations completing successfully.')
@@ -324,7 +322,9 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
 
     table_data = TableData(columns, rows)
 
-    status_message = f"Failed operations with detailed error messages. Helps identify recurring issues. <strong>{len(formatted_items)} failed operation{'s' if len(formatted_items) != 1 else ''}</strong>"
+    # Use helper for consistent count message formatting
+    count_msg = format_count_message(len(formatted_items), 'failed operation')
+    status_message = f"Failed operations with detailed error messages. Helps identify recurring issues. {count_msg}"
 
     return page_config, table_data, status_message
 
@@ -338,11 +338,8 @@ def _create_queue_statistics_tab(ingress_path: str, current_tab: str, db) -> Tup
         storage_key='queue-statistics'
     )
 
-    # Add sub-tabs
-    page_config.add_sub_tab('Pending', '/logs/pending-ratings?tab=pending', current_tab == 'pending')
-    page_config.add_sub_tab('History', '/logs/pending-ratings?tab=history', current_tab == 'history')
-    page_config.add_sub_tab('Errors', '/logs/pending-ratings?tab=errors', current_tab == 'errors')
-    page_config.add_sub_tab('Statistics', '/logs/pending-ratings?tab=statistics', current_tab == 'statistics')
+    # Add sub-tabs (using helper to consolidate repeated pattern)
+    add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Get queue statistics
     statistics = db.get_queue_statistics()
