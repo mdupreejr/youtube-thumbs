@@ -24,9 +24,9 @@ When a new song is detected, the addon first checks the local database cache:
 
 2. **Title + Duration Lookup**: Searches for exact `ha_title` and `ha_duration` match
    - Fallback if content hash doesn't match
-   - **Important**: YouTube ALWAYS reports duration as exactly +1 second longer than Home Assistant
-   - Example: HA reports 353s → YouTube reports 354s
-   - Matching uses ±2s tolerance to handle minor variations (accepts 352-356s for HA 353s)
+   - **Important**: YouTube duration must be either EXACT match or +1 second longer than Home Assistant
+   - Example: HA reports 353s → YouTube must be 353s or 354s
+   - Matching is strict: only accepts exact duration or +1 second (no tolerance)
 
 **Cache Hit**: Returns existing video immediately, increments play count, no YouTube API call needed.
 
@@ -235,14 +235,14 @@ def get_content_hash(title, duration, artist=None):
 
 **Implementation**:
 - Constant: `YOUTUBE_DURATION_OFFSET = 1` (defined in `constants.py`)
-- Matching tolerance: ±2 seconds to handle minor variations
+- Matching is strict: YouTube duration must be exact or +1 second
 - Formula: `expected_youtube_duration = ha_duration + 1`
-- Accepted range: `ha_duration - 1` to `ha_duration + 3` (allows ±2s from expected)
+- Accepted values: `ha_duration` (exact) OR `ha_duration + 1` (YouTube offset) ONLY
 
 **Code references**:
 - `constants.py`: Defines `YOUTUBE_DURATION_OFFSET`
-- `youtube_api.py:314-321`: Duration matching logic with ±2s tolerance
-- `helpers/search_helpers.py:135`: Cache lookup uses `duration + 1`
+- `youtube_api.py:319`: Duration matching logic (exact or +1s only)
+- `helpers/search_helpers.py:139`: Cache lookup uses `tolerance=1` for consistency
 
 ### Queue-Based Rate Limiting
 

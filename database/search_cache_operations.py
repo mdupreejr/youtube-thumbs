@@ -78,13 +78,13 @@ class SearchCacheOperations:
         # The caller logs: "Opportunistically cached X/Y videos checked during search (Z duration matches)"
         return cached_count
 
-    def find_by_duration(self, duration: int, tolerance: int = 2) -> Optional[List[Dict[str, Any]]]:
+    def find_by_duration(self, duration: int, tolerance: int = 1) -> Optional[List[Dict[str, Any]]]:
         """
         Find cached videos matching duration (with tolerance).
 
         Args:
             duration: Target duration in seconds
-            tolerance: Allowed difference in seconds (default ±2)
+            tolerance: Allowed difference in seconds (default 1, supports exact or +1s)
 
         Returns:
             List of matching cached videos, or None if not found
@@ -113,14 +113,14 @@ class SearchCacheOperations:
 
         return None
 
-    def find_by_title_and_duration(self, title: str, duration: int, tolerance: int = 2) -> Optional[Dict[str, Any]]:
+    def find_by_title_and_duration(self, title: str, duration: int, tolerance: int = 1) -> Optional[Dict[str, Any]]:
         """
         Find cached video matching title and duration.
 
         Args:
             title: Video title to match (case-insensitive partial match)
             duration: Target duration in seconds
-            tolerance: Allowed difference in seconds (default ±2)
+            tolerance: Allowed difference in seconds (default 1, supports exact or +1s)
 
         Returns:
             Matching cached video dict, or None if not found

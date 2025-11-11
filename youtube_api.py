@@ -313,14 +313,14 @@ class YouTubeAPI:
 
         # Check duration matching if expected_duration is provided
         if expected_duration is not None and duration is not None:
-            # YouTube typically reports 1 second more than HA, but allow ±2s tolerance
-            # v4.2.3: Changed from exact match to ±2s tolerance to handle minor duration variations
-            expected_youtube_duration = expected_duration + YOUTUBE_DURATION_OFFSET
-            duration_diff = abs(duration - expected_youtube_duration)
-            if duration_diff > 2:
-                return None  # Skip videos that don't match duration (±2s tolerance)
+            # YouTube duration must be either:
+            # 1. Exact match with HA (duration == expected_duration)
+            # 2. Exactly 1 second longer than HA (duration == expected_duration + 1)
+            if duration != expected_duration and duration != expected_duration + YOUTUBE_DURATION_OFFSET:
+                return None  # Skip videos that don't match duration (exact or +1s only)
+            duration_diff = duration - expected_duration
             logger.debug(
-                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | Diff: {duration_diff}s | ID: {video_info['yt_video_id']}"
+                f"Duration match: {expected_duration}s (HA) → {video_info['duration']}s (YT) | Diff: +{duration_diff}s | ID: {video_info['yt_video_id']}"
             )
         elif duration is None and expected_duration is not None:
             logger.warning(
@@ -814,11 +814,11 @@ class YouTubeAPI:
 
     def search_video_globally(self, title: str, expected_duration: Optional[int] = None, artist: Optional[str] = None, return_api_response: bool = False):
         """
-        Search for a video globally. Filters by duration (±2s) if provided.
+        Search for a video globally. Filters by duration (exact or +1s) if provided.
 
         Args:
             title: Video title to search for
-            expected_duration: Expected duration in seconds (±2s tolerance)
+            expected_duration: Expected HA duration in seconds (YouTube must be exact or +1s)
             artist: Artist/channel name (optional, improves accuracy for generic titles like "Flowers", "Electric")
             return_api_response: If True, return tuple of (candidates, api_debug_data)
 

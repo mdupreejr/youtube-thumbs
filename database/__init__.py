@@ -291,12 +291,12 @@ class Database:
         """Cache all videos from a search result."""
         return self._search_cache_ops.cache_search_results(videos, ttl_days)
 
-    def find_in_search_cache_by_duration(self, duration: int, tolerance: int = 2) -> Optional[List[Dict[str, Any]]]:
-        """Find cached videos by duration."""
+    def find_in_search_cache_by_duration(self, duration: int, tolerance: int = 1) -> Optional[List[Dict[str, Any]]]:
+        """Find cached videos by duration (tolerance: exact or +1s only)."""
         return self._search_cache_ops.find_by_duration(duration, tolerance)
 
-    def find_in_search_cache(self, title: str, duration: int, tolerance: int = 2) -> Optional[Dict[str, Any]]:
-        """Find cached video by title and duration."""
+    def find_in_search_cache(self, title: str, duration: int, tolerance: int = 1) -> Optional[Dict[str, Any]]:
+        """Find cached video by title and duration (tolerance: exact or +1s only)."""
         return self._search_cache_ops.find_by_title_and_duration(title, duration, tolerance)
 
     def cleanup_search_cache(self) -> int:
