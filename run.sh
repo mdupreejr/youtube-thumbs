@@ -31,7 +31,7 @@ SQLITE_WEB_HOST_CONFIG=$(bashio::config 'sqlite_web_host')
 SQLITE_WEB_HOST_ENV="${SQLITE_WEB_HOST:-}"
 if bashio::var.has_value "${SQLITE_WEB_HOST_ENV}"; then
     export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_ENV}"
-elif bashio::var.has_value "${SQLITE_WEB_HOST_CONFIG}"; then
+elif bashio::var.has_value "${SQLITE_WEB_HOST_CONFIG}" && [ "${SQLITE_WEB_HOST_CONFIG}" != "null" ]; then
     export SQLITE_WEB_HOST="${SQLITE_WEB_HOST_CONFIG}"
 else
     export SQLITE_WEB_HOST="127.0.0.1"
@@ -191,7 +191,7 @@ SQLITE_WEB_PORT_ENV="${SQLITE_WEB_PORT:-}"
 if bashio::var.has_value "${SQLITE_WEB_PORT_ENV}"; then
     export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_ENV}"
     bashio::log.info "Using custom sqlite_web port from SQLITE_WEB_PORT=${SQLITE_WEB_PORT}"
-elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}"; then
+elif bashio::var.has_value "${SQLITE_WEB_PORT_CONFIG}" && [ "${SQLITE_WEB_PORT_CONFIG}" != "null" ]; then
     export SQLITE_WEB_PORT="${SQLITE_WEB_PORT_CONFIG}"
 else
     export SQLITE_WEB_PORT=8080
