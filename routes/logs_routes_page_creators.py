@@ -12,7 +12,9 @@ from helpers.video_helpers import get_video_title, get_video_artist
 from helpers.template_helpers import (
     TableColumn, TableRow, TableCell,
     format_badge, format_time_ago, truncate_text,
-    format_song_display, format_status_badge
+    format_song_display, format_status_badge,
+    format_rating_badge, format_log_level_badge,
+    create_period_filter, create_rating_filter
 )
 from helpers.page_builder import LogsPageBuilder
 from helpers.log_parsers import parse_error_log
@@ -28,15 +30,11 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('rated', ingress_path)
 
-    # Add filters
-    builder.add_filter('period', 'Time Period', [
-        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
-        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
-        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
-        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
-        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
-    ])
+    # Add filters (using helpers to consolidate repeated patterns)
+    period_opts = create_period_filter(period_filter)
+    builder.add_filter(period_opts['name'], period_opts['label'], period_opts['options'])
 
+    # Custom rating filter options for this page
     builder.add_filter('rating', 'Rating Type', [
         {'value': 'all', 'label': 'All', 'selected': rating_filter == 'all'},
         {'value': 'like', 'label': 'Likes', 'selected': rating_filter == 'like'},
@@ -69,14 +67,9 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
         timestamp = song.get('date_last_played') or song.get('date_added')
         time_ago = format_relative_time(timestamp) if timestamp else 'unknown'
 
-        # Format rating
+        # Format rating (using helper to consolidate repeated pattern)
         rating = song.get('rating')
-        if rating == 'like':
-            rating_html = format_badge('👍 Like', 'success')
-        elif rating == 'dislike':
-            rating_html = format_badge('👎 Dislike', 'error')
-        else:
-            rating_html = format_badge('➖ None', 'info')
+        rating_html = format_rating_badge(rating)
 
         # Format video link
         video_id = song.get('yt_video_id')
@@ -121,14 +114,9 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('matches', ingress_path)
 
-    # Add period filter
-    builder.add_filter('period', 'Time Period', [
-        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
-        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
-        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
-        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
-        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
-    ])
+    # Add period filter (using helper to consolidate repeated pattern)
+    period_opts = create_period_filter(period_filter)
+    builder.add_filter(period_opts['name'], period_opts['label'], period_opts['options'])
 
     builder.add_hidden_field('tab', 'matches')
     builder.set_empty_state('🔍', 'No matches found', 'Try adjusting your filters')
@@ -236,14 +224,9 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('errors', ingress_path)
 
-    # Add filters
-    builder.add_filter('period', 'Time Period', [
-        {'value': 'hour', 'label': 'Last Hour', 'selected': period_filter == 'hour'},
-        {'value': 'day', 'label': 'Last Day', 'selected': period_filter == 'day'},
-        {'value': 'week', 'label': 'Last Week', 'selected': period_filter == 'week'},
-        {'value': 'month', 'label': 'Last Month', 'selected': period_filter == 'month'},
-        {'value': 'all', 'label': 'All Time', 'selected': period_filter == 'all'}
-    ])
+    # Add filters (using helper to consolidate repeated pattern)
+    period_opts = create_period_filter(period_filter)
+    builder.add_filter(period_opts['name'], period_opts['label'], period_opts['options'])
 
     builder.add_filter('level', 'Level', [
         {'value': 'all', 'label': 'All', 'selected': level_filter == 'all'},
@@ -271,16 +254,9 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
         # Format time
         time_ago = format_relative_time(error['timestamp'])
 
-        # Format level badge
+        # Format level badge (using helper to consolidate repeated pattern)
         level = error['level']
-        if level == 'ERROR':
-            level_html = format_badge(level, 'error')
-        elif level == 'WARNING':
-            level_html = format_badge(level, 'warning')
-        elif level == 'INFO':
-            level_html = format_badge(level, 'info')
-        else:
-            level_html = format_badge(level, 'info')
+        level_html = format_log_level_badge(level)
 
         # Format message with truncation
         message = error['message']
@@ -366,14 +342,9 @@ def _create_recent_page(ingress_path: str, db):
         date_added = video.get('date_added')
         time_ago = format_relative_time(date_added) if date_added else 'unknown'
 
-        # Format rating
+        # Format rating (using helper to consolidate repeated pattern)
         rating = video.get('rating')
-        if rating == 'like':
-            rating_html = format_badge('👍 Like', 'success')
-        elif rating == 'dislike':
-            rating_html = format_badge('👎 Dislike', 'error')
-        else:
-            rating_html = format_badge('- None', 'default')
+        rating_html = format_rating_badge(rating)
 
         # Format link
         yt_url = video.get('yt_url')

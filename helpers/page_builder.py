@@ -204,6 +204,32 @@ class LogsPageBuilder:
         self.status_message = message
         return self
 
+    def set_row_click_navigation(self, url_template: str) -> 'LogsPageBuilder':
+        """
+        Set up row click navigation to detail pages.
+
+        Consolidates 3+ identical JavaScript blocks for clickable rows.
+
+        Args:
+            url_template: URL template with ingress path (e.g., '/logs/pending-ratings/item/')
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            builder.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/')
+        """
+        self.page_config.custom_js = f'''
+            document.querySelectorAll('.clickable-row').forEach(row => {{
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', function() {{
+                    const rowId = this.dataset.rowId;
+                    window.location.href = '{url_template}' + rowId;
+                }});
+            }});
+        '''
+        return self
+
     def set_filter_button_text(self, text: str) -> 'LogsPageBuilder':
         """
         Set custom filter button text.

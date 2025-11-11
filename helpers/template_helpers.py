@@ -7,6 +7,7 @@ Provides utilities to format data for the table_viewer.html template.
 from typing import Dict, Any, List, Optional
 import html
 import re
+from flask import render_template
 
 
 def sanitize_html(html_content: str) -> str:
@@ -579,3 +580,304 @@ def format_status_badge(success: bool, success_text: str = '✓ Success',
         return format_badge(success_text, 'success')
     else:
         return format_badge(failure_text, 'error')
+
+
+# ============================================================================
+# NEW OPTIMIZATION HELPERS (v5.3.3)
+# Consolidate repeated patterns across route handlers
+# ============================================================================
+
+def render_table_page(
+    page_config: PageConfig,
+    ingress_path: str,
+    table_data: Optional[TableData] = None,
+    pagination: Optional[Dict] = None,
+    status_message: str = '',
+    summary_stats: Optional[Dict] = None
+):
+    """
+    Render table viewer page with consistent parameters.
+
+    Consolidates 15+ identical render_template calls across route files.
+
+    Args:
+        page_config: PageConfig object with page configuration
+        ingress_path: Ingress path for navigation
+        table_data: Optional TableData object with table rows/columns
+        pagination: Optional pagination dictionary
+        status_message: Optional status message to display
+        summary_stats: Optional summary statistics dictionary
+
+    Returns:
+        Rendered template response
+
+    Example:
+        builder = LogsPageBuilder('recent', ingress_path)
+        builder.set_title('Recent Videos')
+        page_config, table_data, pagination, status = builder.build()
+        return render_table_page(page_config, ingress_path, table_data, pagination, status)
+    """
+    return render_template(
+        'table_viewer.html',
+        ingress_path=ingress_path,
+        page_config=page_config.to_dict(),
+        table_data=table_data.to_dict() if table_data and table_data.rows else None,
+        pagination=pagination,
+        status_message=status_message,
+        summary_stats=summary_stats
+    )
+
+
+def format_rating_badge(rating: str) -> str:
+    """
+    Format rating value as badge.
+
+    Consolidates 10+ identical rating badge formatting blocks.
+
+    Args:
+        rating: Rating value ('like', 'dislike', or other)
+
+    Returns:
+        HTML formatted badge element
+
+    Example:
+        >>> format_rating_badge('like')
+        '<span class="badge badge-success">👍 Like</span>'
+        >>> format_rating_badge('dislike')
+        '<span class="badge badge-error">👎 Dislike</span>'
+        >>> format_rating_badge('none')
+        '<span class="badge badge-info">➖ None</span>'
+    """
+    badges = {
+        'like': ('👍 Like', 'success'),
+        'dislike': ('👎 Dislike', 'error'),
+    }
+    text, badge_type = badges.get(rating, ('➖ None', 'info'))
+    return format_badge(text, badge_type)
+
+
+def format_log_level_badge(level: str) -> str:
+    """
+    Format log level as badge.
+
+    Consolidates repeated log level badge formatting.
+
+    Args:
+        level: Log level string ('ERROR', 'WARNING', 'INFO', etc.)
+
+    Returns:
+        HTML formatted badge element
+
+    Example:
+        >>> format_log_level_badge('ERROR')
+        '<span class="badge badge-error">ERROR</span>'
+        >>> format_log_level_badge('WARNING')
+        '<span class="badge badge-warning">WARNING</span>'
+    """
+    level_types = {
+        'ERROR': 'error',
+        'CRITICAL': 'error',
+        'WARNING': 'warning',
+        'INFO': 'info',
+        'DEBUG': 'default'
+    }
+    badge_type = level_types.get(level, 'info')
+    return format_badge(level, badge_type)
+
+
+def pluralize(count: int, singular: str, plural: str = None) -> str:
+    """
+    Return singular or plural form based on count.
+
+    Args:
+        count: The count to check
+        singular: Singular form of the word
+        plural: Optional plural form (defaults to singular + 's')
+
+    Returns:
+        Singular or plural form of the word
+
+    Example:
+        >>> pluralize(1, 'operation')
+        'operation'
+        >>> pluralize(5, 'operation')
+        'operations'
+        >>> pluralize(1, 'category', 'categories')
+        'category'
+        >>> pluralize(3, 'category', 'categories')
+        'categories'
+    """
+    if plural is None:
+        plural = singular + 's'
+    return singular if count == 1 else plural
+
+
+def format_count_message(count: int, item_type: str, prefix: str = '') -> str:
+    """
+    Format message with count and pluralization.
+
+    Consolidates repeated count message formatting patterns.
+
+    Args:
+        count: The count to display
+        item_type: Type of item (e.g., 'operation', 'video', 'error')
+        prefix: Optional prefix text
+
+    Returns:
+        Formatted HTML message string
+
+    Example:
+        >>> format_count_message(5, 'operation', 'Operations waiting...')
+        'Operations waiting... <strong>5 operations</strong>'
+        >>> format_count_message(1, 'video', 'Found')
+        'Found <strong>1 video</strong>'
+    """
+    plural_form = pluralize(count, item_type)
+    if prefix:
+        return f"{prefix} <strong>{count} {plural_form}</strong>"
+    return f"<strong>{count} {plural_form}</strong>"
+
+
+def create_period_filter(current_value: str = 'all', name: str = 'period', label: str = 'Time Period') -> Dict:
+    """
+    Create standard time period filter options.
+
+    Consolidates 3+ identical period filter definitions.
+
+    Args:
+        current_value: Currently selected value
+        name: Filter parameter name
+        label: Filter label text
+
+    Returns:
+        Filter configuration dictionary
+
+    Example:
+        page_config.add_filter(**create_period_filter(period_filter))
+    """
+    options = [
+        ('hour', 'Last Hour'),
+        ('day', 'Last Day'),
+        ('week', 'Last Week'),
+        ('month', 'Last Month'),
+        ('all', 'All Time')
+    ]
+    return {
+        'name': name,
+        'label': label,
+        'options': [
+            {'value': val, 'label': lbl, 'selected': current_value == val}
+            for val, lbl in options
+        ]
+    }
+
+
+def create_rating_filter(current_value: str = 'all', name: str = 'rating', label: str = 'Rating') -> Dict:
+    """
+    Create standard rating filter options.
+
+    Args:
+        current_value: Currently selected value
+        name: Filter parameter name
+        label: Filter label text
+
+    Returns:
+        Filter configuration dictionary
+
+    Example:
+        page_config.add_filter(**create_rating_filter(rating_filter))
+    """
+    options = [
+        ('all', 'All Ratings'),
+        ('like', '👍 Liked'),
+        ('dislike', '👎 Disliked'),
+        ('none', '➖ No Rating')
+    ]
+    return {
+        'name': name,
+        'label': label,
+        'options': [
+            {'value': val, 'label': lbl, 'selected': current_value == val}
+            for val, lbl in options
+        ]
+    }
+
+
+def create_status_filter(current_value: str = 'all', name: str = 'status', label: str = 'Status') -> Dict:
+    """
+    Create standard status filter options.
+
+    Args:
+        current_value: Currently selected value
+        name: Filter parameter name
+        label: Filter label text
+
+    Returns:
+        Filter configuration dictionary
+
+    Example:
+        page_config.add_filter(**create_status_filter(status_filter))
+    """
+    options = [
+        ('all', 'All Status'),
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed')
+    ]
+    return {
+        'name': name,
+        'label': label,
+        'options': [
+            {'value': val, 'label': lbl, 'selected': current_value == val}
+            for val, lbl in options
+        ]
+    }
+
+
+def add_queue_tabs(page_config: PageConfig, current_tab: str, ingress_path: str):
+    """
+    Add standard queue monitoring tabs.
+
+    Consolidates 4+ identical tab configurations for queue pages.
+
+    Args:
+        page_config: PageConfig object to add tabs to
+        current_tab: Currently active tab identifier
+        ingress_path: Ingress path for tab URLs
+
+    Example:
+        add_queue_tabs(page_config, 'pending', ingress_path)
+    """
+    tabs = [
+        ('Pending', 'pending'),
+        ('History', 'history'),
+        ('Errors', 'errors'),
+        ('Statistics', 'statistics')
+    ]
+    for label, tab in tabs:
+        page_config.add_sub_tab(
+            label,
+            f'{ingress_path}/logs/pending-ratings?tab={tab}',
+            current_tab == tab
+        )
+
+
+def get_video_table_columns() -> List[TableColumn]:
+    """
+    Get standard columns for video/song tables.
+
+    Consolidates identical column definitions for liked/disliked/recent videos.
+
+    Returns:
+        List of TableColumn objects
+
+    Example:
+        columns = get_video_table_columns()
+    """
+    return [
+        TableColumn('song', 'Song', width='50%'),
+        TableColumn('artist', 'Artist'),
+        TableColumn('plays', 'Plays'),
+        TableColumn('last_played', 'Last Played')
+    ]
