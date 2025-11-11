@@ -106,26 +106,21 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
 
     # Create table columns
     columns = [
-        TableColumn('type', 'Type', width='10%'),
-        TableColumn('title', 'Title', width='20%'),
-        TableColumn('artist', 'Artist', width='15%'),
-        TableColumn('operation', 'Operation', width='20%'),
+        TableColumn('title', 'Title', width='25%'),
+        TableColumn('artist', 'Artist', width='20%'),
+        TableColumn('operation', 'Operation', width='25%'),
         TableColumn('queued', 'Queued At', width='15%'),
         TableColumn('attempts', 'Attempts', width='10%'),
-        TableColumn('status', 'Status', width='10%')
+        TableColumn('status', 'Status', width='15%')
     ]
 
     # Create table rows
     rows = []
     for item in formatted_items:
-        # Type badge
-        if item['type'] == 'search':
-            type_html = '<span style="color: #3b82f6;">🔍 Search</span>'
-        else:
-            type_html = '<span style="color: #8b5cf6;">⭐ Rating</span>'
-
-        # Operation with callback
-        operation_html = f"<strong>{item['operation']}</strong>"
+        # Operation with type indicator and callback
+        # Add type emoji to operation for visual clarity
+        type_emoji = '🔍' if item['type'] == 'search' else '⭐'
+        operation_html = f"<strong>{type_emoji} {item['operation']}</strong>"
         if item.get('callback'):
             operation_html += f'<br><span style="font-size: 0.85em; color: #64748b;">{item["callback"]}</span>'
 
@@ -136,7 +131,6 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
             status_html = '<span style="color: #10b981;">Pending</span>'
 
         cells = [
-            TableCell(item['type'], type_html),
             TableCell(item['ha_title']),
             TableCell(item.get('ha_artist') or '—'),
             TableCell(item['operation'], operation_html),
