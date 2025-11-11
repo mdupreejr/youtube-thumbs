@@ -1,6 +1,7 @@
 import requests
 from typing import Optional, Dict, Any
 import os
+from datetime import datetime, timezone
 from logging_helper import LoggingHelper, LogType
 
 # Get logger instance
@@ -67,12 +68,41 @@ class HomeAssistantAPI:
 
             # Log ALL attributes to see what AppleTV is actually sending
             logger.debug("=== ALL Home Assistant attributes ===")
+
+            # Calculate actual current position for more useful debugging
+            media_position = attributes.get('media_position')
+            media_position_updated_at = attributes.get('media_position_updated_at')
+            calculated_position = None
+
+            if media_position is not None and media_position_updated_at:
+                try:
+                    # Parse the timestamp
+                    if isinstance(media_position_updated_at, str):
+                        position_time = datetime.fromisoformat(media_position_updated_at.replace('Z', '+00:00'))
+                    else:
+                        position_time = media_position_updated_at
+
+                    # Calculate elapsed time since position was captured
+                    now = datetime.now(timezone.utc)
+                    elapsed_seconds = (now - position_time).total_seconds()
+
+                    # Calculate current position (raw position + elapsed time)
+                    calculated_position = media_position + elapsed_seconds
+
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Could not calculate current position: {e}")
+
             for key, value in attributes.items():
                 # Truncate long values for readability
                 value_str = str(value)
                 if len(value_str) > 100:
                     value_str = value_str[:100] + "..."
                 logger.debug(f"  {key}: {value_str}")
+
+                # Add calculated position info for media_position
+                if key == 'media_position' and calculated_position is not None:
+                    logger.debug(f"  media_position_calculated: {calculated_position:.1f} (raw HA value: {media_position}, elapsed: {elapsed_seconds:.1f}s)")
+
             logger.debug("=== End attributes ===")
 
             media_title = attributes.get('media_title')
