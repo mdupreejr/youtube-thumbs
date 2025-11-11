@@ -71,9 +71,8 @@ class SearchCacheOperations:
 
             self._conn.commit()
 
-        if cached_count > 0:
-            logger.info(f"Opportunistically cached {cached_count} videos from search results")
-
+        # Note: Logging moved to caller (youtube_api.py) to provide more context
+        # The caller logs: "Opportunistically cached X/Y videos checked during search (Z duration matches)"
         return cached_count
 
     def find_by_duration(self, duration: int, tolerance: int = 2) -> Optional[List[Dict[str, Any]]]:

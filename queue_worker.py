@@ -163,7 +163,21 @@ def process_next_item(db, yt_api):
         elif item_type == 'search':
             # Process search
             title = payload['ha_title']
-            logger.info(f"Processing search: {title}")
+            artist = payload.get('ha_artist', '')
+            album = payload.get('ha_album', '')
+
+            # Build descriptive log message with available metadata
+            search_info = f"'{title}'"
+            metadata_parts = []
+            if artist and artist not in ['Unknown', 'YouTube', '', None]:
+                metadata_parts.append(f"artist: {artist}")
+            if album and album not in ['Unknown', 'YouTube', '', None]:
+                metadata_parts.append(f"album: {album}")
+
+            if metadata_parts:
+                search_info += f" ({', '.join(metadata_parts)})"
+
+            logger.info(f"Processing search: {search_info}")
 
             # Build media dict from payload
             ha_media = {
