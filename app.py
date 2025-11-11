@@ -123,8 +123,8 @@ def handle_csrf_error(e):
 @app.context_processor
 def inject_static_url():
     """
-    Inject static_url function into all templates for ingress-aware static file URLs.
-    This ensures static files work correctly through Home Assistant ingress.
+    Inject static_url function and ingress_path into all templates.
+    This ensures static files and all links work correctly through Home Assistant ingress.
     """
     def static_url(filename):
         """Generate static URL with ingress path support."""
@@ -134,7 +134,8 @@ def inject_static_url():
             return f"{ingress_path}{base_url}"
         return base_url
 
-    return dict(static_url=static_url)
+    # Inject both static_url function and ingress_path variable
+    return dict(static_url=static_url, ingress_path=g.ingress_path)
 
 # ============================================================================
 # REQUEST/RESPONSE MIDDLEWARE

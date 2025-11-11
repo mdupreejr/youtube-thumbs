@@ -228,14 +228,17 @@ def stats_analytics_page() -> str:
         for item in play_dist:
             item['percentage'] = (item.get('video_count', 0) / total_videos * 100) if total_videos > 0 else 0
 
+        # Calculate max play count for hourly bar chart
+        max_hour_plays = max((p.get('play_count', 0) for p in patterns.get('by_hour', [])), default=0)
+
         template_data = {
-            'ingress_path': ingress_path,
             'current_tab': 'analytics',
             'listening_patterns': patterns,
             'heatmap_data': heatmap_data,
             'play_distribution': play_dist,
             'retention_analysis': retention,
             'correlation_stats': correlation,
+            'max_hour_plays': max_hour_plays,
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
