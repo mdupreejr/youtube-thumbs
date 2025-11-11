@@ -88,22 +88,32 @@ def process_next_item(db, yt_api):
             logger.info(f"Processing rating: {video_id} as {rating}")
 
             try:
-                # v4.0.19: Direct rating without get_video_rating check
-                # YouTube API is idempotent - rating with same rating doesn't change anything
-                # This saves 1 quota unit (get_rating costs 1, set_rating costs 50)
-                # More importantly, avoids wasting API calls when quota is nearly exhausted
-                success = yt_api.set_video_rating(video_id, rating)
-                if success:
+                # v5.0.0: Check if already rated with same rating
+                # This moves the "already rated" check from rating endpoint to queue worker
+                existing_video = db.get_video(video_id)
+                if existing_video and existing_video.get('rating') == rating:
+                    # Already rated with same rating - just increment score locally
+                    # No need to call YouTube API (it's idempotent anyway)
                     db.record_rating(video_id, rating)
                     db.mark_queue_item_completed(queue_id)
-                    logger.info(f"✓ Successfully rated {video_id} as {rating}")
-                    logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
+                    logger.info(f"✓ Already rated as {rating}, incremented score for {video_id}")
+                    logger.debug(f"Marked queue item #{queue_id} as COMPLETED (score increment)")
                 else:
-                    # API returned False (unexpected - should raise exception instead)
-                    error_msg = "YouTube API returned False (unexpected)"
-                    logger.error(f"✗ {error_msg} for {video_id}")
-                    db.mark_queue_item_failed(queue_id, error_msg)
-                    logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
+                    # New rating or changing rating - submit to YouTube
+                    # YouTube API is idempotent - rating with same rating doesn't change anything
+                    # This saves quota by not checking current rating first (1 unit saved per rating)
+                    success = yt_api.set_video_rating(video_id, rating)
+                    if success:
+                        db.record_rating(video_id, rating)
+                        db.mark_queue_item_completed(queue_id)
+                        logger.info(f"✓ Successfully rated {video_id} as {rating}")
+                        logger.debug(f"Marked queue item #{queue_id} as COMPLETED")
+                    else:
+                        # API returned False (unexpected - should raise exception instead)
+                        error_msg = "YouTube API returned False (unexpected)"
+                        logger.error(f"✗ {error_msg} for {video_id}")
+                        db.mark_queue_item_failed(queue_id, error_msg)
+                        logger.debug(f"Marked queue item #{queue_id} as FAILED: {error_msg}")
 
             except QuotaExceededError:
                 # Re-raise quota errors to outer handler (will sleep until midnight)
@@ -165,14 +175,27 @@ def process_next_item(db, yt_api):
                 'app_name': payload['ha_app_name']
             }
 
-            # Search using the wrapper (includes caching) - capture API response for debugging
+            # v5.0.0: Check cache FIRST before searching (saves quota)
+            # This moves cache checking from rating endpoint to queue worker
+            from helpers.cache_helpers import find_cached_video
             from helpers.search_helpers import search_and_match_video
             from helpers.video_helpers import prepare_video_upsert
             import json
 
-            # v4.0.64: Request API response data for debugging failed searches
-            result = search_and_match_video(ha_media, yt_api, db, return_api_response=True)
-            video, api_debug_data = result if result else (None, None)
+            video = find_cached_video(db, ha_media)
+            api_debug_data = None
+
+            if video and video.get('yt_video_id'):
+                # Cache hit - skip YouTube search entirely
+                logger.info(f"✓ Cache hit: '{title}' | YouTube ID: {video['yt_video_id']}")
+                logger.debug("  → Skipped YouTube search due to cache hit")
+            else:
+                # Cache miss - search YouTube
+                logger.debug(f"Cache miss for '{title}' - searching YouTube")
+
+                # v4.0.64: Request API response data for debugging failed searches
+                result = search_and_match_video(ha_media, yt_api, db, return_api_response=True)
+                video, api_debug_data = result if result else (None, None)
 
             # Serialize API debug data for storage
             api_response_json = json.dumps(api_debug_data) if api_debug_data else None
