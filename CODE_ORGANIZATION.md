@@ -571,9 +571,12 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, g
 
 # 3. Local application imports
-from logger import logger
+from logging_helper import LoggingHelper, LogType
 from database import get_database
 from helpers.template_helpers import format_badge
+
+# Get logger instance
+logger = LoggingHelper.get_logger(LogType.MAIN)
 ```
 
 ### Function Documentation

@@ -276,9 +276,7 @@ def pending_ratings_log():
         )
 
     except Exception as e:
-        logger.error(f"Error displaying queue: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error displaying queue", e)
         return "<h1>Error loading queue</h1>", 500
 
 
@@ -389,9 +387,7 @@ def get_queue_item_details(queue_id: int):
             return jsonify({'success': False, 'error': f'Invalid item type: {item_type}'}), 400
 
     except Exception as e:
-        logger.error(f"Error getting queue item details ({queue_id}): {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace(f"Error getting queue item details ({queue_id})", e)
         return jsonify({'success': False, 'error': 'Internal server error occurred'}), 500
 
 
@@ -561,9 +557,7 @@ def queue_item_detail_page(item_id: int):
                              static_url=static_url)
 
     except Exception as e:
-        logger.error(f"Error rendering queue item detail page ({item_id}): {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace(f"Error rendering queue item detail page ({item_id})", e)
         return render_template('error.html',
                              error=f'Internal server error: {str(e)}',
                              ingress_path=ingress_path,
@@ -897,9 +891,7 @@ def logs_viewer():
         )
 
     except Exception as e:
-        logger.error(f"Error rendering logs page: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering logs page", e)
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading logs</h1><p>An internal error occurred. Please try again later.</p>", 500
 

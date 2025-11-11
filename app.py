@@ -344,8 +344,7 @@ def rate_limit_error(e):
 try:
     db = get_database()
 except Exception as e:
-    logger.critical(f"Failed to initialize database: {e}")
-    logger.critical(traceback.format_exc())
+    LoggingHelper.log_error_with_trace("CRITICAL: Failed to initialize database", e)
     logger.critical("Application cannot start without database. Exiting.")
     raise SystemExit(1)
 

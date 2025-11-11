@@ -388,8 +388,7 @@ def main():
                 continue
 
         except Exception as e:
-            logger.error(f"Queue worker error: {e}")
-            logger.error(traceback.format_exc())
+            LoggingHelper.log_error_with_trace("Queue worker error", e)
             time.sleep(60)
 
     # Clean up PID file on normal exit

@@ -153,8 +153,8 @@ def stats_page() -> str:
         return render_template('stats.html', **template_data)
 
     except Exception as e:
-        logger.error(f"Error rendering stats page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering stats page: {e}", e)
+
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
 
@@ -243,8 +243,8 @@ def stats_analytics_page() -> str:
         return render_template('stats.html', **template_data)
 
     except Exception as e:
-        logger.error(f"Error rendering analytics page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering analytics page: {e}", e)
+
         return "<h1>Error loading analytics</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
@@ -285,8 +285,8 @@ def stats_api_page() -> str:
         return render_template('stats.html', **template_data)
 
     except Exception as e:
-        logger.error(f"Error rendering API stats page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering API stats page: {e}", e)
+
         return "<h1>Error loading API statistics</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
@@ -326,8 +326,8 @@ def stats_categories_page() -> str:
         return render_template('stats.html', **template_data)
 
     except Exception as e:
-        logger.error(f"Error rendering categories page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering categories page: {e}", e)
+
         return "<h1>Error loading categories</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
@@ -369,8 +369,8 @@ def stats_discovery_page() -> str:
         return render_template('stats.html', **template_data)
 
     except Exception as e:
-        logger.error(f"Error rendering discovery page: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering discovery page: {e}", e)
+
         return "<h1>Error loading discovery</h1><p>An internal error occurred. Please try again later.</p>", 500
 
 
@@ -440,7 +440,7 @@ def stats_liked_page() -> str:
             pagination=pagination
         )
     except Exception as e:
-        logger.error(f"Error rendering liked stats: {e}")
+        LoggingHelper.log_error_with_trace("Error rendering liked stats: {e}", e)
         return "<h1>Error loading liked videos</h1>", 500
 
 
@@ -510,7 +510,7 @@ def stats_disliked_page() -> str:
             pagination=pagination
         )
     except Exception as e:
-        logger.error(f"Error rendering disliked stats: {e}")
+        LoggingHelper.log_error_with_trace("Error rendering disliked stats: {e}", e)
         return "<h1>Error loading disliked videos</h1>", 500
 
 

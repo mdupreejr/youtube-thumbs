@@ -387,8 +387,7 @@ def data_viewer() -> str:
         )
 
     except Exception as e:
-        logger.error(f"Error rendering data viewer: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering data viewer", e)
         # SECURITY: Don't expose error details to user (information disclosure)
         return "<h1>Error loading database viewer</h1><p>An internal error occurred. Please try again later.</p>", 500
 
@@ -411,6 +410,5 @@ def database_admin_wrapper():
         )
 
     except Exception as e:
-        logger.error(f"Error rendering database admin wrapper: {e}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error rendering database admin wrapper", e)
         return "<h1>Error loading database admin</h1><p>An internal error occurred. Please try again later.</p>", 500

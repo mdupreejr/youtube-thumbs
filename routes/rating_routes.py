@@ -187,8 +187,7 @@ def rate_video(rating_type: str) -> Tuple[Response, int]:
             }), 503  # Service Unavailable
 
     except Exception as e:
-        logger.error(f"Unexpected error in {rating_type} endpoint: {str(e)}")
-        logger.debug(f"Traceback for {rating_type} error: {traceback.format_exc()}")
+        LoggingHelper.log_error_with_trace(f"Unexpected error in {rating_type} endpoint", e)
         rating_logger.info(f"{rating_type.upper()} | FAILED | Unexpected error: {str(e)}")
         return error_response("An unexpected error occurred while rating the video", 500)
 
@@ -234,8 +233,7 @@ def rate_song_direct(video_id: str, rating_type: str) -> Response:
         })
 
     except Exception as e:
-        logger.error(f"Error rating video {video_id}")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace(f"Error rating video {video_id}", e)
         return error_response('Failed to rate video', 500)
 
 
@@ -289,8 +287,7 @@ def rate_song_form() -> Response:
         return safe_redirect('rating', page)
 
     except Exception as e:
-        logger.error("Error processing rating form")
-        logger.error(traceback.format_exc())
+        LoggingHelper.log_error_with_trace("Error processing rating form", e)
         # Redirect back even on error
         try:
             page = request.form.get('page', '1')
@@ -325,10 +322,7 @@ def get_unrated_songs() -> Response:
         return jsonify(response_data)
 
     except Exception as e:
-        logger.error(f"=== ERROR in /api/unrated endpoint ===")
-        logger.error(f"Exception type: {type(e).__name__}")
-        logger.error(f"Exception message: {str(e)}")
-        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        LoggingHelper.log_error_with_trace("ERROR in /api/unrated endpoint", e)
         return error_response('Failed to retrieve unrated videos', 500)
 
 
