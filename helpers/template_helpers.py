@@ -858,7 +858,7 @@ def add_queue_tabs(page_config: PageConfig, current_tab: str, ingress_path: str)
     for label, tab in tabs:
         page_config.add_sub_tab(
             label,
-            f'{ingress_path}/logs/pending-ratings?tab={tab}',
+            f'/logs/pending-ratings?tab={tab}',
             current_tab == tab
         )
 
