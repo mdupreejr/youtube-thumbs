@@ -14,7 +14,6 @@
   "hassio_api": true,
   "homeassistant_api": true,
   "hassio_role": "homeassistant",
-  "host_network": true,
   "map": ["addon_config:rw"],
   "options": {
     "media_player_entity": "media_player.your_appletv",
