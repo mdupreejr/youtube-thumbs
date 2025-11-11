@@ -42,12 +42,12 @@ def search_youtube_for_video(
     return_api_response: bool = False
 ):
     """
-    Search YouTube for matching videos with exact duration (+1 second).
+    Search YouTube for matching videos with exact duration match or +1 second.
 
     Args:
         yt_api: YouTube API instance
         title: Video title
-        duration: Video duration (HA duration, YouTube will be +1)
+        duration: Video duration (HA duration, YouTube must be exact or +1s)
         artist: Artist/channel name (improves search accuracy for generic titles)
         return_api_response: If True, return tuple of (candidates, api_debug_data)
 
@@ -66,8 +66,9 @@ def search_youtube_for_video(
 
     if not candidates:
         logger.error(
-            "No videos found with exact duration match | Title: '%s' | Expected YT duration: %ss",
+            "No videos found with duration match (exact or +1s) | Title: '%s' | Expected YT duration: %ss or %ss",
             title,
+            duration,
             duration + 1
         )
         metrics.record_failed_search(title, None, reason='not_found')
@@ -135,7 +136,8 @@ def search_and_match_video(
     title, duration = validation_result
 
     # Step 2: Check opportunistic search cache FIRST (0 API cost!)
-    cached_result = db.find_in_search_cache(title, duration + 1, tolerance=2)  # +1 for YouTube duration
+    # tolerance=1 allows exact match or +1 second (matching the strict duration logic)
+    cached_result = db.find_in_search_cache(title, duration + 1, tolerance=1)  # +1 for YouTube duration
     if cached_result:
         logger.info(f"Opportunistic cache HIT: '{title}' → {cached_result['yt_video_id']} (saved 101 quota units!)")
         metrics.record_cache_hit('search_results')
