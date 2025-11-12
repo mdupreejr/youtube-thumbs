@@ -16,13 +16,11 @@ from helpers.template_helpers import (
 )
 from helpers.page_builder import ApiCallsPageBuilder
 from helpers.queue_item_helpers import extract_queue_item_details
-from routes.logs_routes_queue_helpers import (
+from routes.logs_routes_helpers import (
     _create_queue_pending_tab,
     _create_queue_history_tab,
     _create_queue_errors_tab,
-    _create_queue_statistics_tab
-)
-from routes.logs_routes_page_creators import (
+    _create_queue_statistics_tab,
     _create_rated_songs_page,
     _create_matches_page,
     _create_errors_page,
