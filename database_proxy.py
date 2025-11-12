@@ -46,7 +46,7 @@ def create_sqlite_web_middleware(db_path):
         WSGI application callable that serves sqlite_web
     """
     try:
-        from sqlite_web import app, initialize_app
+        from sqlite_web.sqlite_web import app, initialize_app
 
         # Initialize sqlite_web with database path
         # This must be called before using the app
