@@ -4,6 +4,7 @@ Provides statistical query methods for analytics and reporting.
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from database.query_builder import VideoQueryBuilder
 
 
 class StatsOperations:
@@ -77,16 +78,8 @@ class StatsOperations:
             List of video dictionaries sorted by play count
         """
         with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT *, ha_title, ha_artist, yt_channel, play_count, rating
-                FROM video_ratings
-                               ORDER BY play_count DESC
-                LIMIT ?
-                """,
-                (limit,)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            return builder.order_by("play_count", "DESC").limit(limit).execute()
 
     def get_top_rated(self, limit: int = 10) -> List[Dict]:
         """
@@ -99,17 +92,8 @@ class StatsOperations:
             List of video dictionaries sorted by rating score
         """
         with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT *, ha_title, ha_artist, yt_channel, rating_score, rating
-                FROM video_ratings
-                WHERE rating != 'none'
-                ORDER BY rating_score DESC
-                LIMIT ?
-                """,
-                (limit,)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            return builder.where_not_rating("none").order_by("rating_score", "DESC").limit(limit).execute()
 
     def get_recent_activity(self, limit: int = 20) -> List[Dict]:
         """
@@ -122,17 +106,8 @@ class StatsOperations:
             List of video dictionaries sorted by last played date
         """
         with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
-                FROM video_ratings
-                WHERE date_last_played IS NOT NULL
-                ORDER BY date_last_played DESC
-                LIMIT ?
-                """,
-                (limit,)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            return builder.where_date_last_played_not_null().order_by("date_last_played", "DESC").limit(limit).execute()
 
     def get_rated_videos(self, rating: str, page: int = 1, per_page: int = 50) -> Dict:
         """
@@ -147,31 +122,17 @@ class StatsOperations:
             Dictionary with videos list, total count, and page info
         """
         with self._lock:
-            # Get total count
-            cursor = self._conn.execute(
-                """
-                SELECT COUNT(*) as count
-                FROM video_ratings
-                WHERE rating = ?
-                """,
-                (rating,)
-            )
-            total_count = cursor.fetchone()['count']
+            # Get total count using query builder
+            builder = VideoQueryBuilder(self._conn)
+            total_count = builder.where_rating(rating).count()
             total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
 
-            # Get paginated results
-            offset = (page - 1) * per_page
-            cursor = self._conn.execute(
-                """
-                SELECT *
-                FROM video_ratings
-                WHERE rating = ?
-                ORDER BY date_last_played DESC, play_count DESC
-                LIMIT ? OFFSET ?
-                """,
-                (rating, per_page, offset)
-            )
-            videos = [dict(row) for row in cursor.fetchall()]
+            # Get paginated results using query builder
+            builder = VideoQueryBuilder(self._conn)
+            videos = builder.where_rating(rating).order_by_multiple([
+                ("date_last_played", "DESC"),
+                ("play_count", "DESC")
+            ]).paginate(page, per_page).execute()
 
             return {
                 'videos': videos,
@@ -345,19 +306,15 @@ class StatsOperations:
             List of video dictionaries sorted by last played date
         """
         with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
-                FROM video_ratings
-                                 AND date_last_played IS NOT NULL
-                  AND (? IS NULL OR date_last_played >= ?)
-                  AND (? IS NULL OR date_last_played <= ?)
-                ORDER BY date_last_played DESC
-                LIMIT ? OFFSET ?
-                """,
-                (date_from, date_from, date_to, date_to, limit, offset)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            builder.where_date_last_played_not_null()
+
+            if date_from:
+                builder.where_date_from(date_from)
+            if date_to:
+                builder.where_date_to(date_to)
+
+            return builder.order_by("date_last_played", "DESC").limit(limit).offset(offset).execute()
 
     def get_rating_history(self, limit: int = 100, offset: int = 0) -> List[Dict]:
         """
@@ -371,17 +328,8 @@ class StatsOperations:
             List of video dictionaries sorted by last played date
         """
         with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT *, ha_title, ha_artist, yt_channel, date_last_played, play_count, rating
-                FROM video_ratings
-                WHERE rating != 'none'
-                ORDER BY date_last_played DESC
-                LIMIT ? OFFSET ?
-                """,
-                (limit, offset)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            return builder.where_not_rating("none").order_by("date_last_played", "DESC").limit(limit).offset(offset).execute()
 
     def search_history(self, query: str, limit: int = 50) -> List[Dict]:
         """
@@ -395,17 +343,8 @@ class StatsOperations:
             List of matching video dictionaries
         """
         with self._lock:
-            search_pattern = f"%{query}%"
-            cursor = self._conn.execute(
-                """
-                SELECT * FROM video_ratings
-                                 AND (ha_title LIKE ? OR ha_artist LIKE ? OR yt_channel LIKE ?)
-                ORDER BY date_last_played DESC
-                LIMIT ?
-                """,
-                (search_pattern, search_pattern, search_pattern, limit)
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            builder = VideoQueryBuilder(self._conn)
+            return builder.where_search(query).order_by("date_last_played", "DESC").limit(limit).execute()
 
     def get_listening_patterns(self) -> Dict:
         """
@@ -599,104 +538,59 @@ class StatsOperations:
             Dictionary with 'videos' list and 'total' count
         """
         with self._lock:
-            # Build WHERE clauses dynamically
-            # v4.0.0: All videos in video_ratings are matched, no need to filter on yt_match_pending
-            where_clauses = []
-            params = []
+            # Build query using query builder
+            builder = VideoQueryBuilder(self._conn)
 
+            # Apply WHERE filters
             if filters.get('rating'):
-                where_clauses.append("rating = ?")
-                params.append(filters['rating'])
+                builder.where_rating(filters['rating'])
 
             if filters.get('channel_id'):
-                where_clauses.append("yt_channel_id = ?")
-                params.append(filters['channel_id'])
+                builder.where_channel(filters['channel_id'])
 
             if filters.get('category'):
-                where_clauses.append("yt_category_id = ?")
-                params.append(int(filters['category']))
+                builder.where_category(int(filters['category']))
 
             if filters.get('play_count_min'):
-                where_clauses.append("play_count >= ?")
-                params.append(int(filters['play_count_min']))
+                builder.where_play_count_min(int(filters['play_count_min']))
 
             if filters.get('play_count_max'):
-                where_clauses.append("play_count <= ?")
-                params.append(int(filters['play_count_max']))
+                builder.where_play_count_max(int(filters['play_count_max']))
 
             if filters.get('date_from'):
-                where_clauses.append("date_added >= ?")
-                params.append(filters['date_from'])
+                builder.where_date_from(filters['date_from'], column='date_added')
 
             if filters.get('date_to'):
-                where_clauses.append("date_added <= ?")
-                params.append(filters['date_to'])
+                builder.where_date_to(filters['date_to'], column='date_added')
 
             if filters.get('duration_min'):
-                where_clauses.append("yt_duration >= ?")
-                params.append(int(filters['duration_min']))
+                builder.where_duration_min(int(filters['duration_min']))
 
             if filters.get('duration_max'):
-                where_clauses.append("yt_duration <= ?")
-                params.append(int(filters['duration_max']))
+                builder.where_duration_max(int(filters['duration_max']))
 
             if filters.get('source'):
-                where_clauses.append("source = ?")
-                params.append(filters['source'])
-
-            where_clause = " AND ".join(where_clauses)
-
-            # Build ORDER BY clause with whitelist validation to prevent SQL injection
-            allowed_sort_columns = [
-                'date_added', 'date_last_played', 'play_count', 'rating',
-                'ha_title', 'ha_artist', 'yt_title', 'yt_channel', 'yt_duration'
-            ]
-            sort_by = filters.get('sort_by', 'date_added')
-            if sort_by not in allowed_sort_columns:
-                from logging_helper import LoggingHelper, LogType
-                logger = LoggingHelper.get_logger(LogType.MAIN)
-                logger.warning(
-                    "Invalid sort_by value detected: '%s' (possible attack attempt)",
-                    sort_by
-                )
-                sort_by = 'date_added'  # Default to safe value if invalid
-
-            sort_order = filters.get('sort_order', 'desc').upper()
-            if sort_order not in ['ASC', 'DESC']:
-                from logging_helper import LoggingHelper, LogType
-                logger = LoggingHelper.get_logger(LogType.MAIN)
-                logger.warning(
-                    "Invalid sort_order value detected: '%s' (possible attack attempt)",
-                    sort_order
-                )
-                sort_order = 'DESC'
+                builder.where_source(filters['source'])
 
             # Get total count
-            count_query = f"SELECT COUNT(*) as count FROM video_ratings WHERE {where_clause}"  # nosec B608 - where_clause built from parameterized queries
-            cursor = self._conn.execute(count_query, params)
-            total = cursor.fetchone()['count']
+            total = builder.count()
 
-            # Get videos
+            # Apply sorting and pagination
+            sort_by = filters.get('sort_by', 'date_added')
+            sort_order = filters.get('sort_order', 'desc').upper()
+
+            try:
+                builder.order_by(sort_by, sort_order)
+            except ValueError:
+                # Invalid sort column or order, use defaults
+                builder.order_by('date_added', 'DESC')
+
             limit = int(filters.get('limit', 50))
             offset = int(filters.get('offset', 0))
+            builder.limit(limit).offset(offset)
 
-            # SECURITY WARNING: Using f-string for SQL query construction
-            # This is ONLY safe because:
-            #   - where_clause contains HARDCODED SQL fragments with parameterized values
-            #   - sort_by is validated against whitelist of allowed columns
-            #   - sort_order is validated against ['ASC', 'DESC']
-            # NEVER add user input directly to these variables - always validate and parameterize
-            # nosec B608 - where_clause built from parameterized queries, sort_by validated against whitelist
-            query = f"""
-                SELECT * FROM video_ratings
-                WHERE {where_clause}
-                ORDER BY {sort_by} {sort_order}
-                LIMIT ? OFFSET ?
-            """
-            params.extend([limit, offset])
-
-            cursor = self._conn.execute(query, params)
-            videos = [dict(row) for row in cursor.fetchall()]
+            # Execute query
+            videos = builder.execute()
 
             return {
                 'videos': videos,
@@ -753,6 +647,7 @@ class StatsOperations:
         with self._lock:
             if based_on == 'likes':
                 # Similar to liked videos (same channel/category, low play count, unrated)
+                # Note: Subquery pattern - keeping original for complex subquery logic
                 cursor = self._conn.execute(
                     """
                     SELECT * FROM video_ratings
@@ -769,6 +664,7 @@ class StatsOperations:
                 )
             elif based_on == 'played':
                 # Similar to most played videos (same category, low play count)
+                # Note: Subquery pattern - keeping original for complex subquery logic
                 cursor = self._conn.execute(
                     """
                     SELECT * FROM video_ratings
@@ -786,6 +682,7 @@ class StatsOperations:
                 )
             elif based_on == 'discover':
                 # Never played videos in liked channels
+                # Note: Subquery pattern - keeping original for complex subquery logic
                 cursor = self._conn.execute(
                     """
                     SELECT * FROM video_ratings
@@ -816,11 +713,9 @@ class StatsOperations:
             Dictionary with songs list, pagination info, and total count
         """
         with self._lock:
-            # Get total count of unrated songs
-            cursor = self._conn.execute(
-                "SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'none' "
-            )
-            total_count = cursor.fetchone()['count']
+            # Get total count of unrated songs using query builder
+            builder = VideoQueryBuilder(self._conn)
+            total_count = builder.where_rating('none').count()
 
         # Handle empty results
         if total_count == 0:
@@ -834,31 +729,21 @@ class StatsOperations:
         # Calculate total pages and clamp page to valid range
         total_pages = (total_count + limit - 1) // limit
         page = max(1, min(page, total_pages))  # Clamp page to [1, total_pages]
-        offset = (page - 1) * limit
 
         with self._lock:
-            # Get unrated songs, sorted by play count (most played first)
-            cursor = self._conn.execute(
-                """
-                SELECT yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url, ha_duration, yt_duration
-                FROM video_ratings
-                WHERE rating = 'none'                ORDER BY play_count DESC, date_last_played DESC
-                LIMIT ? OFFSET ?
-                """,
-                (limit, offset)
-            )
-            songs = cursor.fetchall()
-
-        # Return raw database columns for app.py to format
-        songs_list = []
-        for song in songs:
-            songs_list.append(dict(song))
+            # Get unrated songs using query builder
+            builder = VideoQueryBuilder(self._conn)
+            builder.select("yt_video_id, ha_title, yt_title, ha_artist, yt_channel, play_count, yt_url, ha_duration, yt_duration")
+            songs = builder.where_rating('none').order_by_multiple([
+                ("play_count", "DESC"),
+                ("date_last_played", "DESC")
+            ]).paginate(page, limit).execute()
 
         # Note: page is now clamped to valid range above
         total_pages = (total_count + limit - 1) // limit
 
         return {
-            'songs': songs_list,
+            'songs': songs,
             'page': page,
             'total_pages': total_pages,
             'total_count': total_count
