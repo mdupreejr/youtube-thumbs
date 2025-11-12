@@ -158,13 +158,8 @@
                     <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if current_tab == 'rating' else '' }}">Bulk Rating</a>
                     <a href="{{ ingress_path }}/stats">Stats</a>
                     <a href="{{ ingress_path }}/data">Database</a>
-                    <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
-                    <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
-                    <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
-                    <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
-                    <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
+                    <a href="{{ ingress_path }}/logs?tab=rated">Logs</a>
                     <a href="{{ ingress_path }}/logs/pending-ratings">Queue</a>
-                    <a href="{{ ingress_path }}/db-admin">DB Admin</a>
                 </div>
             </div>
         </header>
@@ -172,11 +167,9 @@
         <!-- Connection Tests Tab -->
         {% if current_tab == 'tests' %}
         <div class="card">
-            <h2>System Status</h2>
             <div class="refresh-note">
                 <a href="{{ ingress_path }}/?tab=tests" style="color: #667eea; text-decoration: none;">🔄 Refresh Tests</a>
             </div>
-            <br>
             <div class="test-grid">
                 <!-- Home Assistant Test -->
                 <div class="test-card">
@@ -462,14 +455,19 @@
         <!-- Bulk Rating Tab -->
         {% if current_tab == 'rating' %}
         <div class="card">
-            <h2>⚡ Bulk Rating</h2>
-            <p style="color: #666; margin-bottom: 20px;">{{ total_unrated }} unrated songs • Page {{ current_page }} of {{ total_pages }}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <div style="color: #666; font-size: 0.9em;">{{ total_unrated }} unrated songs</div>
+                <div style="color: #666; font-size: 0.9em;">Page {{ current_page }} of {{ total_pages }}</div>
+            </div>
 
             {% if songs %}
                 {% for song in songs %}
                 <div class="song-item">
                     <div class="song-info">
-                        <div class="song-title">{{ song.title }} <span class="song-meta">• {{ song.artist }}{% if song.duration %} • {{ song.duration }}{% endif %}</span></div>
+                        <div class="song-title">
+                            <a href="https://youtube.com/watch?v={{ song.id }}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">{{ song.title }}</a>
+                            <span class="song-meta">• {{ song.artist }}{% if song.duration %} • {{ song.duration }}{% endif %}</span>
+                        </div>
                     </div>
                     <form method="POST" action="{{ ingress_path }}/rate-song" style="display: inline-flex;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
