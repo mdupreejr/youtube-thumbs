@@ -9,7 +9,8 @@ The LogsPageBuilder ensures all required attributes are set and provides
 a single source of truth for page configuration.
 """
 from typing import Optional, List, Dict, Any, Callable
-from helpers.template_helpers import PageConfig, TableData, TableColumn, TableRow
+from helpers.template import PageConfig, TableData, TableColumn, TableRow
+from helpers.pagination_helpers import generate_page_numbers
 
 
 class LogsPageBuilder:
@@ -321,7 +322,7 @@ class StatsPageBuilder:
             rating_type: 'liked' or 'disliked'
             ingress_path: The ingress path from the request
         """
-        from helpers.template_helpers import create_stats_page_config
+        from helpers.template import create_stats_page_config
 
         self.rating_type = rating_type
         self.ingress_path = ingress_path
@@ -465,7 +466,7 @@ class DataViewerPageBuilder:
         self.pagination = {
             'current_page': current_page,
             'total_pages': total_pages,
-            'page_numbers': list(range(max(1, current_page-2), min(total_pages+1, current_page+3))),
+            'page_numbers': generate_page_numbers(current_page, total_pages),
             'prev_url': f"/data?page={current_page-1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
             'next_url': f"/data?page={current_page+1}&sort={sort_by}&order={sort_order}&columns={columns_param}",
             'page_url_template': f"/data?page=PAGE_NUM&sort={sort_by}&order={sort_order}&columns={columns_param}"
@@ -520,7 +521,7 @@ class ApiCallsPageBuilder:
         Args:
             ingress_path: The ingress path from the request
         """
-        from helpers.template_helpers import create_api_calls_page_config
+        from helpers.template import create_api_calls_page_config
 
         self.ingress_path = ingress_path
         self.page_config = create_api_calls_page_config(ingress_path)

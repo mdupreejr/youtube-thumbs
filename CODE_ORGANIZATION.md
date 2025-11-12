@@ -117,7 +117,7 @@ Formats song title and artist for consistent two-line display.
 
 **Usage:**
 ```python
-from helpers.template_helpers import format_song_display
+from helpers.template import format_song_display
 
 # Creates formatted HTML
 html = format_song_display("Bohemian Rhapsody", "Queen")
@@ -143,7 +143,7 @@ Formats success/failure status badges with consistent styling.
 
 **Usage:**
 ```python
-from helpers.template_helpers import format_status_badge
+from helpers.template import format_status_badge
 
 # Success badge (green)
 badge = format_status_badge(True)
@@ -186,7 +186,7 @@ Low-level badge formatter for custom badge types.
 
 **Usage:**
 ```python
-from helpers.template_helpers import format_badge
+from helpers.template import format_badge
 
 format_badge('⏳ Pending', 'warning')
 format_badge('🔍 search', 'info')
@@ -201,7 +201,7 @@ Creates properly formatted YouTube video links.
 
 **Usage:**
 ```python
-from helpers.template_helpers import format_youtube_link
+from helpers.template import format_youtube_link
 
 # With icon
 link = format_youtube_link('dQw4w9WgXcQ', 'Never Gonna Give You Up', icon=True)
@@ -218,7 +218,7 @@ Truncates long text with optional suffix.
 
 **Usage:**
 ```python
-from helpers.template_helpers import truncate_text
+from helpers.template import truncate_text
 
 short = truncate_text("Very long error message...", max_length=50)
 ```
@@ -231,7 +231,7 @@ Formats timestamps as relative time (e.g., "2 hours ago").
 
 **Usage:**
 ```python
-from helpers.template_helpers import format_time_ago
+from helpers.template import format_time_ago
 
 relative = format_time_ago("2025-11-10T15:30:00")
 # Returns: "2 hours ago" (relative to current time)
@@ -247,7 +247,7 @@ Configuration object for page metadata (title, tabs, filters).
 
 **Usage:**
 ```python
-from helpers.template_helpers import PageConfig
+from helpers.template import PageConfig
 
 config = PageConfig(title="Logs Viewer", page_type="logs")
 config.add_tab("rated", "Rated Songs", "/logs?tab=rated", selected=True)
@@ -262,7 +262,7 @@ Structured data classes for the unified table viewer template.
 
 **Usage:**
 ```python
-from helpers.template_helpers import TableData, TableColumn, TableRow, TableCell
+from helpers.template import TableData, TableColumn, TableRow, TableCell
 
 # Define columns
 columns = [
@@ -573,7 +573,7 @@ from flask import Blueprint, render_template, request, g
 # 3. Local application imports
 from logging_helper import LoggingHelper, LogType
 from database import get_database
-from helpers.template_helpers import format_badge
+from helpers.template import format_badge
 
 # Get logger instance
 logger = LoggingHelper.get_logger(LogType.MAIN)

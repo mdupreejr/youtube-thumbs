@@ -584,7 +584,7 @@ def index() -> str:
             result = db.get_unrated_videos(page=page, limit=50)
 
             # Create page configuration
-            from helpers.template_helpers import PageConfig, TableData, TableColumn, TableRow, TableCell
+            from helpers.template import PageConfig, TableData, TableColumn, TableRow, TableCell
             from helpers.pagination_helpers import generate_page_numbers
 
             page_config = PageConfig(

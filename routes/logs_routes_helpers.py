@@ -10,7 +10,7 @@ from flask import request
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, format_absolute_timestamp
 from helpers.video_helpers import get_video_title, get_video_artist
-from helpers.template_helpers import (
+from helpers.template import (
     PageConfig, TableData, TableColumn, TableRow, TableCell,
     format_badge, format_time_ago, truncate_text,
     format_song_display, format_status_badge,
@@ -511,9 +511,10 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
 
         # Status
         if item.get('last_error'):
-            status_html = f'<span style="color: #ef4444; font-size: 0.9em;">{item["last_error"][:50]}...</span>'
+            error_msg = truncate_text(item["last_error"], max_length=50, suffix='...')
+            status_html = f'<span style="color: #ef4444; font-size: 0.9em;">{error_msg}</span>'
         else:
-            status_html = '<span style="color: #10b981;">Pending</span>'
+            status_html = format_badge('Pending', 'info')
 
         cells = [
             TableCell(item['ha_title']),
@@ -582,9 +583,9 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     for item in formatted_items:
         # Type badge
         if item['type'] == 'search':
-            type_html = '<span style="color: #3b82f6;">🔍 Search</span>'
+            type_html = format_badge('🔍 Search', 'info')
         else:
-            type_html = '<span style="color: #8b5cf6;">⭐ Rating</span>'
+            type_html = format_badge('⭐ Rating', 'info')
 
         # Status badge
         if item['status'] == 'completed':
@@ -660,16 +661,14 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
     for item in formatted_items:
         # Type badge
         if item['type'] == 'search':
-            type_html = '<span style="color: #3b82f6;">🔍 Search</span>'
+            type_html = format_badge('🔍 Search', 'info')
         else:
-            type_html = '<span style="color: #8b5cf6;">⭐ Rating</span>'
+            type_html = format_badge('⭐ Rating', 'info')
 
         # Error message truncated
         error_msg = item.get('last_error') or 'Unknown error'
-        error_html = f'<span style="color: #ef4444; font-size: 0.9em;">{error_msg[:100]}'
-        if len(error_msg) > 100:
-            error_html += '...'
-        error_html += '</span>'
+        error_msg_short = truncate_text(error_msg, max_length=100, suffix='...')
+        error_html = f'<span style="color: #ef4444; font-size: 0.9em;">{error_msg_short}</span>'
 
         cells = [
             TableCell(item['type'], type_html),

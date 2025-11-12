@@ -16,7 +16,8 @@ from helpers.time_helpers import format_relative_time
 from helpers.validation_helpers import validate_page_param
 from helpers.response_helpers import error_response
 from helpers.request_helpers import get_real_ip
-from helpers.template_helpers import (
+from helpers.pagination_helpers import generate_page_numbers
+from helpers.template import (
     TableData, TableColumn, TableRow, TableCell,
     create_stats_page_config, format_youtube_link
 )
@@ -417,7 +418,7 @@ def stats_liked_page() -> str:
 
         # Set table and pagination
         builder.set_table(columns, rows)
-        page_numbers = list(range(max(1, page-2), min(result['total_pages']+1, page+3)))
+        page_numbers = generate_page_numbers(result['current_page'], result['total_pages'])
         builder.set_pagination(result['current_page'], result['total_pages'], page_numbers)
 
         # Build and render
@@ -487,7 +488,7 @@ def stats_disliked_page() -> str:
 
         # Set table and pagination
         builder.set_table(columns, rows)
-        page_numbers = list(range(max(1, page-2), min(result['total_pages']+1, page+3)))
+        page_numbers = generate_page_numbers(result['current_page'], result['total_pages'])
         builder.set_pagination(result['current_page'], result['total_pages'], page_numbers)
 
         # Build and render

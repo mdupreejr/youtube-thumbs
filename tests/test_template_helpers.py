@@ -6,7 +6,7 @@ unified table template system.
 """
 
 import unittest
-from helpers.template_helpers import (
+from helpers.template import (
     sanitize_html, TableCell, TableColumn, TableRow, TableData, PageConfig,
     format_youtube_link, format_badge, create_pagination_info, create_status_message,
     create_filter_option

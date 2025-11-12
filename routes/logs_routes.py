@@ -10,7 +10,7 @@ from logging_helper import LoggingHelper, LogType
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.time_helpers import format_relative_time, format_absolute_timestamp
 from helpers.validation_helpers import validate_page_param
-from helpers.template_helpers import (
+from helpers.template import (
     TableColumn, TableRow, TableCell,
     format_badge, truncate_text, format_status_badge
 )
