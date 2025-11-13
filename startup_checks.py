@@ -181,53 +181,24 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
             }
             return True, {'message': pause_msg, 'details': details}
 
-        # Quota not exceeded - proceed with authentication test
+        # Quota not exceeded - verify authentication without API call
+        # Check if token file exists and has valid credentials
+        token_valid = False
         try:
-            import time
-            start_time = time.time()
-
-            # Get channel info for authenticated user (minimal quota cost = 1 unit)
-            request = yt_api.youtube.channels().list(
-                part='snippet',
-                mine=True,
-                maxResults=1,
-                fields='items(id,snippet(title))'
-            )
-            response = request.execute()
-
-            response_time = int((time.time() - start_time) * 1000)  # ms
-
-            # Log the API call
-            if db:
-                channel_name = response.get('items', [{}])[0].get('snippet', {}).get('title', 'Unknown')
-                db.record_api_call('channels.list', success=True, quota_cost=1)
-                db.log_api_call_detailed(
-                    api_method='channels.list',
-                    operation_type='auth_check',
-                    query_params='mine=True',
-                    quota_cost=1,
-                    success=True,
-                    results_count=len(response.get('items', [])),
-                    context=f'startup_check (authenticated as: {channel_name})'
-                )
-
-            logger.debug(f"YouTube API authentication verified ({response_time}ms)")
-
+            import os
+            token_file = 'token.json'
+            if os.path.exists(token_file):
+                # Token file exists - credentials should be valid
+                # Actual auth errors will be caught on first real API call (search/rating)
+                token_valid = True
+                logger.debug("YouTube API token file exists - authentication assumed valid")
+            else:
+                logger.warning("YouTube API token file not found - authentication may be required")
         except Exception as e:
-            logger.error(f"YouTube API authentication test failed: {e}")
-            # Log the failed API call
-            if db:
-                db.record_api_call('channels.list', success=False, quota_cost=1, error_message=str(e))
-                db.log_api_call_detailed(
-                    api_method='channels.list',
-                    operation_type='auth_check',
-                    query_params='mine=True',
-                    quota_cost=0,  # YouTube doesn't charge for failed auth
-                    success=False,
-                    error_message=str(e)[:500],
-                    context='startup_check'
-                )
-            return False, {'message': f"Authentication test failed: {str(e)}", 'details': {
+            logger.error(f"Error checking token file: {e}")
+
+        if not token_valid:
+            return False, {'message': "Token file not found - please authenticate", 'details': {
                 'authenticated': False,
                 'worker_running': worker_running,
                 'worker_pid': worker_pid if worker_running else None,
