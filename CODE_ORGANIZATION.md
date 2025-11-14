@@ -65,8 +65,7 @@ youtube-thumbs/
 └── static/                     # Static assets
     ├── css/
     │   ├── common.css          # Shared styles
-    │   ├── stats.css           # Stats page styles
-    │   └── stats_visualizations.css # Chart styles
+    │   └── stats.css           # Stats page styles
     └── js/
         └── table-utils.js      # Table interaction utilities
 ```

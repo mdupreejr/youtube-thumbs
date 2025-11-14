@@ -282,14 +282,14 @@ These issues cause bugs or major code quality problems that should be addressed 
 
 These improvements significantly enhance code quality and maintainability.
 
-- [ ] **Consolidate video table building code**
+- [x] **Consolidate video table building code**
   - Files: Multiple routes building similar video list tables
   - Affected: `/routes/logs_routes_helpers.py`, `/routes/stats_routes.py`
   - Action: Create `build_video_table()` helper in `/helpers/template_helpers.py`
   - Features: Consistent column structure, reusable table formatting
   - Impact: Reduces duplicate code, ensures consistent UI
 
-- [ ] **Remove unused CSS file**
+- [x] **Remove unused CSS file**
   - File: `/static/css/stats_visualizations.css`
   - Issue: Not referenced in any template files
   - Action: Delete file or add to templates if needed
