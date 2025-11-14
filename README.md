@@ -241,20 +241,20 @@ Based on comprehensive code review, the following tasks address critical technic
 
 These issues cause bugs or major code quality problems that should be addressed immediately.
 
-- [ ] **Fix format string bugs in error logging**
+- [x] **Fix format string bugs in error logging**
   - File: `/routes/stats_routes.py`
   - Lines: 417, 508
   - Issue: Using `%s` placeholders with `.format()` instead of `{}`
   - Action: Replace `%s` with `{}` in format strings
   - Impact: Prevents potential logging errors and exceptions
 
-- [ ] **Create unified sorting helper function**
+- [x] **Create unified sorting helper function**
   - Create: `/helpers/sorting_helpers.py`
   - Action: Implement `sort_items(items, sort_by=None, sort_dir='asc', default_key=None)` function
   - Features: Handle None values, support nested keys, consistent sorting behavior
   - Impact: Single source of truth for all sorting operations
 
-- [ ] **Replace duplicate sorting implementations (18+ instances)**
+- [x] **Replace duplicate sorting implementations (18+ instances)**
   - **Phase 1**: `/routes/logs_routes_helpers.py` (7 instances)
     - Lines: 44-56, 97-109, 149-161, 203-214, 256-268, 310-321, 362-374
     - Functions: `format_errors()`, `format_recent()`, `format_queue()`, `format_api_calls()`, `format_rated_songs()`, `format_matches()`, `format_searches()`
