@@ -461,8 +461,23 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         }});
     '''
 
-    # Get pending items
-    pending_items = db.list_pending_queue_items(limit=1000)
+    # Get pending AND failed items (failed items can be retried)
+    # Pending tab shows all items that need attention: pending to be processed, or failed awaiting retry
+    with db._lock:
+        cursor = db._conn.execute("""
+            SELECT * FROM queue
+            WHERE status IN ('pending', 'failed')
+            ORDER BY
+                CASE
+                    WHEN status = 'pending' THEN 1
+                    WHEN status = 'failed' THEN 2
+                END,
+                priority ASC,
+                requested_at ASC
+            LIMIT ?
+        """, (1000,))
+        pending_items = [dict(row) for row in cursor.fetchall()]
+
     formatted_items = [format_queue_item(item, db) for item in pending_items]
     formatted_items = [item for item in formatted_items if item]
 
