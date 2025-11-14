@@ -169,6 +169,16 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
             'yt_video_id': video.get('yt_video_id')
         })
 
+    # Format top channels to match template expectations
+    formatted_top_channels = []
+    for channel in top_channels:
+        formatted_top_channels.append({
+            'name': channel.get('yt_channel', 'Unknown Channel'),
+            'play_count': channel.get('total_plays', 0),
+            'video_count': channel.get('video_count', 0),
+            'yt_channel_id': channel.get('yt_channel_id')
+        })
+
     # Get additional analytics for overview
     retention = _db.get_retention_analysis()
     play_dist = _db.get_play_distribution()
@@ -192,7 +202,7 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
         'summary': summary,
         'rating_percentages': rating_percentages,
         'most_played': formatted_most_played,
-        'top_channels': top_channels,
+        'top_channels': formatted_top_channels,
         'recent_activity': recent_activity,
         'retention': retention,
         'play_distribution': play_dist,
