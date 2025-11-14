@@ -379,15 +379,15 @@ table tr:hover {
     margin-right: 8px;
 }
 
-/* Filters */
-.filters {
+/* Filter and Status Bar - all controls on one line */
+.filter-status-bar {
     display: flex;
     gap: 15px;
-    align-items: end;
+    align-items: center;
     flex-wrap: nowrap;
     overflow-x: auto;
-    margin: 20px 0;
-    padding: 15px;
+    margin: 15px 0;
+    padding: 12px 15px;
     background: #f8fafc;
     border-radius: 6px;
     border: 1px solid #e2e8f0;
@@ -395,8 +395,8 @@ table tr:hover {
 
 .filter-group {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
 }
 
@@ -404,6 +404,15 @@ table tr:hover {
     font-size: 0.85em;
     font-weight: 500;
     color: #374151;
+    white-space: nowrap;
+}
+
+.status-text {
+    font-size: 0.85em;
+    color: #64748b;
+    white-space: nowrap;
+    margin-left: auto;
+    font-weight: 500;
 }
 
 .filter-group select,

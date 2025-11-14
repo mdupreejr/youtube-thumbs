@@ -85,16 +85,16 @@
             </div>
             {% endif %}
 
-            <!-- Filters -->
-            {% if page_config.filters %}
-            <form method="GET" action="{{ ingress_path }}{{ page_config.current_url }}">
-                {% if page_config.hidden_fields %}
-                    {% for field in page_config.hidden_fields %}
-                    <input type="hidden" name="{{ field.name }}" value="{{ field.value }}">
-                    {% endfor %}
-                {% endif %}
-                
-                <div class="filters">
+            <!-- Filters and Status Bar (all on one line) -->
+            <div class="filter-status-bar">
+                {% if page_config.filters %}
+                <form method="GET" action="{{ ingress_path }}{{ page_config.current_url }}" style="display: contents;">
+                    {% if page_config.hidden_fields %}
+                        {% for field in page_config.hidden_fields %}
+                        <input type="hidden" name="{{ field.name }}" value="{{ field.value }}">
+                        {% endfor %}
+                    {% endif %}
+
                     {% for filter in page_config.filters %}
                     <div class="filter-group">
                         <label for="{{ filter.name }}">{{ filter.label }}:</label>
@@ -106,14 +106,14 @@
                     </div>
                     {% endfor %}
                     <button type="submit" class="apply-btn">{{ page_config.filter_button_text or 'Apply' }}</button>
-                </div>
-            </form>
-            {% endif %}
+                </form>
+                {% endif %}
 
-            <!-- Status/Info Messages -->
-            {% if status_message %}
-            <div class="info-text">{{ status_message }}</div>
-            {% endif %}
+                <!-- Status message on same line -->
+                {% if status_message %}
+                <div class="status-text">{{ status_message }}</div>
+                {% endif %}
+            </div>
 
             {% if error_message %}
             <div style="padding: 10px; background: #fee2e2; color: #991b1b; border-radius: 4px; margin-bottom: 10px;">
