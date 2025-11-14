@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List, Set
 from flask import render_template, g, current_app, jsonify, request
 from logging_helper import LoggingHelper, LogType
 import traceback
+from html import escape
 
 # Get logger instance
 logger = LoggingHelper.get_logger(LogType.MAIN)
@@ -22,9 +23,14 @@ class BaseRouteHandler:
     TEMPLATE_REQUIREMENTS: Dict[str, Set[str]] = {
         'base.html': {'ingress_path', 'config'},
         'stats.html': {
-            'ingress_path', 'config', 'current_tab', 'summary',
+            'ingress_path', 'config', 'current_tab',
+            'summary.total_videos', 'summary.total_plays',
+            'summary.liked', 'summary.disliked', 'summary.skipped',
+            'summary.unrated', 'summary.like_percentage',
+            'summary.unique_channels',
             'most_played', 'top_channels', 'recent_activity',
-            'rating_percentages'
+            'rating_percentages.liked', 'rating_percentages.disliked',
+            'rating_percentages.unrated'
         },
         'index_server.html': {
             'ingress_path', 'config', 'tab', 'ha_test', 'yt_test',
@@ -134,8 +140,12 @@ class BaseRouteHandler:
                 try:
                     self.validate_template_data(template_name, data)
                 except ValueError as e:
-                    logger.warning(f"Template validation warning: {e}")
-                    # Don't fail, just log - allows gradual migration
+                    # Strict validation in debug mode
+                    if current_app.config.get('DEBUG', False):
+                        raise ValueError(f"Template validation failed: {e}")
+                    else:
+                        logger.warning(f"Template validation warning: {e}")
+                        # In production, log but continue for now
 
             # Render template
             return render_template(template_name, **data)
@@ -177,16 +187,17 @@ class BaseRouteHandler:
         try:
             # Try to use error template if it exists
             return render_template('error.html', **data), status_code
-        except:
+        except Exception as e:
+            logger.error(f"Failed to render error template: {e}")
             # Fallback to simple HTML
             html = f"""
             <!DOCTYPE html>
             <html>
             <head><title>Error {status_code}</title></head>
             <body>
-                <h1>{error_message}</h1>
-                {'<p>' + error_details + '</p>' if error_details else ''}
-                <p><a href="{data['ingress_path']}/">Return to Home</a></p>
+                <h1>{escape(str(error_message))}</h1>
+                {'<p>' + escape(str(error_details)) + '</p>' if error_details else ''}
+                <p><a href="{escape(data['ingress_path'])}/">Return to Home</a></p>
             </body>
             </html>
             """
