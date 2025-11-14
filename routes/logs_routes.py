@@ -63,6 +63,10 @@ def api_calls_log():
         success_filter_str = request.args.get('success', None)
         success_filter = None if success_filter_str is None else (success_filter_str.lower() == 'true')
 
+        # Server-side sorting support
+        sort_by = request.args.get('sort_by', 'time')
+        sort_dir = request.args.get('sort_dir', 'desc')
+
         # Get logs from database
         per_page = 50
         offset = (page - 1) * per_page
@@ -72,6 +76,29 @@ def api_calls_log():
             method_filter=method_filter if method_filter else None,
             success_filter=success_filter
         )
+
+        # Map sort columns to data keys
+        sort_key_map = {
+            'time': 'timestamp',
+            'method': 'api_method',
+            'operation': 'operation_type',
+            'query': 'query_params',
+            'quota': 'quota_cost',
+            'status': 'success',
+            'results': 'results_count',
+            'context': 'context'
+        }
+
+        sort_key = sort_key_map.get(sort_by, 'timestamp')
+        reverse = (sort_dir == 'desc')
+
+        # Sort the API call logs
+        if sort_key in ['quota_cost', 'results_count']:
+            result['logs'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+        elif sort_key == 'success':
+            result['logs'].sort(key=lambda x: x.get(sort_key) or False, reverse=reverse)
+        else:
+            result['logs'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
 
         # Get summary statistics
         summary = _db.get_api_call_summary(hours=24)

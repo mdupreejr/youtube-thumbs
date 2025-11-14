@@ -338,8 +338,29 @@ def stats_liked_page() -> str:
         if not page:
             page = 1
 
+        # Server-side sorting support
+        sort_by = request.args.get('sort_by', 'last_played')
+        sort_dir = request.args.get('sort_dir', 'desc')
+
         result = _db.get_rated_videos('like', page=page, per_page=50)
-        
+
+        # Map sort columns to data keys
+        sort_key_map = {
+            'song': 'ha_title',
+            'artist': 'ha_artist',
+            'plays': 'play_count',
+            'last_played': 'date_last_played'
+        }
+
+        sort_key = sort_key_map.get(sort_by, 'date_last_played')
+        reverse = (sort_dir == 'desc')
+
+        # Sort the videos
+        if sort_key == 'play_count':
+            result['videos'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+        else:
+            result['videos'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('liked', ingress_path)
         builder.set_title('👍 Liked Videos', f"{result['total_count']} total")
@@ -408,7 +429,28 @@ def stats_disliked_page() -> str:
         if not page:
             page = 1
 
+        # Server-side sorting support
+        sort_by = request.args.get('sort_by', 'last_played')
+        sort_dir = request.args.get('sort_dir', 'desc')
+
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
+
+        # Map sort columns to data keys
+        sort_key_map = {
+            'song': 'ha_title',
+            'artist': 'ha_artist',
+            'plays': 'play_count',
+            'last_played': 'date_last_played'
+        }
+
+        sort_key = sort_key_map.get(sort_by, 'date_last_played')
+        reverse = (sort_dir == 'desc')
+
+        # Sort the videos
+        if sort_key == 'play_count':
+            result['videos'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+        else:
+            result['videos'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
 
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('disliked', ingress_path)

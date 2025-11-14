@@ -33,6 +33,10 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
     if rating_filter not in ['like', 'dislike', 'all']:
         rating_filter = 'all'
 
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'time')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('rated', ingress_path)
 
@@ -52,6 +56,25 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
 
     # Get data
     result = db.get_rated_songs(page, 50, period_filter, rating_filter)
+
+    # Map sort columns to data keys
+    sort_key_map = {
+        'time': 'date_last_played',
+        'song': 'ha_title',
+        'artist': 'ha_artist',
+        'rating': 'rating',
+        'plays': 'play_count',
+        'video_id': 'yt_video_id'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'date_last_played')
+    reverse = (sort_dir == 'desc')
+
+    # Sort the songs
+    if sort_key == 'play_count':
+        result['songs'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+    else:
+        result['songs'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
 
     # Create table columns
     columns = [
@@ -117,6 +140,10 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
 
 def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     """Create page config and table data for matches."""
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'time')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('matches', ingress_path)
 
@@ -129,6 +156,24 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
 
     # Get data
     result = db.get_match_history(page, 50, period_filter)
+
+    # Map sort columns to data keys
+    sort_key_map = {
+        'time': 'date_last_played',
+        'ha_song': 'ha_title',
+        'youtube_match': 'yt_title',
+        'duration': 'yt_duration',
+        'plays': 'play_count'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'date_last_played')
+    reverse = (sort_dir == 'desc')
+
+    # Sort the matches
+    if sort_key in ['play_count', 'yt_duration']:
+        result['matches'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+    else:
+        result['matches'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
 
     # Create table columns
     columns = [
@@ -227,6 +272,10 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
     if level_filter not in ['ERROR', 'WARNING', 'INFO', 'all']:
         level_filter = 'all'
 
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'time')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('errors', ingress_path)
 
@@ -246,6 +295,19 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
 
     # Get data
     result = parse_error_log(period_filter, level_filter, page, 50)
+
+    # Map sort columns to data keys
+    sort_key_map = {
+        'time': 'timestamp',
+        'level': 'level',
+        'message': 'message'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'timestamp')
+    reverse = (sort_dir == 'desc')
+
+    # Sort the errors
+    result['errors'].sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
 
     # Create table columns
     columns = [
@@ -323,12 +385,36 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
 
 def _create_recent_page(ingress_path: str, db):
     """Create page config and table data for recent videos."""
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'date_added')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('recent', ingress_path)
     builder.set_empty_state('📭', 'No Videos Yet', 'No videos have been added to the database yet.')
 
     # Get data
     videos = db.get_recently_added(limit=25)
+
+    # Map sort columns to data keys
+    sort_key_map = {
+        'date_added': 'date_added',
+        'title': 'ha_title',
+        'artist': 'ha_artist',
+        'channel': 'yt_channel',
+        'rating': 'rating',
+        'plays': 'play_count',
+        'link': 'yt_url'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'date_added')
+    reverse = (sort_dir == 'desc')
+
+    # Sort the videos
+    if sort_key == 'play_count':
+        videos.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+    else:
+        videos.sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
 
     # Create table columns
     columns = [
