@@ -203,9 +203,6 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
     if _handler:
         return _handler.render_page('stats.html', **template_data)
     else:
-        if _handler:
-        return _handler.render_page('stats.html', **template_data)
-    else:
         return render_template('stats.html', **template_data)
 
 
