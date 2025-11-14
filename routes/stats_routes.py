@@ -1,12 +1,15 @@
 """
 Statistics and debug routes for viewing video statistics and ratings.
-Extracted from app.py for better organization.
+Now using BaseRouteHandler for consistency and error prevention.
 """
 import os
 import traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, Response, g
 from logging_helper import LoggingHelper, LogType
+
+# Import the base handler for consistent routing
+from helpers.base_route_handler import BaseRouteHandler
 
 # Get logger instance
 logger = LoggingHelper.get_logger(LogType.MAIN)
@@ -28,13 +31,23 @@ from helpers.constants.empty_states import EMPTY_STATE_NO_LIKED, EMPTY_STATE_NO_
 
 bp = Blueprint('stats', __name__)
 
-# Global database reference (set by init function)
+# Global database reference and handler
 _db = None
+_handler = None
+
+
+class StatsRouteHandler(BaseRouteHandler):
+    """Handler wrapper for stats routes with validation."""
+
+    def __init__(self, database):
+        super().__init__(db=database)
+
 
 def init_stats_routes(database):
     """Initialize stats routes with dependencies."""
-    global _db
+    global _db, _handler
     _db = database
+    _handler = StatsRouteHandler(database)
 
 
 # ============================================================================
@@ -81,6 +94,17 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
     most_played = _db.get_most_played(10)
     top_channels = _db.get_top_channels(10)
     recent = _db.get_recent_activity(15)
+
+    # Use handler to ensure all required fields exist with defaults
+    if _handler:
+        _handler.ensure_dict_fields(summary, {
+            'total_videos': 0,
+            'total_plays': 0,
+            'liked': 0,
+            'disliked': 0,
+            'unrated': 0,
+            'unique_channels': 0
+        })
 
     # Calculate rating percentages (ensure integers to avoid type errors)
     liked = int(summary.get('liked', 0) or 0)
