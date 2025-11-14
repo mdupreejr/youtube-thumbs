@@ -86,6 +86,7 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
     liked = int(summary.get('liked', 0) or 0)
     disliked = int(summary.get('disliked', 0) or 0)
     unrated = int(summary.get('unrated', 0) or 0)
+    total_plays = int(summary.get('total_plays', 0) or 0)
     total = liked + disliked + unrated
 
     if total > 0:
@@ -96,6 +97,15 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
         }
     else:
         rating_percentages = {'liked': 0, 'disliked': 0, 'unrated': 0}
+
+    # Add missing fields expected by the template
+    summary['skipped'] = total_plays - total  # Videos played but not rated/unrated
+
+    # Calculate like percentage (liked vs disliked, not counting unrated/skipped)
+    if liked + disliked > 0:
+        summary['like_percentage'] = (liked / (liked + disliked)) * 100
+    else:
+        summary['like_percentage'] = 0
 
     # Format recent activity
     recent_activity = []
