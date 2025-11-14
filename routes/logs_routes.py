@@ -17,6 +17,7 @@ from helpers.template import (
 from helpers.page_builder import ApiCallsPageBuilder
 from helpers.queue_item_helpers import extract_queue_item_details
 from helpers.sorting_helpers import sort_table_data
+from helpers.constants.empty_states import EMPTY_STATE_NO_API_CALLS
 from routes.logs_routes_helpers import (
     _create_queue_pending_tab,
     _create_queue_history_tab,
@@ -109,7 +110,7 @@ def api_calls_log():
             {'value': 'false', 'label': 'Failed', 'selected': success_filter_str == 'false'}
         ])
         builder.set_filter_button_text('Apply Filters')
-        builder.set_empty_state('📊', 'No API calls found', 'No API calls have been logged yet, or none match your filters.')
+        builder.set_empty_state(**EMPTY_STATE_NO_API_CALLS)
 
         # Create table data
         columns = [

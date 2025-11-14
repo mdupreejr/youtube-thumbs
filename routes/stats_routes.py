@@ -24,6 +24,7 @@ from helpers.template import (
 )
 from helpers.page_builder import StatsPageBuilder
 from helpers.sorting_helpers import sort_table_data
+from helpers.constants.empty_states import EMPTY_STATE_NO_LIKED, EMPTY_STATE_NO_DISLIKED
 
 bp = Blueprint('stats', __name__)
 
@@ -358,7 +359,7 @@ def stats_liked_page() -> str:
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('liked', ingress_path)
         builder.set_title('👍 Liked Videos', f"{result['total_count']} total")
-        builder.set_empty_state('👍', 'No liked videos', "You haven't liked any videos yet.")
+        builder.set_empty_state(**EMPTY_STATE_NO_LIKED)
 
         # Create table data
         columns = [
@@ -419,7 +420,7 @@ def stats_disliked_page() -> str:
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('disliked', ingress_path)
         builder.set_title('👎 Disliked Videos', f"{result['total_count']} total")
-        builder.set_empty_state('👎', 'No disliked videos', "You haven't disliked any videos yet.")
+        builder.set_empty_state(**EMPTY_STATE_NO_DISLIKED)
 
         # Create table data
         columns = [

@@ -33,6 +33,7 @@ from routes.rating_routes import bp as rating_bp, init_rating_routes
 from routes.system_routes import bp as system_bp, init_system_routes
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 from helpers.time_helpers import format_duration
+from helpers.constants.empty_states import EMPTY_STATE_ALL_RATED
 
 # ============================================================================
 # SECURITY HELPER FUNCTIONS
@@ -610,7 +611,7 @@ def index() -> str:
             # No need for main_tabs - they're already in the main navbar
 
             # Set empty state
-            page_config.set_empty_state('🎉', 'All songs rated!', "You've rated all your songs. Great job!")
+            page_config.set_empty_state(**EMPTY_STATE_ALL_RATED)
 
             # Create table columns
             columns = [

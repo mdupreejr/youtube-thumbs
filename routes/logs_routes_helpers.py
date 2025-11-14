@@ -21,6 +21,12 @@ from helpers.template import (
 from helpers.page_builder import LogsPageBuilder
 from helpers.log_parsers import parse_error_log
 from helpers.sorting_helpers import sort_table_data
+from helpers.constants.empty_states import (
+    EMPTY_STATE_NO_RATED_SONGS, EMPTY_STATE_NO_MATCHES,
+    EMPTY_STATE_NO_ERRORS, EMPTY_STATE_NO_VIDEOS,
+    EMPTY_STATE_QUEUE_EMPTY, EMPTY_STATE_NO_HISTORY,
+    EMPTY_STATE_NO_QUEUE_ERRORS
+)
 
 
 # ============================================================================
@@ -53,7 +59,7 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
     ])
 
     builder.add_hidden_field('tab', 'rated')
-    builder.set_empty_state('📭', 'No rated songs found', 'Try adjusting your filters')
+    builder.set_empty_state(**EMPTY_STATE_NO_RATED_SONGS)
 
     # Get data
     result = db.get_rated_songs(page, 50, period_filter, rating_filter)
@@ -145,7 +151,7 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     builder.add_filter(period_opts['name'], period_opts['label'], period_opts['options'])
 
     builder.add_hidden_field('tab', 'matches')
-    builder.set_empty_state('🔍', 'No matches found', 'Try adjusting your filters')
+    builder.set_empty_state(**EMPTY_STATE_NO_MATCHES)
 
     # Get data
     result = db.get_match_history(page, 50, period_filter)
@@ -276,7 +282,7 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
     ])
 
     builder.add_hidden_field('tab', 'errors')
-    builder.set_empty_state('✓', 'No errors found', 'System is running smoothly!')
+    builder.set_empty_state(**EMPTY_STATE_NO_ERRORS)
 
     # Get data
     result = parse_error_log(period_filter, level_filter, page, 50)
@@ -371,7 +377,7 @@ def _create_recent_page(ingress_path: str, db):
 
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('recent', ingress_path)
-    builder.set_empty_state('📭', 'No Videos Yet', 'No videos have been added to the database yet.')
+    builder.set_empty_state(**EMPTY_STATE_NO_VIDEOS)
 
     # Get data
     videos = db.get_recently_added(limit=25)
@@ -506,7 +512,7 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
-    page_config.set_empty_state('✓', 'Queue is empty', 'No operations waiting to be processed.')
+    page_config.set_empty_state(**EMPTY_STATE_QUEUE_EMPTY)
 
     # Add row click handler for navigation
     page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
@@ -605,7 +611,7 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
-    page_config.set_empty_state('📭', 'No history available', 'No recently completed operations.')
+    page_config.set_empty_state(**EMPTY_STATE_NO_HISTORY)
 
     # Add row click handler for navigation
     page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
@@ -693,7 +699,7 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
     add_queue_tabs(page_config, current_tab, ingress_path)
 
     # Set empty state
-    page_config.set_empty_state('✓', 'No errors', 'All operations completing successfully.')
+    page_config.set_empty_state(**EMPTY_STATE_NO_QUEUE_ERRORS)
 
     # Add row click handler for navigation
     page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')

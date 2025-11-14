@@ -16,6 +16,7 @@ from helpers.validation_helpers import validate_page_param
 from helpers.request_helpers import get_real_ip
 from helpers.template import TableColumn, TableRow, TableCell, format_badge
 from helpers.page_builder import DataViewerPageBuilder
+from helpers.constants.empty_states import EMPTY_STATE_NO_DATA
 
 bp = Blueprint('data_viewer', __name__)
 
@@ -323,7 +324,7 @@ def data_viewer() -> str:
         # Use builder pattern for consistent page creation
         builder = DataViewerPageBuilder(ingress_path)
         builder.set_title_suffix(f'{total_count} records')
-        builder.set_empty_state('📭', 'No data found', 'No records match your criteria.')
+        builder.set_empty_state(**EMPTY_STATE_NO_DATA)
         builder.enable_table_features(sorting=True, resizing=True, column_toggle=True)
 
         # Create table columns based on selected columns
