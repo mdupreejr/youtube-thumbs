@@ -468,7 +468,7 @@ def check_database(db) -> Tuple[bool, dict]:
             cursor = db._conn.execute("SELECT MAX(cached_at) as last_cached FROM search_results_cache")
             cache_last_updated = cursor.fetchone()['last_cached']
 
-            cursor = db._conn.execute("SELECT COUNT(*) as count FROM search_results_cache WHERE expired = 0")
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM search_results_cache WHERE expires_at > datetime('now')")
             valid_cache = cursor.fetchone()['count']
 
             tables_info.append({
