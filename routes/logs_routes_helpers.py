@@ -454,7 +454,17 @@ def format_queue_item(item, db):
     Returns:
         Formatted item dict or None if invalid
     """
+    import json
+
+    # Parse payload if it's a JSON string
     payload = item.get('payload', {})
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            from logging_helper import LoggingHelper
+            LoggingHelper.log_error_with_trace(f"Failed to parse queue item payload for item {item.get('id')}: {payload}", None)
+            payload = {}
 
     if item['type'] == 'search':
         ha_media = payload
