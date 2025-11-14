@@ -240,6 +240,24 @@ def log_response_info(response):
         "accelerometer=()"
     )
 
+    # Cache control - prevent CDN/browser caching issues
+    # Static files with ?v= parameter can be cached long-term (version in URL)
+    # Everything else should not be cached to ensure fresh content
+    if request.path.startswith('/static/'):
+        if 'v' in request.args:
+            # Versioned static files - cache for 1 year (URL changes with version)
+            response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        else:
+            # Non-versioned static files - no cache
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+    else:
+        # HTML pages and API responses - no cache
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+
     return response
 
 # Add error handler to show actual errors
