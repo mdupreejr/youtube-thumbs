@@ -63,13 +63,20 @@ class QueueOperations:
         if item_type not in ('search', 'rating'):
             raise ValueError(f"Invalid queue item type: {item_type}")
 
+        # Validate payload can be serialized to JSON
+        try:
+            payload_json = json.dumps(payload)
+        except (TypeError, ValueError) as e:
+            logger.error(f"Failed to serialize payload for {item_type}: {e}")
+            raise ValueError(f"Invalid payload format: {e}")
+
         with self._lock:
             cursor = self._conn.execute(
                 """
                 INSERT INTO queue (type, priority, status, payload, requested_at)
                 VALUES (?, ?, 'pending', ?, CURRENT_TIMESTAMP)
                 """,
-                (item_type, priority, json.dumps(payload))
+                (item_type, priority, payload_json)
             )
             self._conn.commit()
             return cursor.lastrowid
@@ -97,7 +104,8 @@ class QueueOperations:
             if not row:
                 return None
 
-            item = dict(row)
+            # Parse JSON payload using helper first
+            item = self._hydrate_queue_item(row)
 
             # Mark as processing (prevents other workers from claiming it)
             self._conn.execute(
@@ -112,8 +120,6 @@ class QueueOperations:
             )
             self._conn.commit()
 
-            # Parse JSON payload using helper
-            item = self._hydrate_queue_item(row)
             return item
 
     def mark_completed(self, queue_id: int, api_response_data: str = None) -> None:

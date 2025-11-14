@@ -273,15 +273,13 @@ def rate_song_form() -> Response:
         if rating != 'skip':
             # Use existing rate_song_direct function
             response = rate_song_direct(song_id, rating)
-            # Check if rating was successful (response is tuple of (Response, status_code))
-            if isinstance(response, tuple):
-                response_obj, status_code = response
-            else:
-                response_obj = response
-                status_code = 200
-
-            if status_code != 200:
-                logger.warning(f"Rating failed for {song_id}: status {status_code}")
+            # rate_song_direct returns a Flask Response object with JSON data
+            try:
+                response_data = response.get_json()
+                if not response_data.get('success'):
+                    logger.warning(f"Rating failed for {song_id}: {response_data.get('message', 'Unknown error')}")
+            except Exception as e:
+                logger.warning(f"Rating failed for {song_id}: Invalid response format - {e}")
 
         # Redirect back to rating tab with same page
         return safe_redirect('rating', page)

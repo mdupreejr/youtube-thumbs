@@ -461,9 +461,9 @@ def format_queue_item(item, db):
     if isinstance(payload, str):
         try:
             payload = json.loads(payload)
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError) as e:
             from logging_helper import LoggingHelper
-            LoggingHelper.log_error_with_trace(f"Failed to parse queue item payload for item {item.get('id')}: {payload}", None)
+            LoggingHelper.log_error_with_trace(f"Failed to parse queue item payload for item {item.get('id')}: {payload}", e)
             payload = {}
 
     if item['type'] == 'search':
