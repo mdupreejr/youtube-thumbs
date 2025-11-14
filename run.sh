@@ -59,6 +59,14 @@ if bashio::var.has_value "${SONG_TRACKING_POLL_INTERVAL_CONFIG}" && [ "${SONG_TR
     export SONG_TRACKING_POLL_INTERVAL="${SONG_TRACKING_POLL_INTERVAL_CONFIG}"
 fi
 
+# Queue configuration
+QUEUE_MAX_RETRY_ATTEMPTS_CONFIG=$(bashio::config 'queue_max_retry_attempts')
+if bashio::var.has_value "${QUEUE_MAX_RETRY_ATTEMPTS_CONFIG}" && [ "${QUEUE_MAX_RETRY_ATTEMPTS_CONFIG}" != "null" ]; then
+    export QUEUE_MAX_RETRY_ATTEMPTS="${QUEUE_MAX_RETRY_ATTEMPTS_CONFIG}"
+else
+    export QUEUE_MAX_RETRY_ATTEMPTS=5
+fi
+
 if bashio::config.true 'force_quota_unlock'; then
     export YTT_FORCE_QUOTA_UNLOCK=1
     bashio::log.warning "force_quota_unlock enabled; quota guard state will be cleared on startup"

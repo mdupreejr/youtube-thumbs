@@ -49,7 +49,7 @@ def signal_handler(signum, frame):
         logger.warning(f"Failed to remove PID file: {e}")
 
 
-def process_next_item(db, yt_api):
+def process_next_item(db, yt_api, max_attempts=5):
     """
     Process the next item from the unified queue (rating or search).
     The queue automatically prioritizes ratings (priority=1) over searches (priority=2).
@@ -81,8 +81,8 @@ def process_next_item(db, yt_api):
         pending_count = cursor.fetchone()[0]
         logger.debug(f"Queue stats before claim: {pending_count} pending items")
 
-    # Claim next item from unified queue
-    item = db.claim_next_queue_item()
+    # Claim next item from unified queue (v5.19.8: with max attempts check)
+    item = db.claim_next_queue_item(max_attempts=max_attempts)
     if not item:
         # This should never happen if pending_count > 0
         if pending_count > 0:
@@ -320,7 +320,9 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    logger.info("Queue worker starting (1 item/min, ratings priority=1, searches priority=2)")
+    # v5.19.8: Get max retry attempts from environment (default 5)
+    max_attempts = int(os.environ.get('QUEUE_MAX_RETRY_ATTEMPTS', '5'))
+    logger.info(f"Queue worker starting (1 item/min, ratings priority=1, searches priority=2, max attempts={max_attempts})")
 
     # Initialize database
     db = get_database()
@@ -330,7 +332,8 @@ def main():
     set_youtube_api_database(db)
 
     # v4.0.9: Reset any items stuck in 'processing' status (crash recovery)
-    reset_count = db.reset_stale_processing_items()
+    # v5.19.8: Pass max_attempts to prevent infinite retry loops
+    reset_count = db.reset_stale_processing_items(max_attempts=max_attempts)
     if reset_count > 0:
         logger.info(f"Crash recovery: Reset {reset_count} items from 'processing' to 'pending'")
 
@@ -388,7 +391,7 @@ def main():
                     continue
 
             # Process next item from unified queue (automatically prioritized)
-            result = process_next_item(db, yt_api)
+            result = process_next_item(db, yt_api, max_attempts)
 
             if result == 'quota' or result == 'quota_recent':
                 # Quota exceeded - sleep until midnight Pacific (quota reset time)

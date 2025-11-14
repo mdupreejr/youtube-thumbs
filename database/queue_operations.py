@@ -81,27 +81,49 @@ class QueueOperations:
             self._conn.commit()
             return cursor.lastrowid
 
-    def claim_next(self) -> Optional[Dict[str, Any]]:
+    def claim_next(self, max_attempts: int = 5) -> Optional[Dict[str, Any]]:
         """
         Atomically claim the next pending queue item.
         Returns highest priority (lowest number) pending item.
+
+        v5.19.8: Added max_attempts limit to prevent infinite retry loops.
+        Items that have failed too many times are automatically marked as permanently failed.
+
+        Args:
+            max_attempts: Maximum number of attempts before marking as permanently failed (default: 5)
 
         Returns:
             Queue item dict or None if queue is empty
         """
         with self._lock:
             # Get next item ordered by priority (asc), then requested_at (asc)
+            # v5.19.8: Added attempts < max_attempts check to skip items that have failed too many times
             cursor = self._conn.execute(
                 """
                 SELECT * FROM queue
-                WHERE status = 'pending'
+                WHERE status = 'pending' AND attempts < ?
                 ORDER BY priority ASC, requested_at ASC
                 LIMIT 1
-                """
+                """,
+                (max_attempts,)
             )
             row = cursor.fetchone()
 
+            # Check if there are any items that have exceeded max attempts
             if not row:
+                # Mark any pending items with too many attempts as permanently failed
+                cursor = self._conn.execute(
+                    """
+                    UPDATE queue
+                    SET status = 'failed',
+                        last_error = 'Exceeded maximum retry attempts (' || ? || ')'
+                    WHERE status = 'pending' AND attempts >= ?
+                    """,
+                    (max_attempts, max_attempts)
+                )
+                if cursor.rowcount > 0:
+                    logger.warning(f"Marked {cursor.rowcount} queue items as permanently failed (exceeded {max_attempts} attempts)")
+                    self._conn.commit()
                 return None
 
             # Parse JSON payload using helper first
@@ -173,33 +195,53 @@ class QueueOperations:
             )
             self._conn.commit()
 
-    def reset_stale_processing_items(self) -> int:
+    def reset_stale_processing_items(self, max_attempts: int = 5) -> int:
         """
         Reset queue items stuck in 'processing' status back to 'pending'.
         This recovers from worker crashes/restarts.
 
         v4.0.9: Added crash recovery - items stuck in 'processing' will be retried.
         v5.0.7: Moved stuck items to back of queue by updating requested_at timestamp.
+        v5.19.8: Added max_attempts check to prevent infinite retry loops.
         This is safe because all queue operations are idempotent:
         - Ratings: get_video_rating checks current state before changing
         - Searches: duplicate searches just update existing video_ratings entry
+
+        Args:
+            max_attempts: Maximum attempts before marking as permanently failed
 
         Returns:
             Number of items reset
         """
         with self._lock:
+            # First, mark items with too many attempts as permanently failed
+            cursor = self._conn.execute(
+                """
+                UPDATE queue
+                SET status = 'failed',
+                    last_error = 'Exceeded maximum retry attempts during crash recovery'
+                WHERE status = 'processing' AND attempts >= ?
+                """,
+                (max_attempts,)
+            )
+            failed_count = cursor.rowcount
+            if failed_count > 0:
+                logger.warning(f"Marked {failed_count} stuck items as permanently failed (>={max_attempts} attempts)")
+
+            # Then reset remaining items that haven't exceeded max attempts
             cursor = self._conn.execute(
                 """
                 UPDATE queue
                 SET status = 'pending',
                     last_error = 'Reset from processing (worker crash recovery)',
                     requested_at = CURRENT_TIMESTAMP
-                WHERE status = 'processing'
-                """
+                WHERE status = 'processing' AND attempts < ?
+                """,
+                (max_attempts,)
             )
             self._conn.commit()
-            count = cursor.rowcount
-            return count
+            reset_count = cursor.rowcount
+            return reset_count
 
     def list_pending(self, limit: int = 100) -> List[Dict[str, Any]]:
         """
