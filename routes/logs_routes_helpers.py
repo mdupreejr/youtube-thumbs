@@ -581,6 +581,28 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     formatted_items = [format_queue_item(item, db) for item in history_items]
     formatted_items = [item for item in formatted_items if item]
 
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'completed')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
+    # Map column keys to item keys
+    sort_key_map = {
+        'type': 'type',
+        'title': 'ha_title',
+        'artist': 'ha_artist',
+        'operation': 'operation',
+        'queued': 'requested_at',
+        'completed': 'completed_at',
+        'duration': 'completed_at',  # Not calculated, sort by completion time
+        'status': 'status'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'completed_at')
+    reverse = (sort_dir == 'desc')
+
+    # Sort items
+    formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
+
     # Create table columns
     columns = [
         TableColumn('type', 'Type', width='10%'),
@@ -659,6 +681,30 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
     error_items = db.list_queue_failed(limit=200)
     formatted_items = [format_queue_item(item, db) for item in error_items]
     formatted_items = [item for item in formatted_items if item]
+
+    # Server-side sorting support
+    sort_by = request.args.get('sort_by', 'last_attempt')
+    sort_dir = request.args.get('sort_dir', 'desc')
+
+    # Map column keys to item keys
+    sort_key_map = {
+        'type': 'type',
+        'title': 'ha_title',
+        'artist': 'ha_artist',
+        'operation': 'operation',
+        'last_attempt': 'last_attempt',
+        'attempts': 'attempts',
+        'error': 'last_error'
+    }
+
+    sort_key = sort_key_map.get(sort_by, 'last_attempt')
+    reverse = (sort_dir == 'desc')
+
+    # Sort items
+    if sort_key == 'attempts':
+        formatted_items.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
+    else:
+        formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
 
     # Create table columns
     columns = [
