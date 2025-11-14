@@ -548,19 +548,23 @@ def index() -> str:
 
         # Handle tests tab with old template
         if current_tab == 'tests':
-            # Refresh YouTube API stats on every Tests tab load (for live quota usage)
-            # Note: check_youtube_api() doesn't make API calls (just reads DB stats)
+            # Refresh all checks on every Tests tab load (all are cheap operations)
+            # HA API is local so we can hit it as much as needed
+            ha_success, ha_data = check_home_assistant_api(ha_api)
+            fresh_ha_test = {'success': ha_success, **ha_data}
+
+            # check_youtube_api() doesn't make API calls (just reads DB stats for quota)
             yt_success, yt_data = check_youtube_api(yt_api, db)
             fresh_yt_test = {'success': yt_success, **yt_data}
 
-            # Refresh DB stats too (cheap operation)
+            # DB check is also cheap (just counts)
             db_success, db_message = check_database(db)
             fresh_db_test = {'success': db_success, 'message': db_message}
 
             template_data = {
                 'current_tab': current_tab,
                 'ingress_path': ingress_path,
-                'ha_test': _cached_health_checks['ha_test'],  # Keep HA cached (no need to refresh often)
+                'ha_test': fresh_ha_test,  # Fresh HA status (local, can refresh often)
                 'yt_test': fresh_yt_test,  # Fresh YouTube stats with live quota usage
                 'db_test': fresh_db_test,  # Fresh DB stats
                 'songs': [],
