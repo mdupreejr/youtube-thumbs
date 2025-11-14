@@ -296,7 +296,8 @@ class APIUsageOperations:
             Dictionary with summary statistics
         """
         with self._lock:
-            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            # Format cutoff time as ISO string to match SQLite CURRENT_TIMESTAMP format
+            cutoff_time = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
 
             # Total calls and quota
             cursor = self._conn.execute(
