@@ -211,6 +211,73 @@ link = format_youtube_link('dQw4w9WgXcQ', 'Song Title', icon=False)
 
 ---
 
+#### Sorting Helpers (`helpers/sorting_helpers.py`)
+
+**Purpose:** Unified sorting logic for all table pages
+
+**Key Functions:**
+- `sort_table_data(data, sort_by, sort_dir, sort_key_map, numeric_keys)` - Sort table data consistently
+  - Handles numeric, boolean, and string sorting
+  - Case-insensitive string comparison
+  - Safe handling of None values
+
+**Example Usage:**
+```python
+from helpers.sorting_helpers import sort_table_data
+
+sort_key_map = {
+    'song': 'ha_title',
+    'artist': 'ha_artist',
+    'plays': 'play_count'
+}
+sort_table_data(data, 'plays', 'desc', sort_key_map, {'play_count'})
+```
+
+#### Table Helpers (`helpers/template/table_helpers.py`)
+
+**Purpose:** Reusable table building functions
+
+**Key Functions:**
+- `build_video_table_rows(videos, format_videos_for_display_fn, format_youtube_link_fn)` - Build standardized video table rows
+  - Used by liked/disliked pages
+  - Consistent formatting across pages
+
+**Example Usage:**
+```python
+from helpers.template.table_helpers import build_video_table_rows
+from helpers.video_helpers import format_videos_for_display
+from helpers.template import format_youtube_link
+
+rows = build_video_table_rows(result['videos'], format_videos_for_display, format_youtube_link)
+```
+
+#### Empty State Constants (`helpers/constants/empty_states.py`)
+
+**Purpose:** Standardized empty state messages for consistent UX
+
+**Available Constants:**
+- `EMPTY_STATE_NO_DATA` - Generic no data message
+- `EMPTY_STATE_NO_VIDEOS` - No videos in database
+- `EMPTY_STATE_ALL_RATED` - All songs rated
+- `EMPTY_STATE_NO_LIKED` - No liked videos
+- `EMPTY_STATE_NO_DISLIKED` - No disliked videos
+- `EMPTY_STATE_NO_ERRORS` - No errors found
+- `EMPTY_STATE_NO_RATED_SONGS` - No rated songs match filters
+- `EMPTY_STATE_NO_MATCHES` - No matches found
+- `EMPTY_STATE_QUEUE_EMPTY` - Queue has no items
+- `EMPTY_STATE_NO_HISTORY` - No queue history
+- `EMPTY_STATE_NO_QUEUE_ERRORS` - No queue errors
+- `EMPTY_STATE_NO_API_CALLS` - No API calls logged
+
+**Example Usage:**
+```python
+from helpers.constants.empty_states import EMPTY_STATE_NO_VIDEOS
+
+builder.set_empty_state(**EMPTY_STATE_NO_VIDEOS)
+```
+
+---
+
 ##### `truncate_text(text: str, max_length: int = 80, suffix: str = '...') -> str`
 
 Truncates long text with optional suffix.
