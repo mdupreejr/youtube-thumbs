@@ -479,7 +479,15 @@ def format_queue_item(item, db):
     elif item['type'] == 'rating':
         yt_video_id = payload.get('yt_video_id')
         rating = payload.get('rating')
-        video = db.get_video(yt_video_id) if yt_video_id else None
+
+        # Safely fetch video data
+        video = None
+        if yt_video_id:
+            try:
+                video = db.get_video(yt_video_id)
+            except Exception as e:
+                from logging_helper import LoggingHelper
+                LoggingHelper.log_error_with_trace(f"Failed to get video for queue item {item.get('id')}: {e}", e)
 
         return {
             'type': 'rating',
@@ -519,20 +527,25 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
 
     # Get pending AND failed items (failed items can be retried)
     # Pending tab shows all items that need attention: pending to be processed, or failed awaiting retry
-    with db._lock:
-        cursor = db._conn.execute("""
-            SELECT * FROM queue
-            WHERE status IN ('pending', 'failed')
-            ORDER BY
-                CASE
-                    WHEN status = 'pending' THEN 1
-                    WHEN status = 'failed' THEN 2
-                END,
-                priority ASC,
-                requested_at ASC
-            LIMIT ?
-        """, (1000,))
-        pending_items = [dict(row) for row in cursor.fetchall()]
+    try:
+        with db._lock:
+            cursor = db._conn.execute("""
+                SELECT * FROM queue
+                WHERE status IN ('pending', 'failed')
+                ORDER BY
+                    CASE
+                        WHEN status = 'pending' THEN 1
+                        WHEN status = 'failed' THEN 2
+                    END,
+                    priority ASC,
+                    requested_at ASC
+                LIMIT ?
+            """, (1000,))
+            pending_items = [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        from logging_helper import LoggingHelper
+        LoggingHelper.log_error_with_trace(f"Database error fetching pending queue items: {e}", e)
+        pending_items = []
 
     formatted_items = [format_queue_item(item, db) for item in pending_items]
     formatted_items = [item for item in formatted_items if item]

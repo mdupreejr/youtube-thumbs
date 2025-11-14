@@ -432,6 +432,43 @@
     margin-bottom: 20px;
 }
 
+/* Stat card - Primary card component */
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #2563eb;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.9em;
+    color: #1e293b;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.stat-sublabel {
+    font-size: 0.8em;
+    color: #64748b;
+    margin-top: 4px;
+}
+
 .stat-card-mini {
     background: #f8fafc;
     border-radius: 8px;
@@ -628,6 +665,47 @@
 .retention-visual {
     max-width: 500px;
     margin: 0 auto;
+}
+
+/* Utility Classes */
+/* Typography utilities */
+.text-muted {
+    color: #64748b;
+}
+
+.text-small {
+    font-size: 0.85em;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.font-semibold {
+    font-weight: 600;
+}
+
+/* Spacing utilities */
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.mt-1 {
+    margin-top: 0.25rem;
+}
+
+.mt-3 {
+    margin-top: 0.75rem;
+}
+
+.mt-4 {
+    margin-top: 1rem;
+}
+
+/* Table column alignment */
+.comparison-table th.number,
+.comparison-table td.number {
+    text-align: right;
 }
 
 /* Responsive design */
