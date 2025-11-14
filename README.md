@@ -229,6 +229,140 @@ ls -la /addon_configs/XXXXXXXX_youtube_thumbs/
 - **[INSTALL.md](INSTALL.md)** - Detailed installation and OAuth setup guide
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture, database schema, and implementation details
 
+## Development Roadmap
+
+### Code Quality Improvements
+
+Based on comprehensive code review, the following tasks address critical technical debt and improve code maintainability.
+
+---
+
+#### Priority 1: Critical Fixes (Do First)
+
+These issues cause bugs or major code quality problems that should be addressed immediately.
+
+- [ ] **Fix format string bugs in error logging**
+  - File: `/routes/stats_routes.py`
+  - Lines: 417, 508
+  - Issue: Using `%s` placeholders with `.format()` instead of `{}`
+  - Action: Replace `%s` with `{}` in format strings
+  - Impact: Prevents potential logging errors and exceptions
+
+- [ ] **Create unified sorting helper function**
+  - Create: `/helpers/sorting_helpers.py`
+  - Action: Implement `sort_items(items, sort_by=None, sort_dir='asc', default_key=None)` function
+  - Features: Handle None values, support nested keys, consistent sorting behavior
+  - Impact: Single source of truth for all sorting operations
+
+- [ ] **Replace duplicate sorting implementations (18+ instances)**
+  - **Phase 1**: `/routes/logs_routes_helpers.py` (7 instances)
+    - Lines: 44-56, 97-109, 149-161, 203-214, 256-268, 310-321, 362-374
+    - Functions: `format_errors()`, `format_recent()`, `format_queue()`, `format_api_calls()`, `format_rated_songs()`, `format_matches()`, `format_searches()`
+  - **Phase 2**: `/routes/stats_routes.py` (2 instances)
+    - Lines: 285-297, 458-470
+    - Functions: Most played videos and top channels sorting
+  - **Phase 3**: `/routes/logs_routes.py` (1 instance)
+    - Line: 38-50
+    - Function: Main logs route sorting
+  - **Phase 4**: Search remaining files for additional sorting implementations
+    - Use grep to find: `sort_by`, `sort_dir`, `reverse=` patterns
+  - Action: Replace all with calls to new `sorting_helpers.sort_items()`
+  - Impact: Eliminates inconsistent behavior, reduces ~200 lines of duplicate code
+
+- [ ] **Standardize error handling across routes**
+  - Files: All route files (`/routes/*.py`)
+  - Issue: 25+ try-except blocks with inconsistent error handling patterns
+  - Action: Create error handling decorator or helper function
+  - Features: Consistent logging format, proper HTTP status codes, user-friendly error messages
+  - Impact: Improved debugging and user experience
+
+---
+
+#### Priority 2: High Priority
+
+These improvements significantly enhance code quality and maintainability.
+
+- [ ] **Consolidate video table building code**
+  - Files: Multiple routes building similar video list tables
+  - Affected: `/routes/logs_routes_helpers.py`, `/routes/stats_routes.py`
+  - Action: Create `build_video_table()` helper in `/helpers/template_helpers.py`
+  - Features: Consistent column structure, reusable table formatting
+  - Impact: Reduces duplicate code, ensures consistent UI
+
+- [ ] **Remove unused CSS file**
+  - File: `/static/css/stats_visualizations.css`
+  - Issue: Not referenced in any template files
+  - Action: Delete file or add to templates if needed
+  - Verification: Search all `.html` files for references to this CSS
+  - Impact: Reduces technical debt, cleaner codebase
+
+- [ ] **Consolidate row click navigation JavaScript**
+  - Files: Multiple templates with duplicate `tr.clickable-row` handlers
+  - Issue: 3+ duplicate implementations of the same functionality
+  - Action: Use PageBuilder's `set_row_click_navigation()` method consistently
+  - Alternative: Extract to shared JavaScript file in `/static/js/`
+  - Impact: DRY principle, easier maintenance
+
+- [ ] **Add comprehensive sorting tests**
+  - Create: `/tests/test_sorting_helpers.py`
+  - Coverage: None handling, nested keys, ascending/descending, edge cases
+  - Action: Write unit tests for new sorting helper
+  - Impact: Prevents regression, documents expected behavior
+
+---
+
+#### Priority 3: Medium Priority
+
+Nice-to-have improvements that enhance consistency and user experience.
+
+- [ ] **Standardize empty state messages**
+  - Files: All route handlers and templates
+  - Issue: Inconsistent messaging when no data available
+  - Action: Create standard empty state templates/messages
+  - Examples: "No rated songs yet", "No errors found", "Queue is empty"
+  - Impact: Better UX consistency
+
+- [ ] **Add integration tests for sorting endpoints**
+  - Create: `/tests/test_sorting_integration.py`
+  - Coverage: Test all paginated endpoints with various sort parameters
+  - Endpoints: `/errors`, `/recent`, `/queue`, `/rated`, `/matches`, stats pages
+  - Impact: Ensures sorting works correctly across all pages
+
+- [ ] **Document helper functions usage**
+  - Update: `/CODE_ORGANIZATION.md`
+  - Action: Add examples for new sorting helpers and error handling utilities
+  - Include: When to use, parameters, return values, examples
+  - Impact: Easier for contributors to use existing utilities
+
+- [ ] **Audit and consolidate badge formatting**
+  - Files: Multiple uses of `format_status_badge()` and `format_badge()`
+  - Action: Ensure consistent use of existing helpers vs inline HTML
+  - Review: All template files and helper functions
+  - Impact: More consistent visual design
+
+---
+
+### Task Completion Workflow
+
+When completing tasks:
+
+1. Create feature branch: `git checkout -b task/sorting-helpers`
+2. Implement changes with tests
+3. Bump version in `/config.json` (PATCH for fixes, MINOR for features)
+4. Run validation: `python -m py_compile <changed_files>`
+5. Commit with format from `CLAUDE.md`
+6. Push and verify in Home Assistant addon
+
+### Estimated Impact
+
+- **Lines of code reduced**: ~300+ (duplicate sorting + duplicate JS)
+- **Bugs fixed**: 2 (format string errors)
+- **Consistency improvements**: 18+ sorting implementations unified
+- **Test coverage**: New unit and integration tests
+- **Maintainability**: Significantly improved
+
+---
+
 ## Contributing
 
 Issues and pull requests welcome! Please include:

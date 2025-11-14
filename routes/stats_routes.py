@@ -414,7 +414,7 @@ def stats_liked_page() -> str:
             pagination=pagination
         )
     except Exception as e:
-        LoggingHelper.log_error_with_trace("Error rendering liked stats: {e}", e)
+        LoggingHelper.log_error_with_trace(f"Error rendering liked stats: {e}", e)
         return "<h1>Error loading liked videos</h1>", 500
 
 
@@ -505,7 +505,7 @@ def stats_disliked_page() -> str:
             pagination=pagination
         )
     except Exception as e:
-        LoggingHelper.log_error_with_trace("Error rendering disliked stats: {e}", e)
+        LoggingHelper.log_error_with_trace(f"Error rendering disliked stats: {e}", e)
         return "<h1>Error loading disliked videos</h1>", 500
 
 
