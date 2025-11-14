@@ -203,6 +203,9 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
     if _handler:
         return _handler.render_page('stats.html', **template_data)
     else:
+        if _handler:
+        return _handler.render_page('stats.html', **template_data)
+    else:
         return render_template('stats.html', **template_data)
 
 
@@ -279,7 +282,10 @@ def _render_stats_analytics_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    return render_template('stats.html', **template_data)
+    if _handler:
+        return _handler.render_page('stats.html', **template_data)
+    else:
+        return render_template('stats.html', **template_data)
 
 
 def _render_stats_api_tab(ingress_path: str) -> str:
@@ -306,7 +312,10 @@ def _render_stats_api_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    return render_template('stats.html', **template_data)
+    if _handler:
+        return _handler.render_page('stats.html', **template_data)
+    else:
+        return render_template('stats.html', **template_data)
 
 
 def _render_stats_categories_tab(ingress_path: str) -> str:
@@ -332,7 +341,10 @@ def _render_stats_categories_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    return render_template('stats.html', **template_data)
+    if _handler:
+        return _handler.render_page('stats.html', **template_data)
+    else:
+        return render_template('stats.html', **template_data)
 
 
 def _render_stats_discovery_tab(ingress_path: str) -> str:
@@ -360,7 +372,10 @@ def _render_stats_discovery_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    return render_template('stats.html', **template_data)
+    if _handler:
+        return _handler.render_page('stats.html', **template_data)
+    else:
+        return render_template('stats.html', **template_data)
 
 
 # ============================================================================
