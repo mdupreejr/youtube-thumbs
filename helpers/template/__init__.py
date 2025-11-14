@@ -54,6 +54,11 @@ from .rendering import (
     create_status_message
 )
 
+# Table helpers
+from .table_helpers import (
+    build_video_table_rows
+)
+
 __all__ = [
     # Data structures
     'TableColumn',
@@ -89,4 +94,6 @@ __all__ = [
     'render_table_page',
     'create_pagination_info',
     'create_status_message',
+    # Table helpers
+    'build_video_table_rows',
 ]

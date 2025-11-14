@@ -19,7 +19,8 @@ from helpers.request_helpers import get_real_ip
 from helpers.pagination_helpers import generate_page_numbers
 from helpers.template import (
     TableData, TableColumn, TableRow, TableCell,
-    create_stats_page_config, format_youtube_link
+    create_stats_page_config, format_youtube_link,
+    build_video_table_rows
 )
 from helpers.page_builder import StatsPageBuilder
 from helpers.sorting_helpers import sort_table_data
@@ -367,29 +368,7 @@ def stats_liked_page() -> str:
             TableColumn('last_played', 'Last Played')
         ]
         
-        rows = []
-        for video in result['videos']:
-            formatted_video = format_videos_for_display([video])[0]
-            
-            # Format song title with YouTube link
-            song_html = format_youtube_link(
-                formatted_video.get('yt_video_id'), 
-                formatted_video.get('title', 'Unknown'),
-                icon=False
-            )
-            
-            # Format last played date
-            last_played = '-'
-            if formatted_video.get('date_last_played'):
-                last_played = str(formatted_video['date_last_played'])[:10]
-            
-            cells = [
-                TableCell(formatted_video.get('title', 'Unknown'), song_html),
-                TableCell(formatted_video.get('artist', '-'), style='color: #64748b;'),
-                TableCell(formatted_video.get('play_count', 0), style='color: #64748b;'),
-                TableCell(last_played, style='color: #64748b; white-space: nowrap;')
-            ]
-            rows.append(TableRow(cells))
+        rows = build_video_table_rows(result['videos'], format_videos_for_display, format_youtube_link)
 
         # Set table and pagination
         builder.set_table(columns, rows)
@@ -450,29 +429,7 @@ def stats_disliked_page() -> str:
             TableColumn('last_played', 'Last Played')
         ]
         
-        rows = []
-        for video in result['videos']:
-            formatted_video = format_videos_for_display([video])[0]
-            
-            # Format song title with YouTube link
-            song_html = format_youtube_link(
-                formatted_video.get('yt_video_id'), 
-                formatted_video.get('title', 'Unknown'),
-                icon=False
-            )
-            
-            # Format last played date
-            last_played = '-'
-            if formatted_video.get('date_last_played'):
-                last_played = str(formatted_video['date_last_played'])[:10]
-            
-            cells = [
-                TableCell(formatted_video.get('title', 'Unknown'), song_html),
-                TableCell(formatted_video.get('artist', '-'), style='color: #64748b;'),
-                TableCell(formatted_video.get('play_count', 0), style='color: #64748b;'),
-                TableCell(last_played, style='color: #64748b; white-space: nowrap;')
-            ]
-            rows.append(TableRow(cells))
+        rows = build_video_table_rows(result['videos'], format_videos_for_display, format_youtube_link)
 
         # Set table and pagination
         builder.set_table(columns, rows)
