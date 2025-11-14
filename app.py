@@ -1,4 +1,5 @@
 import atexit
+import time
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for, g
 from flask_wtf.csrf import CSRFProtect, CSRFError, generate_csrf
 from typing import Tuple, Optional, Dict, Any
@@ -31,6 +32,7 @@ from routes.data_viewer_routes import bp as data_viewer_bp, init_data_viewer_rou
 from routes.stats_routes import bp as stats_bp, init_stats_routes
 from routes.rating_routes import bp as rating_bp, init_rating_routes
 from routes.system_routes import bp as system_bp, init_system_routes
+from routes.health_routes import bp as health_bp, init as init_health_routes
 from helpers.validation_helpers import validate_page_param, validate_youtube_video_id
 from helpers.time_helpers import format_duration
 from helpers.constants.empty_states import EMPTY_STATE_ALL_RATED
@@ -62,6 +64,9 @@ def _sanitize_log_value(value: str, max_length: int = 50) -> str:
 
 
 app = Flask(__name__)
+
+# Track application start time for health monitoring
+app.start_time = time.time()
 
 # ============================================================================
 # FLASK CONFIGURATION
@@ -511,6 +516,11 @@ init_system_routes(
     check_database_func=check_database
 )
 app.register_blueprint(system_bp)
+
+# Initialize and register health check blueprint
+# v5.20.0: Added comprehensive health monitoring with content verification
+init_health_routes(db, ha_api, yt_api, metrics)
+app.register_blueprint(health_bp)
 
 # ============================================================================
 # STATIC FILE ROUTES

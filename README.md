@@ -158,9 +158,15 @@ When quota is exceeded, the queue worker automatically pauses until midnight Pac
 - `POST /api/rate/<video_id>/like` - Rate specific YouTube video as like
 - `POST /api/rate/<video_id>/dislike` - Rate specific YouTube video as dislike
 
-### System Status
+### Health Monitoring (v5.20.0+)
 
-- `GET /health` - Health check with detailed system stats
+- `GET /health` - Comprehensive health check with content verification
+  - Returns detailed status of all components (database, YouTube API, queue worker, Home Assistant, endpoints)
+  - Actually verifies endpoint content, not just HTTP status codes
+  - Returns HTTP 200 if healthy, 503 if degraded/unhealthy
+- `GET /health/simple` - Simple health check for load balancers (just checks DB connectivity)
+
+### System Status
 - `GET /metrics` - Prometheus-compatible metrics
 
 ### Data Access
