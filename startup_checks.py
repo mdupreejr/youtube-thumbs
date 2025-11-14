@@ -245,7 +245,34 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
                 # Calculate time until next reset if not already calculated
                 if next_reset_str is None:
                     now_utc = datetime.now(timezone.utc)
-                    pacific_offset = timedelta(hours=-8)
+
+                    # Determine Pacific Time offset based on DST
+                    # DST in Pacific Time runs from 2nd Sunday in March to 1st Sunday in November
+                    # During DST (PDT): UTC-7, Standard (PST): UTC-8
+                    # For simplicity, we'll check if we're in the DST period
+                    month = now_utc.month
+                    if 3 <= month <= 11:
+                        # Rough DST check (March through November)
+                        # More precise would check exact DST transition dates
+                        if month > 3 and month < 11:
+                            # Definitely DST (April through October)
+                            pacific_offset = timedelta(hours=-7)
+                        elif month == 3:
+                            # March: DST starts 2nd Sunday, approximate as after March 10
+                            if now_utc.day >= 10:
+                                pacific_offset = timedelta(hours=-7)
+                            else:
+                                pacific_offset = timedelta(hours=-8)
+                        else:  # November
+                            # November: DST ends 1st Sunday, approximate as before Nov 7
+                            if now_utc.day < 7:
+                                pacific_offset = timedelta(hours=-7)
+                            else:
+                                pacific_offset = timedelta(hours=-8)
+                    else:
+                        # December through February: Standard time
+                        pacific_offset = timedelta(hours=-8)
+
                     now_pacific = now_utc + pacific_offset
                     midnight_today_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
                     midnight_today_utc = midnight_today_pacific - pacific_offset
@@ -361,7 +388,7 @@ def check_database(db) -> Tuple[bool, dict]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating IS NULL")
             unrated = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT MAX(last_updated) as last_updated FROM video_ratings")
+            cursor = db._conn.execute("SELECT MAX(date_last_played) as last_updated FROM video_ratings")
             video_last_updated = cursor.fetchone()['last_updated']
 
             tables_info.append({
