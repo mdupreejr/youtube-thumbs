@@ -64,19 +64,8 @@
         <header>
             <div class="header-left">
                 <h1>YouTube Thumbs Rating</h1>
-                <div class="nav-links">
-                    <a href="{{ ingress_path }}/?tab=tests">Tests</a>
-                    <a href="{{ ingress_path }}/?tab=rating">Bulk Rating</a>
-                    <a href="{{ ingress_path }}/stats">Stats</a>
-                    <a href="{{ ingress_path }}/data">Database</a>
-                    <a href="{{ ingress_path }}/logs?tab=rated">Rated Songs</a>
-                    <a href="{{ ingress_path }}/logs?tab=matches">Matches</a>
-                    <a href="{{ ingress_path }}/logs?tab=recent">Recent</a>
-                    <a href="{{ ingress_path }}/logs?tab=errors">Errors</a>
-                    <a href="{{ ingress_path }}/logs/api-calls">API Calls</a>
-                    <a href="{{ ingress_path }}/logs/pending-ratings" class="active">Queue</a>
-                    <a href="{{ ingress_path }}/db-admin">DB Admin</a>
-                </div>
+                {% set nav_active = 'queue' %}
+                {% include '_navbar.html' %}
             </div>
         </header>
 
