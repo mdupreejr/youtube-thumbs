@@ -20,6 +20,7 @@ from helpers.template import (
 )
 from helpers.page_builder import LogsPageBuilder
 from helpers.log_parsers import parse_error_log
+from helpers.sorting_helpers import sort_table_data
 
 
 # ============================================================================
@@ -57,7 +58,7 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
     # Get data
     result = db.get_rated_songs(page, 50, period_filter, rating_filter)
 
-    # Map sort columns to data keys
+    # Sort using unified helper
     sort_key_map = {
         'time': 'date_last_played',
         'song': 'ha_title',
@@ -66,15 +67,7 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
         'plays': 'play_count',
         'video_id': 'yt_video_id'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'date_last_played')
-    reverse = (sort_dir == 'desc')
-
-    # Sort the songs
-    if sort_key == 'play_count':
-        result['songs'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-    else:
-        result['songs'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+    sort_table_data(result['songs'], sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -157,7 +150,7 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     # Get data
     result = db.get_match_history(page, 50, period_filter)
 
-    # Map sort columns to data keys
+    # Sort using unified helper
     sort_key_map = {
         'time': 'date_last_played',
         'ha_song': 'ha_title',
@@ -165,15 +158,7 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
         'duration': 'yt_duration',
         'plays': 'play_count'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'date_last_played')
-    reverse = (sort_dir == 'desc')
-
-    # Sort the matches
-    if sort_key in ['play_count', 'yt_duration']:
-        result['matches'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-    else:
-        result['matches'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+    sort_table_data(result['matches'], sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -296,18 +281,13 @@ def _create_errors_page(page: int, period_filter: str, ingress_path: str, db):
     # Get data
     result = parse_error_log(period_filter, level_filter, page, 50)
 
-    # Map sort columns to data keys
+    # Sort using unified helper
     sort_key_map = {
         'time': 'timestamp',
         'level': 'level',
         'message': 'message'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'timestamp')
-    reverse = (sort_dir == 'desc')
-
-    # Sort the errors
-    result['errors'].sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
+    sort_table_data(result['errors'], sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -396,7 +376,7 @@ def _create_recent_page(ingress_path: str, db):
     # Get data
     videos = db.get_recently_added(limit=25)
 
-    # Map sort columns to data keys
+    # Sort using unified helper
     sort_key_map = {
         'date_added': 'date_added',
         'title': 'ha_title',
@@ -406,15 +386,7 @@ def _create_recent_page(ingress_path: str, db):
         'plays': 'play_count',
         'link': 'yt_url'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'date_added')
-    reverse = (sort_dir == 'desc')
-
-    # Sort the videos
-    if sort_key == 'play_count':
-        videos.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-    else:
-        videos.sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+    sort_table_data(videos, sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -571,7 +543,7 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     sort_by = request.args.get('sort_by', 'queued')
     sort_dir = request.args.get('sort_dir', 'desc')
 
-    # Map column keys to item keys
+    # Sort using unified helper
     sort_key_map = {
         'title': 'ha_title',
         'artist': 'ha_artist',
@@ -580,15 +552,7 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         'attempts': 'attempts',
         'status': 'last_error'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'requested_at')
-    reverse = (sort_dir == 'desc')
-
-    # Sort items
-    if sort_key == 'attempts':
-        formatted_items.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-    else:
-        formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
+    sort_table_data(formatted_items, sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -671,7 +635,7 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     sort_by = request.args.get('sort_by', 'completed')
     sort_dir = request.args.get('sort_dir', 'desc')
 
-    # Map column keys to item keys
+    # Sort using unified helper
     sort_key_map = {
         'type': 'type',
         'title': 'ha_title',
@@ -679,15 +643,10 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         'operation': 'operation',
         'queued': 'requested_at',
         'completed': 'completed_at',
-        'duration': 'completed_at',  # Not calculated, sort by completion time
+        'duration': 'completed_at',
         'status': 'status'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'completed_at')
-    reverse = (sort_dir == 'desc')
-
-    # Sort items
-    formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
+    sort_table_data(formatted_items, sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
@@ -772,7 +731,7 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
     sort_by = request.args.get('sort_by', 'last_attempt')
     sort_dir = request.args.get('sort_dir', 'desc')
 
-    # Map column keys to item keys
+    # Sort using unified helper
     sort_key_map = {
         'type': 'type',
         'title': 'ha_title',
@@ -782,15 +741,7 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
         'attempts': 'attempts',
         'error': 'last_error'
     }
-
-    sort_key = sort_key_map.get(sort_by, 'last_attempt')
-    reverse = (sort_dir == 'desc')
-
-    # Sort items
-    if sort_key == 'attempts':
-        formatted_items.sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-    else:
-        formatted_items.sort(key=lambda x: x.get(sort_key) or '', reverse=reverse)
+    sort_table_data(formatted_items, sort_by, sort_dir, sort_key_map)
 
     # Create table columns
     columns = [
