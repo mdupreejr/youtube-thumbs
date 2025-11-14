@@ -558,8 +558,8 @@ def index() -> str:
             fresh_yt_test = {'success': yt_success, **yt_data}
 
             # DB check is also cheap (just counts)
-            db_success, db_message = check_database(db)
-            fresh_db_test = {'success': db_success, 'message': db_message}
+            db_success, db_data = check_database(db)
+            fresh_db_test = {'success': db_success, **db_data}
 
             template_data = {
                 'current_tab': current_tab,

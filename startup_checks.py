@@ -329,48 +329,160 @@ def check_youtube_api(yt_api, db=None) -> Tuple[bool, dict]:
         return False, {'message': str(e), 'details': details}
 
 
-def check_database(db) -> Tuple[bool, str]:
-    """Test database connectivity and report statistics."""
+def check_database(db) -> Tuple[bool, dict]:
+    """Test database connectivity and report detailed statistics for all tables."""
     try:
         if not db.db_path.exists():
-            return True, "Will be created on first use"
+            return True, {
+                'message': "Will be created on first use",
+                'details': {}
+            }
 
         # Test connection and get statistics
         with db._lock:
-            # Count all videos
+            # Get database file size
+            import os
+            db_size_bytes = os.path.getsize(db.db_path)
+            db_size_mb = db_size_bytes / (1024 * 1024)
+
+            # Build table statistics
+            tables_info = []
+
+            # 1. video_ratings table
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings")
             total_videos = cursor.fetchone()['count']
 
-            # Count rated videos
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'like'")
             liked = cursor.fetchone()['count']
 
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating = 'dislike'")
             disliked = cursor.fetchone()['count']
 
-            # Count queue items from unified queue
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM video_ratings WHERE rating IS NULL")
+            unrated = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT MAX(last_updated) as last_updated FROM video_ratings")
+            video_last_updated = cursor.fetchone()['last_updated']
+
+            tables_info.append({
+                'name': 'video_ratings',
+                'label': '📹 Video Ratings',
+                'count': total_videos,
+                'details': f"{liked} liked, {disliked} disliked, {unrated} unrated",
+                'last_updated': video_last_updated
+            })
+
+            # 2. queue table
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM queue")
+            total_queue = cursor.fetchone()['count']
+
             cursor = db._conn.execute("""
                 SELECT
-                    COUNT(*) as total,
-                    SUM(CASE WHEN type = 'rating' THEN 1 ELSE 0 END) as ratings,
-                    SUM(CASE WHEN type = 'search' THEN 1 ELSE 0 END) as searches
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
                 FROM queue
-                WHERE status = 'pending'
             """)
-            queue_row = cursor.fetchone()
-            total_queue = queue_row['total'] or 0
-            pending_ratings = queue_row['ratings'] or 0
-            pending_searches = queue_row['searches'] or 0
+            queue_stats = cursor.fetchone()
 
-        # Build concise status
+            cursor = db._conn.execute("SELECT MAX(requested_at) as last_updated FROM queue")
+            queue_last_updated = cursor.fetchone()['last_updated']
+
+            tables_info.append({
+                'name': 'queue',
+                'label': '📋 Queue',
+                'count': total_queue,
+                'details': f"{queue_stats['pending'] or 0} pending, {queue_stats['completed'] or 0} completed, {queue_stats['failed'] or 0} failed",
+                'last_updated': queue_last_updated
+            })
+
+            # 3. api_call_log table
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM api_call_log")
+            total_api_calls = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("""
+                SELECT
+                    SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
+                    SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed
+                FROM api_call_log
+            """)
+            api_stats = cursor.fetchone()
+
+            cursor = db._conn.execute("SELECT MAX(timestamp) as last_updated FROM api_call_log")
+            api_last_updated = cursor.fetchone()['last_updated']
+
+            tables_info.append({
+                'name': 'api_call_log',
+                'label': '📊 API Call Log',
+                'count': total_api_calls,
+                'details': f"{api_stats['successful'] or 0} successful, {api_stats['failed'] or 0} failed",
+                'last_updated': api_last_updated
+            })
+
+            # 4. api_usage table (hourly aggregate)
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM api_usage")
+            total_api_usage_days = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT MAX(date) as last_date FROM api_usage")
+            api_usage_last_date = cursor.fetchone()['last_date']
+
+            tables_info.append({
+                'name': 'api_usage',
+                'label': '⏱️ API Usage (Hourly)',
+                'count': total_api_usage_days,
+                'details': f"{total_api_usage_days} days tracked",
+                'last_updated': api_usage_last_date
+            })
+
+            # 5. search_results_cache table
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM search_results_cache")
+            total_cached = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT MAX(cached_at) as last_cached FROM search_results_cache")
+            cache_last_updated = cursor.fetchone()['last_cached']
+
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM search_results_cache WHERE expired = 0")
+            valid_cache = cursor.fetchone()['count']
+
+            tables_info.append({
+                'name': 'search_results_cache',
+                'label': '💾 Search Cache',
+                'count': total_cached,
+                'details': f"{valid_cache} valid, {total_cached - valid_cache} expired",
+                'last_updated': cache_last_updated
+            })
+
+            # 6. stats_cache table
+            cursor = db._conn.execute("SELECT COUNT(*) as count FROM stats_cache")
+            total_stats_cache = cursor.fetchone()['count']
+
+            cursor = db._conn.execute("SELECT MAX(cached_at) as last_cached FROM stats_cache")
+            stats_cache_last_updated = cursor.fetchone()['last_cached']
+
+            tables_info.append({
+                'name': 'stats_cache',
+                'label': '📈 Stats Cache',
+                'count': total_stats_cache,
+                'details': f"{total_stats_cache} cached entries",
+                'last_updated': stats_cache_last_updated
+            })
+
+        # Build concise summary message
         parts = [f"{total_videos} videos", f"{liked}👍 {disliked}👎"]
-        if total_queue > 0:
-            parts.append(f"Queue: {total_queue} ({pending_searches}S/{pending_ratings}R)")
+        if queue_stats['pending'] and queue_stats['pending'] > 0:
+            parts.append(f"Queue: {queue_stats['pending']}")
 
-        return True, ", ".join(parts)
+        return True, {
+            'message': ", ".join(parts),
+            'details': {
+                'db_path': str(db.db_path),
+                'db_size_mb': round(db_size_mb, 2),
+                'tables': tables_info
+            }
+        }
 
     except Exception as e:
-        return False, str(e)
+        return False, {'message': str(e), 'details': {}}
 
 
 def run_startup_checks(ha_api, yt_api, db):
@@ -397,7 +509,8 @@ def run_startup_checks(ha_api, yt_api, db):
     all_ok = all_ok and yt_ok
 
     # Check Database
-    db_ok, db_msg = check_database(db)
+    db_ok, db_data = check_database(db)
+    db_msg = db_data.get('message', 'Unknown') if isinstance(db_data, dict) else db_data
     results.append(("Database", db_ok, db_msg))
     all_ok = all_ok and db_ok
 
@@ -424,7 +537,7 @@ def run_startup_checks(ha_api, yt_api, db):
     check_results = {
         'ha': (ha_ok, ha_data),
         'yt': (yt_ok, yt_data),
-        'db': (db_ok, db_msg)
+        'db': (db_ok, db_data)
     }
 
     return all_ok, check_results
