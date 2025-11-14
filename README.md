@@ -303,7 +303,7 @@ These improvements significantly enhance code quality and maintainability.
   - Alternative: Extract to shared JavaScript file in `/static/js/`
   - Impact: DRY principle, easier maintenance
 
-- [ ] **Add comprehensive sorting tests**
+- [x] **Add comprehensive sorting tests**
   - Create: `/tests/test_sorting_helpers.py`
   - Coverage: None handling, nested keys, ascending/descending, edge cases
   - Action: Write unit tests for new sorting helper
