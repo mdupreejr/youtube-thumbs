@@ -1,0 +1,14 @@
+{# Shared navigation bar - included by all templates #}
+<div class="nav-links">
+    <a href="{{ ingress_path }}/?tab=tests" class="{{ 'active' if nav_active == 'tests' else '' }}">Tests</a>
+    <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if nav_active == 'rating' else '' }}">Bulk Rating</a>
+    <a href="{{ ingress_path }}/stats" class="{{ 'active' if nav_active == 'stats' else '' }}">Stats</a>
+    <a href="{{ ingress_path }}/data" class="{{ 'active' if nav_active == 'data' else '' }}">Database</a>
+    <a href="{{ ingress_path }}/logs?tab=rated" class="{{ 'active' if nav_active == 'logs-rated' else '' }}">Rated Songs</a>
+    <a href="{{ ingress_path }}/logs?tab=matches" class="{{ 'active' if nav_active == 'logs-matches' else '' }}">Matches</a>
+    <a href="{{ ingress_path }}/logs?tab=recent" class="{{ 'active' if nav_active == 'logs-recent' else '' }}">Recent</a>
+    <a href="{{ ingress_path }}/logs?tab=errors" class="{{ 'active' if nav_active == 'logs-errors' else '' }}">Errors</a>
+    <a href="{{ ingress_path }}/logs/api-calls" class="{{ 'active' if nav_active == 'logs-api-calls' else '' }}">API Calls</a>
+    <a href="{{ ingress_path }}/logs/pending-ratings" class="{{ 'active' if nav_active == 'queue' else '' }}">Queue</a>
+    <a href="{{ ingress_path }}/db-admin" class="{{ 'active' if nav_active == 'db-admin' else '' }}">DB Admin</a>
+</div>

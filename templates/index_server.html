@@ -153,14 +153,8 @@
         <header>
             <div class="header-left">
                 <h1>YouTube Thumbs Rating</h1>
-                <div class="nav-links">
-                    <a href="{{ ingress_path }}/?tab=tests" class="{{ 'active' if current_tab == 'tests' else '' }}">Tests</a>
-                    <a href="{{ ingress_path }}/?tab=rating" class="{{ 'active' if current_tab == 'rating' else '' }}">Bulk Rating</a>
-                    <a href="{{ ingress_path }}/stats">Stats</a>
-                    <a href="{{ ingress_path }}/data">Database</a>
-                    <a href="{{ ingress_path }}/logs?tab=rated">Logs</a>
-                    <a href="{{ ingress_path }}/logs/pending-ratings">Queue</a>
-                </div>
+                {% set nav_active = 'tests' if current_tab == 'tests' else 'rating' %}
+                {% include '_navbar.html' %}
             </div>
         </header>
 
