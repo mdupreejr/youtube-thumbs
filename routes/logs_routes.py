@@ -16,6 +16,7 @@ from helpers.template import (
 )
 from helpers.page_builder import ApiCallsPageBuilder
 from helpers.queue_item_helpers import extract_queue_item_details
+from helpers.sorting_helpers import sort_table_data
 from routes.logs_routes_helpers import (
     _create_queue_pending_tab,
     _create_queue_history_tab,
@@ -77,7 +78,7 @@ def api_calls_log():
             success_filter=success_filter
         )
 
-        # Map sort columns to data keys
+        # Sort using unified helper
         sort_key_map = {
             'time': 'timestamp',
             'method': 'api_method',
@@ -88,17 +89,7 @@ def api_calls_log():
             'results': 'results_count',
             'context': 'context'
         }
-
-        sort_key = sort_key_map.get(sort_by, 'timestamp')
-        reverse = (sort_dir == 'desc')
-
-        # Sort the API call logs
-        if sort_key in ['quota_cost', 'results_count']:
-            result['logs'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-        elif sort_key == 'success':
-            result['logs'].sort(key=lambda x: x.get(sort_key) or False, reverse=reverse)
-        else:
-            result['logs'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+        sort_table_data(result['logs'], sort_by, sort_dir, sort_key_map)
 
         # Get summary statistics
         summary = _db.get_api_call_summary(hours=24)
