@@ -74,6 +74,8 @@ def search_youtube_for_video(
         metrics.record_failed_search(title, None, reason='not_found')
         return (None, api_debug_data) if return_api_response else None
 
+    # Record successful search
+    metrics.record_search_query(title)
     return (candidates, api_debug_data) if return_api_response else candidates
 
 

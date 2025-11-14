@@ -398,7 +398,7 @@
                         {{ metrics.search_stats.total_searches }} searches, {{ metrics.search_stats.failed_searches.total }} failed
                     </div>
                     <div style="margin-top: 15px; font-size: 0.85em;">
-                        <div style="margin: 5px 0;"><strong>Success Rate:</strong> {{ "%.1f"|format((100 - (metrics.search_stats.failed_searches.total / metrics.search_stats.total_searches * 100)) if metrics.search_stats.total_searches > 0 else 100) }}%</div>
+                        <div style="margin: 5px 0;"><strong>Success Rate:</strong> {% if metrics.search_stats.total_searches > 0 %}{{ "%.1f"|format(100 - (metrics.search_stats.failed_searches.total / metrics.search_stats.total_searches * 100)) }}%{% else %}N/A{% endif %}</div>
                         <div style="margin: 5px 0;"><strong>Failed (1h):</strong> {{ metrics.search_stats.failed_searches.last_hour }}</div>
                         
                         {% if metrics.search_stats.failed_searches.by_reason %}
