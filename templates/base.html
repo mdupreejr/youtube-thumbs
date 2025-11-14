@@ -6,13 +6,13 @@
     <title>{% block title %}YouTube Thumbs Rating{% endblock %}</title>
 
     <!-- Always load common CSS for unified styling -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/common.css') }}">
 
     <!-- Optional page-specific styles -->
     {% block styles %}{% endblock %}
 
     <!-- Cache busting for all static resources -->
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}?v={{ config.version }}">
+    <link rel="icon" type="image/png" href="{{ static_url('images/icon.png') }}?v={{ config.version }}">
 
     <!-- Common meta tags -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">

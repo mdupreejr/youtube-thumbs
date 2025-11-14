@@ -6,7 +6,7 @@ YouTube Thumbs - {% if current_tab == 'overview' %}Statistics Overview{% elif cu
 {% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/stats.css') }}">
+<link rel="stylesheet" href="{{ static_url('css/stats.css') }}">
 <meta http-equiv="refresh" content="300"> <!-- Auto-refresh every 5 minutes -->
 {% endblock %}
 
