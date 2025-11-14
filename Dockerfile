@@ -26,6 +26,9 @@ COPY routes/ ./routes/
 # Copy the helpers module directory
 COPY helpers/ ./helpers/
 
+# Copy the youtube_api module directory
+COPY youtube_api/ ./youtube_api/
+
 # Copy templates directory for Flask web UI
 COPY templates/ ./templates/
 
