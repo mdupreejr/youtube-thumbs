@@ -1,44 +1,6 @@
 /* YouTube Thumbs - Stats Dashboard Styles */
 /* Base styles inherited from common.css - only dashboard-specific styles here */
-
-/* ============================================================================
-   STATS TAB NAVIGATION (specific to /stats page tabs)
-   ============================================================================ */
-.stats-tabs {
-    display: flex;
-    gap: 4px;
-    padding: 8px;
-    background: white;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    border: 1px solid #e2e8f0;
-    overflow-x: auto;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-
-.stats-tabs a {
-    padding: 8px 16px;
-    border-radius: 4px;
-    text-decoration: none;
-    color: #64748b;
-    font-size: 0.85em;
-    font-weight: 500;
-    white-space: nowrap;
-    transition: all 0.2s;
-    border: 1px solid transparent;
-    min-width: fit-content;
-}
-
-.stats-tabs a:hover {
-    background: #f8fafc;
-    color: #1e293b;
-}
-
-.stats-tabs a.active {
-    background: #2563eb;
-    color: white;
-    border-color: #2563eb;
-}
+/* Tab navigation now uses unified .tab-navigation from common.css */
 
 /* ============================================================================
    METRICS GRID (dashboard cards)
@@ -443,47 +405,4 @@
     .heatmap-header-spacer {
         width: 60px;
     }
-}
-
-/* ============================================================================
-   LIST ITEMS (required for stats.html template)
-   ============================================================================ */
-.list-item {
-    padding: 12px 15px;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background 0.2s ease;
-}
-
-.list-item:last-child {
-    border-bottom: none;
-}
-
-.list-item:hover {
-    background: #f8fafc;
-}
-
-.item-info {
-    flex: 1;
-}
-
-.item-title {
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 4px;
-}
-
-.item-meta {
-    font-size: 0.85em;
-    color: #64748b;
-}
-
-.item-stat {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.9em;
-    color: #64748b;
 }

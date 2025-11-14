@@ -1,0 +1,163 @@
+{# Unified Component Library - Import with: {% import 'components.html' as components %} #}
+
+{# ============================================================================
+   TAB NAVIGATION - Universal tab component
+   ============================================================================ #}
+{% macro tabs(items, active_tab=None) %}
+<div class="tab-navigation">
+    {% for item in items %}
+    <a href="{{ item.url }}" class="tab-link {% if item.id == active_tab %}active{% endif %}">
+        {% if item.icon %}<span class="tab-icon">{{ item.icon }}</span>{% endif %}
+        {{ item.label }}
+        {% if item.count is defined %}
+        <span class="tab-count">{{ item.count }}</span>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   STAT CARD - Universal metric/stat display
+   ============================================================================ #}
+{% macro stat_card(value, label, sublabel=None, icon=None, link=None, color='primary') %}
+<div class="stat-card stat-card-{{ color }} {% if link %}clickable{% endif %}">
+    {% if link %}<a href="{{ link }}">{% endif %}
+        {% if icon %}<div class="stat-icon">{{ icon }}</div>{% endif %}
+        <div class="stat-value">{{ value }}</div>
+        <div class="stat-label">{{ label }}</div>
+        {% if sublabel %}<div class="stat-sublabel">{{ sublabel }}</div>{% endif %}
+    {% if link %}</a>{% endif %}
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   STAT GRID - Container for stat cards
+   ============================================================================ #}
+{% macro stat_grid(cards, columns='auto') %}
+<div class="stat-grid" {% if columns != 'auto' %}style="grid-template-columns: repeat({{ columns }}, 1fr);"{% endif %}>
+    {% for card in cards %}
+        {{ stat_card(card.value, card.label, card.sublabel, card.icon, card.link, card.color|default('primary')) }}
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   DATA TABLE - Universal enhanced table
+   ============================================================================ #}
+{% macro data_table(headers, rows, id=None, sortable=True, show_index=False) %}
+<div class="table-container">
+    <table class="enhanced-table" {% if id %}id="{{ id }}"{% endif %}>
+        <thead>
+            <tr>
+                {% if show_index %}<th class="col-index">#</th>{% endif %}
+                {% for header in headers %}
+                <th {% if header.class %}class="{{ header.class }}"{% endif %}
+                    {% if sortable and header.sortable != false %}data-sortable="true"{% endif %}>
+                    {{ header.label }}
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr {% if row.id %}data-id="{{ row.id }}"{% endif %}>
+                {% if show_index %}<td class="col-index">{{ loop.index }}</td>{% endif %}
+                {% for cell in row.cells %}
+                <td {% if cell.class %}class="{{ cell.class }}"{% endif %}>
+                    {% if cell.html %}
+                        {{ cell.html|safe }}
+                    {% else %}
+                        {{ cell.value }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   LIST CARD - Modern replacement for old list-item pattern
+   ============================================================================ #}
+{% macro list_card(title, items, show_more_link=None) %}
+<div class="card list-card">
+    {% if title %}
+    <div class="card-header">
+        <h3>{{ title }}</h3>
+        {% if show_more_link %}
+        <a href="{{ show_more_link.url }}" class="card-header-link">{{ show_more_link.text }} →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="card-content">
+        {% if items|length == 0 %}
+            <div class="empty-state">No items to display</div>
+        {% else %}
+            <div class="list-items">
+                {% for item in items %}
+                <div class="list-item-modern">
+                    <div class="list-item-content">
+                        <div class="list-item-primary">{{ item.primary }}</div>
+                        {% if item.secondary %}
+                        <div class="list-item-secondary">{{ item.secondary }}</div>
+                        {% endif %}
+                    </div>
+                    {% if item.value %}
+                    <div class="list-item-value">{{ item.value }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   BADGE - Universal badge component
+   ============================================================================ #}
+{% macro badge(text, type='default') %}
+<span class="badge badge-{{ type }}">{{ text }}</span>
+{% endmacro %}
+
+{# ============================================================================
+   PROGRESS BAR - Universal progress indicator
+   ============================================================================ #}
+{% macro progress_bar(value, max=100, label=None, color='primary') %}
+<div class="progress-container">
+    {% if label %}<div class="progress-label">{{ label }}</div>{% endif %}
+    <div class="progress-bar">
+        <div class="progress-fill progress-{{ color }}" style="width: {{ (value / max * 100)|round|int }}%;">
+            <span class="progress-value">{{ value }}/{{ max }}</span>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   EMPTY STATE - Consistent empty state display
+   ============================================================================ #}
+{% macro empty_state(message, icon=None, action=None) %}
+<div class="empty-state-container">
+    {% if icon %}<div class="empty-state-icon">{{ icon }}</div>{% endif %}
+    <div class="empty-state-message">{{ message }}</div>
+    {% if action %}
+    <a href="{{ action.url }}" class="btn btn-primary">{{ action.text }}</a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# ============================================================================
+   ALERT - Universal alert/message component
+   ============================================================================ #}
+{% macro alert(message, type='info', dismissible=True) %}
+<div class="alert alert-{{ type }} {% if dismissible %}alert-dismissible{% endif %}">
+    {{ message }}
+    {% if dismissible %}
+    <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+    {% endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}YouTube Thumbs Rating{% endblock %}</title>
+
+    <!-- Always load common CSS for unified styling -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+
+    <!-- Optional page-specific styles -->
+    {% block styles %}{% endblock %}
+
+    <!-- Cache busting for all static resources -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}?v={{ config.version }}">
+
+    <!-- Common meta tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+</head>
+<body>
+    <!-- Navigation (included on all pages) -->
+    {% include 'navbar.html' %}
+
+    <!-- Main container with consistent structure -->
+    <div class="container">
+        {% block container_content %}
+            <!-- Page header section -->
+            {% block header %}
+                {% if page_title %}
+                <h1>{{ page_title }}</h1>
+                {% endif %}
+            {% endblock %}
+
+            <!-- Tab navigation (if needed) -->
+            {% block tabs %}{% endblock %}
+
+            <!-- Main content area -->
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+        {% endblock %}
+    </div>
+
+    <!-- Common JavaScript -->
+    <script>
+        // Global configuration available to all pages
+        window.appConfig = {
+            ingressPath: '{{ g.ingress_path }}',
+            version: '{{ config.version }}',
+            csrfToken: '{{ csrf_token() if csrf_token is defined else "" }}'
+        };
+
+        // Common utility functions
+        function showToast(message, type = 'info') {
+            // Unified toast notification system
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Consistent AJAX error handling
+        function handleAjaxError(error) {
+            console.error('AJAX Error:', error);
+            showToast('An error occurred. Please try again.', 'error');
+        }
+    </script>
+
+    <!-- Page-specific JavaScript -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>
