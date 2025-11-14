@@ -135,14 +135,15 @@ class PageConfig:
         title: The page title displayed in the header
         nav_active: Which top-level navigation item is active
         storage_key: localStorage key for saving user preferences
+        show_title: Whether to display the page title (default: True)
     """
 
-    def __init__(self, title: str, nav_active: str = '', storage_key: str = ''):
+    def __init__(self, title: str, nav_active: str = '', storage_key: str = '', show_title: bool = True):
         # Basic page settings
         self.title = title
         self.nav_active = nav_active
         self.storage_key = storage_key or f"table-{nav_active}"
-        self.show_title = True
+        self.show_title = show_title
         self.title_suffix = None
 
         # Navigation settings
