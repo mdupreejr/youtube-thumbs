@@ -50,11 +50,12 @@ def create_sqlite_web_middleware(db_path):
 
         # Initialize sqlite_web with database path
         # This must be called before using the app
+        # Note: First parameter is 'filename', not 'database'
         initialize_app(
-            database=db_path,
+            db_path,  # filename (positional argument)
             read_only=False,  # Allow writes for testing queries
             password=None,  # No password (protected by Home Assistant)
-            url_prefix='',  # No prefix (handled by our mounting)
+            url_prefix=None,  # No prefix (handled by our mounting)
             extensions=None,  # No additional extensions
             foreign_keys=True  # Enable foreign key constraints
         )
