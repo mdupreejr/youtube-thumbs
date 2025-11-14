@@ -28,10 +28,14 @@ def sanitize_html(html_content: str) -> str:
         import bleach
 
         # Define allowed tags and attributes for safe HTML
-        allowed_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre']
+        allowed_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre',
+                        'form', 'input', 'button']
         allowed_attributes = {
             'a': ['href', 'target', 'rel', 'title'],
             'span': ['class', 'title', 'style'],
+            'form': ['method', 'action', 'style'],
+            'input': ['type', 'name', 'value', 'style'],
+            'button': ['type', 'name', 'value', 'class', 'style'],
             '*': ['class', 'title']
         }
 
@@ -76,7 +80,8 @@ def sanitize_html(html_content: str) -> str:
         html_content = re.sub(r'data\s*:(?!image/)', '', html_content, flags=re.IGNORECASE)
 
         # Allow only specific safe tags using safe, non-backtracking patterns
-        safe_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre']
+        safe_tags = ['a', 'span', 'strong', 'em', 'br', 'small', 'code', 'pre',
+                     'form', 'input', 'button']
 
         # Remove all HTML tags except safe ones (with length limits to prevent ReDoS)
         html_content = re.sub(
