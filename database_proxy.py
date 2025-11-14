@@ -265,6 +265,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         return [body]
 
             # Not HTML or no modification needed, return as-is
+            # We need to call start_response with original headers
+            if responses:
+                status, headers = responses[0]
+                start_response(status, headers)
             return app_iter
 
         logger.info(f"sqlite_web WSGI app created successfully for {db_path}")
