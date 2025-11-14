@@ -128,12 +128,26 @@ def inject_static_url():
     This ensures static files and all links work correctly through Home Assistant ingress.
     """
     def static_url(filename):
-        """Generate static URL with ingress path support."""
+        """Generate static URL with ingress path support and cache-busting."""
         ingress_path = g.ingress_path
         base_url = url_for('static', filename=filename)
+
+        # Add version parameter for cache-busting to prevent browser caching issues
+        # This ensures CSS/JS updates are immediately visible without hard refresh
+        import json
+        try:
+            with open('config.json', 'r') as f:
+                config = json.load(f)
+                version = config.get('version', '1.0.0')
+        except:
+            version = '1.0.0'
+
+        # Append version as query parameter
+        cache_buster = f"?v={version}"
+
         if ingress_path:
-            return f"{ingress_path}{base_url}"
-        return base_url
+            return f"{ingress_path}{base_url}{cache_buster}"
+        return f"{base_url}{cache_buster}"
 
     # Inject both static_url function and ingress_path variable
     return dict(static_url=static_url, ingress_path=g.ingress_path)
