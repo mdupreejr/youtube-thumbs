@@ -296,7 +296,7 @@ These improvements significantly enhance code quality and maintainability.
   - Verification: Search all `.html` files for references to this CSS
   - Impact: Reduces technical debt, cleaner codebase
 
-- [ ] **Consolidate row click navigation JavaScript**
+- [x] **Consolidate row click navigation JavaScript**
   - Files: Multiple templates with duplicate `tr.clickable-row` handlers
   - Issue: 3+ duplicate implementations of the same functionality
   - Action: Use PageBuilder's `set_row_click_navigation()` method consistently

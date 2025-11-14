@@ -509,15 +509,7 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     page_config.set_empty_state('✓', 'Queue is empty', 'No operations waiting to be processed.')
 
     # Add row click handler for navigation
-    page_config.custom_js = f'''
-        document.querySelectorAll('.clickable-row').forEach(row => {{
-            row.style.cursor = 'pointer';
-            row.addEventListener('click', function() {{
-                const rowId = this.dataset.rowId;
-                window.location.href = '{ingress_path}/logs/pending-ratings/item/' + rowId;
-            }});
-        }});
-    '''
+    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get pending AND failed items (failed items can be retried)
     # Pending tab shows all items that need attention: pending to be processed, or failed awaiting retry
@@ -616,15 +608,7 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
     page_config.set_empty_state('📭', 'No history available', 'No recently completed operations.')
 
     # Add row click handler for navigation
-    page_config.custom_js = f'''
-        document.querySelectorAll('.clickable-row').forEach(row => {{
-            row.style.cursor = 'pointer';
-            row.addEventListener('click', function() {{
-                const rowId = this.dataset.rowId;
-                window.location.href = '{ingress_path}/logs/pending-ratings/item/' + rowId;
-            }});
-        }});
-    '''
+    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get history items
     history_items = db.list_queue_history(limit=200)
@@ -712,15 +696,7 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
     page_config.set_empty_state('✓', 'No errors', 'All operations completing successfully.')
 
     # Add row click handler for navigation
-    page_config.custom_js = f'''
-        document.querySelectorAll('.clickable-row').forEach(row => {{
-            row.style.cursor = 'pointer';
-            row.addEventListener('click', function() {{
-                const rowId = this.dataset.rowId;
-                window.location.href = '{ingress_path}/logs/pending-ratings/item/' + rowId;
-            }});
-        }});
-    '''
+    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get error items
     error_items = db.list_queue_failed(limit=200)

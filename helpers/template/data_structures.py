@@ -211,6 +211,27 @@ class PageConfig:
         self.empty_state = {'icon': icon, 'title': title, 'message': message}
         return self
 
+    def set_row_click_navigation(self, url_template: str):
+        """
+        Add JavaScript for clickable row navigation.
+
+        Args:
+            url_template: URL template with {id} placeholder
+
+        Returns:
+            Self for method chaining
+        """
+        self.custom_js = f'''
+        document.querySelectorAll('.clickable-row').forEach(row => {{
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', function() {{
+                const rowId = this.dataset.rowId;
+                window.location.href = '{url_template}'.replace('{{id}}', rowId);
+            }});
+        }});
+    '''
+        return self
+
     def set_modal_config(self, api_url: str, title: str = 'Details',
                         formatter: str = None):
         """Configure modal popup functionality."""
