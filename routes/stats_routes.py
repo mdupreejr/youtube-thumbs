@@ -73,13 +73,6 @@ def stats_dashboard() -> str:
 
 def _render_stats_overview_tab(ingress_path: str) -> str:
     """Render the overview tab of the stats dashboard."""
-    # Check cache first (5 minute TTL)
-    cached = _db.get_cached_stats('stats_overview')
-    if cached:
-        cached['ingress_path'] = ingress_path
-        cached['current_tab'] = 'overview'
-        return render_template('stats.html', **cached)
-
     # Fetch fresh data
     summary = _db.get_stats_summary()
     most_played = _db.get_most_played(10)
@@ -170,21 +163,11 @@ def _render_stats_overview_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    # Cache for 5 minutes
-    _db.set_cached_stats('stats_overview', template_data, ttl_seconds=300)
-
     return render_template('stats.html', **template_data)
 
 
 def _render_stats_analytics_tab(ingress_path: str) -> str:
     """Render the analytics tab of the stats dashboard."""
-    # Check cache first (5 minute TTL)
-    cached = _db.get_cached_stats('stats_analytics')
-    if cached:
-        cached['ingress_path'] = ingress_path
-        cached['current_tab'] = 'analytics'
-        return render_template('stats.html', **cached)
-
     # Fetch analytics data
     patterns = _db.get_listening_patterns()
     play_dist = _db.get_play_distribution()
@@ -256,18 +239,11 @@ def _render_stats_analytics_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    _db.set_cached_stats('stats_analytics', template_data, ttl_seconds=300)
     return render_template('stats.html', **template_data)
 
 
 def _render_stats_api_tab(ingress_path: str) -> str:
     """Render the API & Queue tab of the stats dashboard."""
-    # Check cache first (5 minute TTL)
-    cached = _db.get_cached_stats('stats_api')
-    if cached:
-        cached['ingress_path'] = ingress_path
-        cached['current_tab'] = 'api'
-        return render_template('stats.html', **cached)
 
     # Fetch API and queue data
     api_summary = _db.get_api_usage_summary(days=30)
@@ -290,18 +266,11 @@ def _render_stats_api_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    _db.set_cached_stats('stats_api', template_data, ttl_seconds=300)
     return render_template('stats.html', **template_data)
 
 
 def _render_stats_categories_tab(ingress_path: str) -> str:
     """Render the categories tab of the stats dashboard."""
-    # Check cache first (5 minute TTL)
-    cached = _db.get_cached_stats('stats_categories')
-    if cached:
-        cached['ingress_path'] = ingress_path
-        cached['current_tab'] = 'categories'
-        return render_template('stats.html', **cached)
 
     # Fetch category and duration data
     category_breakdown = _db.get_category_breakdown()
@@ -323,18 +292,11 @@ def _render_stats_categories_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    _db.set_cached_stats('stats_categories', template_data, ttl_seconds=300)
     return render_template('stats.html', **template_data)
 
 
 def _render_stats_discovery_tab(ingress_path: str) -> str:
     """Render the discovery tab of the stats dashboard."""
-    # Check cache first (5 minute TTL)
-    cached = _db.get_cached_stats('stats_discovery')
-    if cached:
-        cached['ingress_path'] = ingress_path
-        cached['current_tab'] = 'discovery'
-        return render_template('stats.html', **cached)
 
     # Fetch discovery data
     discovery_trends = _db.get_discovery_stats()
@@ -358,7 +320,6 @@ def _render_stats_discovery_tab(ingress_path: str) -> str:
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    _db.set_cached_stats('stats_discovery', template_data, ttl_seconds=300)
     return render_template('stats.html', **template_data)
 
 
