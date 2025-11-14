@@ -22,6 +22,7 @@ from helpers.template import (
     create_stats_page_config, format_youtube_link
 )
 from helpers.page_builder import StatsPageBuilder
+from helpers.sorting_helpers import sort_table_data
 
 bp = Blueprint('stats', __name__)
 
@@ -344,22 +345,14 @@ def stats_liked_page() -> str:
 
         result = _db.get_rated_videos('like', page=page, per_page=50)
 
-        # Map sort columns to data keys
+        # Sort using unified helper
         sort_key_map = {
             'song': 'ha_title',
             'artist': 'ha_artist',
             'plays': 'play_count',
             'last_played': 'date_last_played'
         }
-
-        sort_key = sort_key_map.get(sort_by, 'date_last_played')
-        reverse = (sort_dir == 'desc')
-
-        # Sort the videos
-        if sort_key == 'play_count':
-            result['videos'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-        else:
-            result['videos'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+        sort_table_data(result['videos'], sort_by, sort_dir, sort_key_map)
 
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('liked', ingress_path)
@@ -435,22 +428,14 @@ def stats_disliked_page() -> str:
 
         result = _db.get_rated_videos('dislike', page=page, per_page=50)
 
-        # Map sort columns to data keys
+        # Sort using unified helper
         sort_key_map = {
             'song': 'ha_title',
             'artist': 'ha_artist',
             'plays': 'play_count',
             'last_played': 'date_last_played'
         }
-
-        sort_key = sort_key_map.get(sort_by, 'date_last_played')
-        reverse = (sort_dir == 'desc')
-
-        # Sort the videos
-        if sort_key == 'play_count':
-            result['videos'].sort(key=lambda x: int(x.get(sort_key) or 0), reverse=reverse)
-        else:
-            result['videos'].sort(key=lambda x: (x.get(sort_key) or '').lower() if isinstance(x.get(sort_key), str) else (x.get(sort_key) or ''), reverse=reverse)
+        sort_table_data(result['videos'], sort_by, sort_dir, sort_key_map)
 
         # Use builder pattern for consistent page creation
         builder = StatsPageBuilder('disliked', ingress_path)
