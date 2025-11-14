@@ -77,8 +77,10 @@ def create_sqlite_web_middleware(db_path):
             # Store original start_response to intercept response
             responses = []
             def custom_start_response(status, headers, exc_info=None):
+                # Just capture status and headers, don't call start_response yet
                 responses.append((status, headers))
-                return start_response(status, headers, exc_info)
+                # Return a dummy write function (required by WSGI spec)
+                return lambda s: None
 
             # Call sqlite_web app
             app_iter = sqlite_web_app(environ, custom_start_response)
