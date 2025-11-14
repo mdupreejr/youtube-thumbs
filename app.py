@@ -599,12 +599,11 @@ def index() -> str:
             page_config = PageConfig(
                 title='Bulk Rating',
                 nav_active='rating',
-                storage_key='bulk-rating'
+                storage_key='bulk-rating',
+                show_title=False  # Don't show title, already in navbar
             )
 
-            # Add main tabs
-            page_config.add_main_tab('Tests', '/?tab=tests', False)
-            page_config.add_main_tab('Bulk Rating', '/?tab=rating', True)
+            # No need for main_tabs - they're already in the main navbar
 
             # Set empty state
             page_config.set_empty_state('🎉', 'All songs rated!', "You've rated all your songs. Great job!")
