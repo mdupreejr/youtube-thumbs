@@ -92,9 +92,9 @@ class Database:
         """Enqueue a search operation to the unified queue."""
         return self._queue_ops.enqueue_search(media, callback_rating)
 
-    def claim_next_queue_item(self):
+    def claim_next_queue_item(self, max_attempts: int = 5):
         """Claim the next item from the unified queue (for queue worker)."""
-        return self._queue_ops.claim_next()
+        return self._queue_ops.claim_next(max_attempts=max_attempts)
 
     def mark_queue_item_completed(self, queue_id, api_response_data=None):
         """Mark a queue item as completed."""
