@@ -139,12 +139,18 @@ def _create_rated_songs_page(page: int, period_filter: str, ingress_path: str, d
 
 def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     """Create page config and table data for matches."""
+    from logging_helper import LoggingHelper, LogType
+    logger = LoggingHelper.get_logger(LogType.MAIN)
+
+    logger.debug(f"[MATCHES_PAGE] Creating matches page - page: {page}, period: {period_filter}, ingress_path: '{ingress_path}'")
+
     # Server-side sorting support
     sort_by = request.args.get('sort_by', 'time')
     sort_dir = request.args.get('sort_dir', 'desc')
 
     # Use builder pattern for consistent page creation
     builder = LogsPageBuilder('matches', ingress_path)
+    logger.debug(f"[MATCHES_PAGE] LogsPageBuilder created for 'matches' tab")
 
     # Add period filter (using helper to consolidate repeated pattern)
     period_opts = create_period_filter(period_filter)
@@ -154,7 +160,9 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
     builder.set_empty_state(**EMPTY_STATE_NO_MATCHES)
 
     # Get data
+    logger.debug(f"[MATCHES_PAGE] Fetching match history from database...")
     result = db.get_match_history(page, 50, period_filter)
+    logger.debug(f"[MATCHES_PAGE] Retrieved {len(result.get('matches', []))} matches, total: {result.get('total_count', 0)}")
 
     # Sort using unified helper
     sort_key_map = {
@@ -253,6 +261,7 @@ def _create_matches_page(page: int, period_filter: str, ingress_path: str, db):
         f"Showing {len(result['matches'])} of {total_count} matches • Page {page}/{total_pages}"
     )
 
+    logger.debug(f"[MATCHES_PAGE] Building page with {len(rows)} table rows, page {page}/{total_pages}")
     return builder.build()
 
 
