@@ -634,3 +634,121 @@ class ApiCallsPageBuilder:
             self.status_message,
             self.summary_stats
         )
+
+
+class QueuePageBuilder:
+    """
+    Builder class for queue monitor pages.
+
+    This provides the same consistency guarantees as LogsPageBuilder
+    but for the /logs/pending-ratings route with its sub-tabs.
+    """
+
+    def __init__(self, tab_name: str, ingress_path: str):
+        """
+        Initialize builder for queue page.
+
+        Args:
+            tab_name: The tab identifier ('pending', 'history', 'errors', 'statistics')
+            ingress_path: The ingress path from the request
+        """
+        self.tab_name = tab_name
+        self.ingress_path = ingress_path
+
+        # Create page config
+        self.page_config = PageConfig(
+            title='📊 Queue Monitor',
+            nav_active='queue',
+            storage_key=f'queue-{tab_name}'
+        )
+
+        # Add sub-tabs using helper
+        from helpers.template import add_queue_tabs
+        add_queue_tabs(self.page_config, tab_name, ingress_path)
+
+        # Initialize optional attributes
+        self.table_data: Optional[TableData] = None
+        self.status_message: str = ''
+        self.summary_stats: Optional[Dict[str, Any]] = None
+
+        self._table_set = False
+
+    def set_empty_state(self, icon: str, title: str, message: str) -> 'QueuePageBuilder':
+        """Set empty state display."""
+        self.page_config.set_empty_state(icon, title, message)
+        return self
+
+    def set_row_click_navigation(self, url_template: str) -> 'QueuePageBuilder':
+        """
+        Set up row click navigation to detail pages.
+
+        Args:
+            url_template: URL template with {id} placeholder
+
+        Returns:
+            Self for method chaining
+        """
+        self.page_config.set_row_click_navigation(url_template)
+        return self
+
+    def set_table(self, columns: List[TableColumn], rows: List[TableRow]) -> 'QueuePageBuilder':
+        """Set table data."""
+        self.table_data = TableData(columns, rows)
+        self._table_set = True
+        return self
+
+    def set_status_message(self, message: str) -> 'QueuePageBuilder':
+        """Set status message."""
+        self.status_message = message
+        return self
+
+    def set_summary_stats(self, stats: Dict[str, Any]) -> 'QueuePageBuilder':
+        """Set summary statistics (for statistics tab)."""
+        self.summary_stats = stats
+        return self
+
+    def validate(self) -> None:
+        """Validate all required attributes are set."""
+        # For statistics tab, table is not required (has summary_stats instead)
+        if self.tab_name != 'statistics' and not self._table_set:
+            raise ValueError("Table data not set - call set_table() before build()")
+
+        if not self.status_message:
+            raise ValueError("Status message not set - call set_status_message() before build()")
+
+    def build(self) -> tuple:
+        """
+        Build and return the page tuple.
+
+        Returns:
+            Tuple of (page_config, table_data, status_message) for most tabs
+            Tuple of (page_config, table_data, status_message, summary_stats) for statistics tab
+        """
+        from logging_helper import LoggingHelper, LogType
+        logger = LoggingHelper.get_logger(LogType.MAIN)
+
+        # Validate before building
+        self.validate()
+
+        # Debug logging
+        logger.debug(f"[PAGE_BUILDER] QueuePageBuilder.build() - Tab: {self.tab_name}")
+        logger.debug(f"[PAGE_BUILDER]   Ingress Path: '{self.ingress_path}'")
+        logger.debug(f"[PAGE_BUILDER]   Nav Active: '{self.page_config.nav_active}'")
+        logger.debug(f"[PAGE_BUILDER]   Has Table: {self.table_data is not None}")
+        logger.debug(f"[PAGE_BUILDER]   Has Summary Stats: {self.summary_stats is not None}")
+
+        # Return tuple based on tab type
+        if self.tab_name == 'statistics':
+            return (
+                self.page_config,
+                None,  # statistics tab doesn't have table
+                self.status_message,
+                self.summary_stats
+            )
+        else:
+            return (
+                self.page_config,
+                self.table_data,
+                self.status_message
+            )
+

@@ -16,7 +16,7 @@ from helpers.template import (
     format_song_display, format_status_badge,
     format_rating_badge, format_log_level_badge,
     create_period_filter, create_rating_filter,
-    add_queue_tabs, format_count_message
+    format_count_message
 )
 from helpers.page_builder import LogsPageBuilder
 from helpers.log_parsers import parse_error_log
@@ -528,21 +528,12 @@ def format_queue_item(item, db):
 
 def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[PageConfig, TableData, str]:
     """Create page configuration for Pending queue tab."""
-    # Create page config with sub-tabs
-    page_config = PageConfig(
-        title='📊 Queue Monitor',
-        nav_active='queue',
-        storage_key='queue-pending'
-    )
+    from helpers.page_builder import QueuePageBuilder
 
-    # Add sub-tabs (using helper to consolidate repeated pattern)
-    add_queue_tabs(page_config, current_tab, ingress_path)
-
-    # Set empty state
-    page_config.set_empty_state(**EMPTY_STATE_QUEUE_EMPTY)
-
-    # Add row click handler for navigation
-    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
+    # Use builder pattern for consistent page creation
+    builder = QueuePageBuilder('pending', ingress_path)
+    builder.set_empty_state(**EMPTY_STATE_QUEUE_EMPTY)
+    builder.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get pending AND failed items (failed items can be retried)
     # Pending tab shows all items that need attention: pending to be processed, or failed awaiting retry
@@ -621,32 +612,25 @@ def _create_queue_pending_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         ]
         rows.append(TableRow(cells, clickable=True, row_id=item['id']))
 
-    table_data = TableData(columns, rows)
+    # Set table and status message
+    builder.set_table(columns, rows)
 
     # Use helper for consistent count message formatting
     count_msg = format_count_message(len(formatted_items), 'operation', 'in queue')
     status_message = f"Operations waiting to be processed by the background worker. The worker processes one item per minute to respect API quotas and rate limits. {count_msg}"
+    builder.set_status_message(status_message)
 
-    return page_config, table_data, status_message
+    return builder.build()
 
 
 def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[PageConfig, TableData, str]:
     """Create page configuration for History queue tab."""
-    # Create page config with sub-tabs
-    page_config = PageConfig(
-        title='📊 Queue Monitor',
-        nav_active='queue',
-        storage_key='queue-history'
-    )
+    from helpers.page_builder import QueuePageBuilder
 
-    # Add sub-tabs (using helper to consolidate repeated pattern)
-    add_queue_tabs(page_config, current_tab, ingress_path)
-
-    # Set empty state
-    page_config.set_empty_state(**EMPTY_STATE_NO_HISTORY)
-
-    # Add row click handler for navigation
-    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
+    # Use builder pattern for consistent page creation
+    builder = QueuePageBuilder('history', ingress_path)
+    builder.set_empty_state(**EMPTY_STATE_NO_HISTORY)
+    builder.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get history items
     history_items = db.list_queue_history(limit=200)
@@ -709,32 +693,25 @@ def _create_queue_history_tab(ingress_path: str, current_tab: str, db) -> Tuple[
         ]
         rows.append(TableRow(cells, clickable=True, row_id=item['id']))
 
-    table_data = TableData(columns, rows)
+    # Set table and status message
+    builder.set_table(columns, rows)
 
     # Use helper for consistent count message formatting
     count_msg = format_count_message(len(formatted_items), 'recent operation')
     status_message = f"Recently completed and failed operations. Shows the last 200 processed items. {count_msg}"
+    builder.set_status_message(status_message)
 
-    return page_config, table_data, status_message
+    return builder.build()
 
 
 def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[PageConfig, TableData, str]:
     """Create page configuration for Errors queue tab."""
-    # Create page config with sub-tabs
-    page_config = PageConfig(
-        title='📊 Queue Monitor',
-        nav_active='queue',
-        storage_key='queue-errors'
-    )
+    from helpers.page_builder import QueuePageBuilder
 
-    # Add sub-tabs (using helper to consolidate repeated pattern)
-    add_queue_tabs(page_config, current_tab, ingress_path)
-
-    # Set empty state
-    page_config.set_empty_state(**EMPTY_STATE_NO_QUEUE_ERRORS)
-
-    # Add row click handler for navigation
-    page_config.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
+    # Use builder pattern for consistent page creation
+    builder = QueuePageBuilder('errors', ingress_path)
+    builder.set_empty_state(**EMPTY_STATE_NO_QUEUE_ERRORS)
+    builder.set_row_click_navigation(f'{ingress_path}/logs/pending-ratings/item/{{id}}')
 
     # Get error items
     error_items = db.list_queue_failed(limit=200)
@@ -793,26 +770,23 @@ def _create_queue_errors_tab(ingress_path: str, current_tab: str, db) -> Tuple[P
         ]
         rows.append(TableRow(cells, clickable=True, row_id=item['id']))
 
-    table_data = TableData(columns, rows)
+    # Set table and status message
+    builder.set_table(columns, rows)
 
     # Use helper for consistent count message formatting
     count_msg = format_count_message(len(formatted_items), 'failed operation')
     status_message = f"Failed operations with detailed error messages. Helps identify recurring issues. {count_msg}"
+    builder.set_status_message(status_message)
 
-    return page_config, table_data, status_message
+    return builder.build()
 
 
 def _create_queue_statistics_tab(ingress_path: str, current_tab: str, db) -> Tuple[PageConfig, TableData, str, Dict[str, Any]]:
     """Create page configuration for Statistics queue tab."""
-    # Create page config with sub-tabs
-    page_config = PageConfig(
-        title='📊 Queue Monitor',
-        nav_active='queue',
-        storage_key='queue-statistics'
-    )
+    from helpers.page_builder import QueuePageBuilder
 
-    # Add sub-tabs (using helper to consolidate repeated pattern)
-    add_queue_tabs(page_config, current_tab, ingress_path)
+    # Use builder pattern for consistent page creation
+    builder = QueuePageBuilder('statistics', ingress_path)
 
     # Get queue statistics
     statistics = db.get_queue_statistics()
@@ -864,6 +838,8 @@ def _create_queue_statistics_tab(ingress_path: str, current_tab: str, db) -> Tup
 
         summary_stats['breakdowns'] = breakdowns
 
-    status_message = "Queue performance metrics and operational statistics."
+    # Set summary stats and status message
+    builder.set_summary_stats(summary_stats)
+    builder.set_status_message("Queue performance metrics and operational statistics.")
 
-    return page_config, None, status_message, summary_stats
+    return builder.build()
