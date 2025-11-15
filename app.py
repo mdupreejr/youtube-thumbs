@@ -194,6 +194,7 @@ def inject_ingress_path():
     This centralizes the ingress path retrieval and eliminates duplication across routes.
     """
     g.ingress_path = request.environ.get('HTTP_X_INGRESS_PATH', '')
+    logger.debug(f"[INGRESS] Path: '{g.ingress_path}' | Request: {request.method} {request.path} | Query: {request.query_string.decode()}")
 
 @app.after_request
 def log_response_info(response):

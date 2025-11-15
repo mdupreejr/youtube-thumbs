@@ -295,8 +295,21 @@ class LogsPageBuilder:
         Raises:
             ValueError: If validation fails
         """
+        from logging_helper import LoggingHelper, LogType
+        logger = LoggingHelper.get_logger(LogType.MAIN)
+
         # Validate before building
         self.validate()
+
+        # Debug logging for URL generation
+        logger.debug(f"[PAGE_BUILDER] LogsPageBuilder.build() - Tab: {self.tab_name}")
+        logger.debug(f"[PAGE_BUILDER]   Ingress Path: '{self.ingress_path}'")
+        logger.debug(f"[PAGE_BUILDER]   Current URL: '{self.page_config.current_url}'")
+        logger.debug(f"[PAGE_BUILDER]   Nav Active: '{self.page_config.nav_active}'")
+        if self.pagination:
+            logger.debug(f"[PAGE_BUILDER]   Pagination prev_url: '{self.pagination.get('prev_url')}'")
+            logger.debug(f"[PAGE_BUILDER]   Pagination next_url: '{self.pagination.get('next_url')}'")
+            logger.debug(f"[PAGE_BUILDER]   Page {self.pagination.get('current_page')}/{self.pagination.get('total_pages')}")
 
         # Return standard tuple
         return (

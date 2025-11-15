@@ -426,17 +426,26 @@ def logs_viewer():
         # Get ingress path
         ingress_path = g.ingress_path
 
+        logger.debug(f"[LOGS_ROUTE] /logs route called - tab: '{current_tab}', page: {page}, period: '{period_filter}', ingress_path: '{ingress_path}'")
+
         # Create page configuration
         if current_tab == 'rated':
+            logger.debug(f"[LOGS_ROUTE] Calling _create_rated_songs_page")
             page_config, table_data, pagination, status_message = _create_rated_songs_page(page, period_filter, ingress_path, _db)
         elif current_tab == 'matches':
+            logger.debug(f"[LOGS_ROUTE] Calling _create_matches_page")
             page_config, table_data, pagination, status_message = _create_matches_page(page, period_filter, ingress_path, _db)
         elif current_tab == 'errors':
+            logger.debug(f"[LOGS_ROUTE] Calling _create_errors_page")
             page_config, table_data, pagination, status_message = _create_errors_page(page, period_filter, ingress_path, _db)
         elif current_tab == 'recent':
+            logger.debug(f"[LOGS_ROUTE] Calling _create_recent_page")
             page_config, table_data, pagination, status_message = _create_recent_page(ingress_path, _db)
         else:
+            logger.debug(f"[LOGS_ROUTE] Unknown tab, defaulting to _create_rated_songs_page")
             page_config, table_data, pagination, status_message = _create_rated_songs_page(page, period_filter, ingress_path, _db)
+
+        logger.debug(f"[LOGS_ROUTE] Rendering template - ingress_path: '{ingress_path}', has_table_data: {table_data is not None and table_data.rows is not None}, has_pagination: {pagination is not None}")
 
         return render_template(
             'table_viewer.html',
