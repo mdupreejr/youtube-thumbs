@@ -390,6 +390,14 @@ except Exception as e:
 # Inject database into youtube_api module for API usage tracking
 set_youtube_api_database(db)
 
+# Initialize YouTube API (needed for health routes and other services)
+yt_api = None
+try:
+    yt_api = get_youtube_api()
+except Exception as e:
+    logger.error(f"Failed to initialize YouTube API: {str(e)}")
+    logger.error("Please ensure credentials.json exists and run the OAuth flow")
+
 # ============================================================================
 # SQLITE_WEB INTEGRATION
 # ============================================================================
@@ -731,14 +739,6 @@ def index() -> str:
 # ============================================================================
 # APPLICATION INITIALIZATION
 # ============================================================================
-
-# Initialize YouTube API (runs on both direct execution and WSGI import)
-yt_api = None
-try:
-    yt_api = get_youtube_api()
-except Exception as e:
-    logger.error(f"Failed to initialize YouTube API: {str(e)}")
-    logger.error("Please ensure credentials.json exists and run the OAuth flow")
 
 # Run startup health checks and cache results (wrapped in try-except to prevent app crashes)
 # v4.0.23: Cache results to avoid re-running checks on every page load

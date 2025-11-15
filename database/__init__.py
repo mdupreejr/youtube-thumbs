@@ -104,9 +104,9 @@ class Database:
         """Mark a queue item as failed."""
         return self._queue_ops.mark_failed(queue_id, error, api_response_data)
 
-    def reset_stale_processing_items(self):
+    def reset_stale_processing_items(self, max_attempts: int = 5):
         """Reset queue items stuck in 'processing' status (crash recovery)."""
-        return self._queue_ops.reset_stale_processing_items()
+        return self._queue_ops.reset_stale_processing_items(max_attempts=max_attempts)
 
     def list_pending_queue_items(self, limit=100):
         """List all pending items in the unified queue."""
