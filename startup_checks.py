@@ -483,7 +483,7 @@ def check_database(db) -> Tuple[bool, dict]:
             cursor = db._conn.execute("SELECT COUNT(*) as count FROM stats_cache")
             total_stats_cache = cursor.fetchone()['count']
 
-            cursor = db._conn.execute("SELECT MAX(cached_at) as last_cached FROM stats_cache")
+            cursor = db._conn.execute("SELECT MAX(generated_at) as last_cached FROM stats_cache")
             stats_cache_last_updated = cursor.fetchone()['last_cached']
 
             tables_info.append({
